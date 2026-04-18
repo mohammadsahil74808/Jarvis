@@ -1,0 +1,8 @@
+Application for Leave
+
+Dear Manager,
+
+I am writing to request a leave of absence from [Start Date] to [End Date] due to [Reason]. I will ensure all my pending tasks are completed before my departure.
+
+Thank you,
+Sahil

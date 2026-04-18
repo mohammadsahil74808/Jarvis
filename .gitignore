@@ -1,0 +1,14 @@
+config/api_keys.json
+jarvis.log
+__pycache__/
+.env
+.ipynb_checkpoints/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+ENV/
+.vscode/
+.idea/
