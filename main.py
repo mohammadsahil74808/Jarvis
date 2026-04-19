@@ -11,7 +11,7 @@ from google.genai import types
 from ui import JarvisUI
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
-    should_extract_memory, extract_memory
+    should_extract_memory, extract_memory, should_extract_memory_local
 )
 from core.clap_detector import ClapDetector
 from core.wake_detector import WakeWordDetector
@@ -107,6 +107,10 @@ def _update_memory_async(user_text: str, jarvis_text: str) -> None:
     if len(user_text) < 5 or user_text == _last_memory_input:
         return
     _last_memory_input = user_text
+
+    # Quick Local Check to save Quota
+    if not should_extract_memory_local(user_text):
+        return
 
     try:
         api_key = _get_api_key()

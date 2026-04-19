@@ -8,7 +8,7 @@ Düzeltmeler:
   - Projeleri, favori şeyleri, arkadaşları daha iyi yakalar
 """
 
-import json
+import json, os, re
 from datetime import datetime
 from threading import Lock
 from pathlib import Path
@@ -115,11 +115,47 @@ def update_memory(memory_update: dict) -> dict:
     return memory
 
 
+
+def should_extract_memory_local(user_text: str) -> bool:
+    """
+    Local regex check to avoid Gemini calls for every turn.
+    Returns True if the text likely contains memorable facts.
+    """
+    # Patterns for names
+    name_patterns = [
+        r'\bmy name is\b', r'\bi am called\b', r'\bcall me\b',
+        r'\bmera naam\b', r'\bmujhe .+ bulao\b'
+    ]
+    
+    # Preferences and favorites
+    pref_patterns = [
+        r'\bi (like|love|prefer|enjoy|hate|dislike)\b',
+        r'\bmy favorite\b', r'\bmujhe .+ pasand\b',
+        r'\bmera favorite\b'
+    ]
+    
+    # Personal information and status
+    info_patterns = [
+        r'\bi (work|live|study)\b', r'\bmy (job|city|age|birthday)\b',
+        r'\bi\'m (from|a|an)\b', r'\bmain .+ hun\b',
+        r'\bi want to\b', r'\bi need to\b'
+    ]
+    
+    text_lower = user_text.lower()
+    all_patterns = name_patterns + pref_patterns + info_patterns
+    
+    return any(re.search(p, text_lower) for p in all_patterns)
+
+
 def should_extract_memory(user_text: str, jarvis_text: str, api_key: str) -> bool:
     """
-    Stage 1: Hızlı YES/NO kontrolü.
-    Öncekinden daha geniş kriterler — favori şeyler, projeler, arkadaşlar da dahil.
+    Stage 1: Pre-check (local) then AI confirmation.
     """
+    # First pass: Local regex (Fast & Free)
+    if not should_extract_memory_local(user_text):
+        return False
+
+    # Second pass: AI verification (Detailed)
     try:
         import google.generativeai as genai
         genai.configure(api_key=api_key)
