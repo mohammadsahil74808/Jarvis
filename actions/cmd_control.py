@@ -84,6 +84,21 @@ def _find_hardcoded(task: str) -> str | None:
 
     return None
 
+DANGEROUS_PATTERNS = [
+    r'del\s+/[fsq]',      # del /f /s /q
+    r'rd\s+/s',           # rd /s (folder delete)
+    r'rmdir\s+/s',        # rmdir /s
+    r'format\s+[a-z]:',   # format C:
+    r'reg\s+delete',      # registry delete
+    r'net\s+user',        # user account changes
+    r'cipher\s+/w',       # data wipe
+    r'sfc\s+/scannow',    # system file changes (admin)
+]
+
+def is_dangerous(command: str) -> bool:
+    cmd_lower = command.lower()
+    return any(re.search(p, cmd_lower) for p in DANGEROUS_PATTERNS)
+
 BLOCKED_PATTERNS = [
     r"\brm\s+-rf\b", r"\brmdir\s+/s\b", r"\bdel\s+/[fqs]",
     r"\bformat\b", r"\bdiskpart\b", r"\bfdisk\b",
@@ -210,6 +225,9 @@ def cmd_control(
                 return "I cannot generate a safe command for that request, sir."
             if command.startswith("ERROR:"):
                 return f"Could not generate command: {command}"
+
+    if is_dangerous(command):
+        return f"⚠️ Yeh command dangerous hai: '{command}'\nConfirm karo pehle (Say 'Yes, execute it')."
 
     safe, reason = _is_safe(command)
     if not safe:
