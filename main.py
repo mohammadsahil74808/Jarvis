@@ -79,6 +79,21 @@ def _load_system_prompt() -> str:
         )
 
 
+
+def startup_check():
+    key = _get_api_key()
+    if not key or len(key.strip()) < 10:
+        print("=" * 50)
+        print("❌ JARVIS: API key missing hai!")
+        print("   Pehle setup screen mein key enter karo.")
+        print("=" * 50)
+        sys.exit(1)
+    
+    if not PROMPT_PATH.exists():
+        print(f"⚠️  WARNING: prompt.txt nahi mila: {PROMPT_PATH}")
+        print("   Default prompt use hoga.")
+
+
 # ── Hafıza ────────────────────────────────────────────────────────────────────
 _last_memory_input = ""
 
@@ -1130,6 +1145,7 @@ class JarvisLive:
 
 
 def main():
+    startup_check()
     ui = JarvisUI("face.png")
 
     def runner():
