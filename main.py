@@ -796,7 +796,7 @@ class JarvisLive:
                 response={"result": result}
             )
 
-        loop   = asyncio.get_event_loop()
+        loop   = asyncio.get_running_loop()
         result = "Done."
 
         # Self-healing retry loop
@@ -1115,7 +1115,7 @@ class JarvisLive:
                     asyncio.TaskGroup() as tg,
                 ):
                     self.session        = session
-                    self._loop          = asyncio.get_event_loop()
+                    self._loop          = asyncio.get_running_loop()
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue      = asyncio.Queue(maxsize=100) # Increased from 10
 
