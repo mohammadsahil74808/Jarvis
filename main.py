@@ -14,7 +14,6 @@ from memory.memory_manager import (
     should_extract_memory, extract_memory, should_extract_memory_local
 )
 from core.clap_detector import ClapDetector
-from core.wake_detector import WakeWordDetector
 from core.utils import retry, async_retry
 from core.usage_tracker import UsageTracker
 from core.predictive_engine import PredictiveEngine
@@ -515,12 +514,7 @@ class JarvisLive:
         self.wake_word_enabled = config.get("wake_word_activation", True)
         self.wake_detector = None
         if self.wake_word_enabled:
-            model_path = str(BASE_DIR / "models" / "vosk-model")
-            try:
-                self.wake_detector = WakeWordDetector(model_path)
-            except Exception as e:
-                print(f"[JARVIS] ⚠️ WakeWord error: {e}")
-                self.wake_word_enabled = False
+            threading.Thread(target=self._load_wake_detector, daemon=True).start()
 
         # Session Context
         self.session_context = {
@@ -566,6 +560,17 @@ class JarvisLive:
         
         # Check every 10 minutes (600,000 ms)
         self.ui.root.after(600000, self._prediction_loop)
+
+    def _load_wake_detector(self):
+        """Loads Vosk model in background to avoid freezing the UI."""
+        model_path = str(BASE_DIR / "models" / "vosk-model")
+        try:
+            from core.wake_detector import WakeWordDetector
+            self.wake_detector = WakeWordDetector(model_path)
+            self.ui.write_log("SYS: Wake word system ready.")
+        except Exception as e:
+            print(f"[JARVIS] ⚠️ WakeWord load failed: {e}")
+            self.wake_word_enabled = False
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
