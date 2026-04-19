@@ -43,7 +43,7 @@ class ConsolePanel(tk.Toplevel):
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | DATA CONSOLE")
         x = parent_ui.CX
-        self.geometry(f"240x450+{x}+{parent_ui.root.winfo_y()}")
+        self.geometry(f"220x360+{x}+{parent_ui.root.winfo_y()}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) # Attach to parent stacking order
         self.attributes("-alpha", 0.9)
@@ -107,8 +107,8 @@ class StatsPanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | HUD MODULE")
-        # Asymmetric height for Mini-Mark
-        self.geometry(f"230x520+{parent_ui.root.winfo_x() + parent_ui.W + 10}+{parent_ui.root.winfo_y()}")
+        # Micro-height for Mini-Mark
+        self.geometry(f"210x440+{parent_ui.root.winfo_x() + parent_ui.W + 10}+{parent_ui.root.winfo_y()}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) 
         self.attributes("-alpha", 0.95)
@@ -125,11 +125,11 @@ class StatsPanel(tk.Toplevel):
         self.canvas.delete("dynamic")
         
         # 1. ── HUD Animation (Top) ──────────────────
-        cx, cy = 115, 80
+        cx, cy = 105, 55
         # Rotating Scanner Arc
-        self.canvas.create_arc(cx-45, cy-45, cx+45, cy+45, start=(self.tick*4)%360, extent=120, 
+        self.canvas.create_arc(cx-35, cy-35, cx+35, cy+35, start=(self.tick*4)%360, extent=120, 
                                outline=C_PRI, width=2, style="arc", tags="dynamic")
-        self.canvas.create_arc(cx-50, cy-50, cx+50, cy+50, start=(self.tick*-2)%360, extent=60, 
+        self.canvas.create_arc(cx-40, cy-40, cx+40, cy+40, start=(self.tick*-2)%360, extent=60, 
                                outline="#ff3333", width=2, style="arc", tags="dynamic")
         # Inner Rotating Lines
         angle = math.radians(self.tick * 6)
@@ -141,12 +141,12 @@ class StatsPanel(tk.Toplevel):
         now = time.strftime("%H:%M:%S")
         date = time.strftime("%d %b %Y").upper()
         # Layered text for glow effect
-        self.canvas.create_text(cx+1, 150+1, text=now, fill=C_DIM, font=("Courier", 20, "bold"), tags="dynamic")
-        self.canvas.create_text(cx, 150, text=now, fill="#ffffff", font=("Courier", 20, "bold"), tags="dynamic")
-        self.canvas.create_text(cx, 175, text=date, fill=C_MID, font=("Courier", 9), tags="dynamic")
+        self.canvas.create_text(cx+1, 115+1, text=now, fill=C_DIM, font=("Courier", 16, "bold"), tags="dynamic")
+        self.canvas.create_text(cx, 115, text=now, fill="#ffffff", font=("Courier", 16, "bold"), tags="dynamic")
+        self.canvas.create_text(cx, 135, text=date, fill=C_MID, font=("Courier", 8), tags="dynamic")
         
-        self.canvas.create_text(cx, 205, text="SYSTEM STATUS: READY", fill="#00ff88", font=("Courier", 8, "bold"), tags="dynamic")
-        self.canvas.create_text(cx, 218, text="WELCOME BACK SAHIL", fill=C_PRI, font=("Courier", 8), tags="dynamic")
+        self.canvas.create_text(cx, 160, text="STATUS: READY", fill="#00ff88", font=("Courier", 8, "bold"), tags="dynamic")
+        self.canvas.create_text(cx, 172, text="WELCOME SAHIL", fill=C_PRI, font=("Courier", 7), tags="dynamic")
 
         # 3. ── Live JARVIS Status ──────────────────
         status = self.ui._jarvis_state
@@ -156,38 +156,38 @@ class StatsPanel(tk.Toplevel):
         elif status == "SPEAKING": color = C_PRI
         elif status == "MUTED": color = "#ff3333"
         
-        self.canvas.create_rectangle(30, 240, 200, 265, outline=color, width=1, tags="dynamic")
-        self.canvas.create_text(115, 252, text=status, fill=color, font=("Courier", 10, "bold"), tags="dynamic")
+        self.canvas.create_rectangle(25, 190, 185, 212, outline=color, width=1, tags="dynamic")
+        self.canvas.create_text(105, 201, text=status, fill=color, font=("Courier", 9, "bold"), tags="dynamic")
 
         # 4. ── Core Performance (Bars) ──────────────
-        sy = 290
+        sy = 232
         stats = self.ui.stats
-        self._draw_bar(sy, "CPU LOAD", stats.get('cpu', 0), "#ff3333" if stats.get('cpu',0)>80 else C_PRI)
-        self._draw_bar(sy+50, "RAM USAGE", stats.get('ram', 0), "#ff3333" if stats.get('ram',0)>80 else "#00ff88")
-        self.canvas.create_text(30, sy+90, text=f"NET: {stats.get('net', '0 KB/s')}", fill="#ffffff", font=("Courier", 8), anchor="w", tags="dynamic")
+        self._draw_bar(sy, "CPU", stats.get('cpu', 0), "#ff3333" if stats.get('cpu',0)>80 else C_PRI)
+        self._draw_bar(sy+42, "RAM", stats.get('ram', 0), "#ff3333" if stats.get('ram',0)>80 else "#00ff88")
+        self.canvas.create_text(25, sy+74, text=f"NET: {stats.get('net', '0 KB/s')}", fill="#ffffff", font=("Courier", 7), anchor="w", tags="dynamic")
 
         # 5. ── Mini Activity Feed ──────────────────
-        fy = 410
-        self.canvas.create_text(30, fy-15, text="ACTIVITY LOG", fill=C_MID, font=("Courier", 8, "bold"), anchor="w", tags="dynamic")
+        fy = 330
+        self.canvas.create_text(25, fy-12, text="LOG", fill=C_MID, font=("Courier", 7, "bold"), anchor="w", tags="dynamic")
         for i, act in enumerate(self.ui.activity_feed):
-            self.canvas.create_text(30, fy + (i*16), text=act, fill="#aaaaaa", font=("Courier", 8), anchor="w", tags="dynamic")
+            self.canvas.create_text(25, fy + (i*14), text=act, fill="#aaaaaa", font=("Courier", 7), anchor="w", tags="dynamic")
 
         # 6. ── Voice Visualizer ────────────────────
-        vy = 490
+        vy = 425
         for i in range(12):
-            h = random.randint(5, 30) if status == "SPEAKING" else (random.randint(2, 8) if status == "LISTENING" else 3)
-            x_pos = 70 + (i * 18)
-            self.canvas.create_rectangle(x_pos, vy-h, x_pos+10, vy, fill=C_PRI if status != "MUTED" else "#330000", outline="", tags="dynamic")
+            h = random.randint(3, 22) if status == "SPEAKING" else (random.randint(2, 6) if status == "LISTENING" else 2)
+            x_pos = 50 + (i * 12)
+            self.canvas.create_rectangle(x_pos, vy-h, x_pos+8, vy, fill=C_PRI if status != "MUTED" else "#330000", outline="", tags="dynamic")
 
         self.after(50, self._animate)
 
     def _draw_bar(self, y, label, val, col):
-        self.canvas.create_text(30, y, text=label, fill="#ffffff", font=("Courier", 8), anchor="w", tags="dynamic")
-        self.canvas.create_rectangle(30, y+8, 200, y+18, outline=C_DIM, width=1, tags="dynamic")
-        w = int(170 * (val/100.0))
+        self.canvas.create_text(25, y, text=label, fill="#ffffff", font=("Courier", 7), anchor="w", tags="dynamic")
+        self.canvas.create_rectangle(25, y+6, 175, y+14, outline=C_DIM, width=1, tags="dynamic")
+        w = int(150 * (val/100.0))
         if w > 0:
-            self.canvas.create_rectangle(30, y+8, 30+w, y+18, fill=col, outline="", tags="dynamic")
-        self.canvas.create_text(205, y+13, text=f"{val:.0f}%", fill=col, font=("Courier", 8), anchor="w", tags="dynamic")
+            self.canvas.create_rectangle(25, y+6, 25+w, y+14, fill=col, outline="", tags="dynamic")
+        self.canvas.create_text(180, y+10, text=f"{val:.0f}%", fill=col, font=("Courier", 7), anchor="w", tags="dynamic")
 
 class WebIntelManager:
     """Managed Edge Browser in App Mode (Left Bottom)"""
@@ -225,14 +225,14 @@ class WebIntelManager:
             cx = self.ui.console_panel.winfo_x()
             cy = self.ui.console_panel.winfo_y()
             
-            x = cx + 20
-            # Console height is 420
-            y = cy + 450
+            x = cx + 15
+            # Console height is 360
+            y = cy + 380
         except Exception as e:
             print(f"[UI] [Browser] Pos calculation error: {e}")
-            x, y = self.ui.CX + 20, 450
+            x, y = self.ui.CX + 15, 380
             
-        w, h = 380, 420 # Compact Browser
+        w, h = 320, 360 # Micro Browser
         
         url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
         
@@ -276,9 +276,9 @@ class JarvisUI:
         sh = self.root.winfo_screenheight()
         
         # Panel Sizes (Asymmetric Mini-Mark)
-        W, H   = 720, 600   # Main
-        CW, CH = 240, 450   # Console (Left)
-        SW, SH = 230, 520   # Stats (Right)
+        W, H   = 640, 520   # Main
+        CW, CH = 220, 360   # Console (Left)
+        SW, SH = 210, 440   # Stats (Right)
         
         # Margins & Spacing
         MARGIN = 30
@@ -305,9 +305,9 @@ class JarvisUI:
         self.sw, self.sh = sw, sh
         self.CX, self.SX = CX, SX
 
-        self.FACE_SZ = min(int(H * 0.5), 240)
+        self.FACE_SZ = min(int(H * 0.45), 200)
         self.FCX     = W // 2
-        self.FCY     = int(H * 0.1) + self.FACE_SZ // 2
+        self.FCY     = int(H * 0.08) + self.FACE_SZ // 2
 
         # ── Durum ────────────────────────────────────────────────────────────
         config = self._get_config_internal()
