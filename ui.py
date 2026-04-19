@@ -43,8 +43,8 @@ class ConsolePanel(tk.Toplevel):
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | DATA CONSOLE")
         x = parent_ui.CX
-        # Shorter height for Tiny-Mark
-        self.geometry(f"220x360+{x}+{parent_ui.root.winfo_y() + 120}")
+        # Top-aligned with main window using fixed RY
+        self.geometry(f"220x360+{x}+{parent_ui.RY}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) # Attach to parent stacking order
         self.attributes("-alpha", 0.9)
@@ -108,8 +108,8 @@ class StatsPanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | HUD MODULE")
-        # Shorter height for Tiny-Mark
-        self.geometry(f"220x360+{parent_ui.root.winfo_x() + parent_ui.W + 5}+{parent_ui.root.winfo_y() + 120}")
+        # Top-aligned with main window using fixed RY
+        self.geometry(f"220x360+{parent_ui.SX}+{parent_ui.RY}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) 
         self.attributes("-alpha", 0.95)
@@ -286,11 +286,11 @@ class JarvisUI:
         SPACING = (sw - W - CW - SW - 2*MARGIN) // 2
         SPACING = max(10, min(SPACING, 50)) # Clamp spacing
         
-        # Positions (Above Taskbar)
+        # Positions (Centered)
         RX = (sw - W) // 2
-        RY = (sh - H - 70)  # ~70px above bottom (for taskbar)
+        RY = (sh - H) // 2
         
-        CX = (RX - 5 - CW) # Tight spacing
+        CX = (RX - 5 - CW) 
         SX = (RX + W + 5)
         
         # Fallback for small screens
@@ -352,9 +352,8 @@ class JarvisUI:
         
         # Position Console and Stats relative to Root
         self.console_panel = ConsolePanel(self)
-        
         self.stats_panel   = StatsPanel(self)
-        self.stats_panel.geometry(f"{SW}x{SH}+{SX}+{(sh-SH)//2}")
+        self.stats_panel.geometry(f"{SW}x{SH}+{SX}+{RY}")
         
         # New Real Browser Panel
         self.web_panel = WebIntelManager(self)
@@ -434,10 +433,10 @@ class JarvisUI:
             else:
                 self.console_panel.deiconify()
                 self.stats_panel.deiconify()
-                # Tiny-Mark positioning on restore
+                # Top-aligned positioning on restore
                 ry = self.root.winfo_y()
-                self.console_panel.geometry(f"+{self.CX}+{ry + 120}")
-                self.stats_panel.geometry(f"+{self.SX}+{ry + 120}")
+                self.console_panel.geometry(f"+{self.CX}+{ry}")
+                self.stats_panel.geometry(f"+{self.SX}+{ry}")
                 self.console_panel.lift()
                 self.stats_panel.lift()
                 if hasattr(self, "web_panel") and self.web_panel.proc is not None:
