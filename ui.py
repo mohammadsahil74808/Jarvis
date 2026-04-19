@@ -43,7 +43,7 @@ class ConsolePanel(tk.Toplevel):
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | DATA CONSOLE")
         x = parent_ui.CX
-        self.geometry(f"240x420+{x}+50")
+        self.geometry(f"240x600+{x}+{parent_ui.root.winfo_y()}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) # Attach to parent stacking order
         self.attributes("-alpha", 0.9)
@@ -107,8 +107,8 @@ class StatsPanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | HUD MODULE")
-        # Smaller panel for Mini-Mark
-        self.geometry(f"230x520+{parent_ui.root.winfo_x() + parent_ui.W + 10}+{parent_ui.root.winfo_y()}")
+        # Symmetric height for Mini-Mark
+        self.geometry(f"230x600+{parent_ui.root.winfo_x() + parent_ui.W + 10}+{parent_ui.root.winfo_y()}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) 
         self.attributes("-alpha", 0.95)
@@ -275,9 +275,10 @@ class JarvisUI:
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         
-        # Panel Sizes (Retro Compact Mode)
-        W, H   = 540, 680   # Main
-        CW, CH = 0, 0       # No side panels
+        # Panel Sizes (Symmetric Mini-Mark)
+        W, H   = 720, 600   # Main
+        CW, CH = 240, 600   # Console (Left)
+        SW, SH = 230, 600   # Stats (Right)
         
         # Margins & Spacing
         MARGIN = 30
@@ -302,11 +303,11 @@ class JarvisUI:
         self.root.configure(bg=C_BG)
 
         self.sw, self.sh = sw, sh
-        self.CX, self.SX = RX, RX # Center everything
+        self.CX, self.SX = CX, SX
 
-        self.FACE_SZ = 300
+        self.FACE_SZ = min(int(H * 0.5), 240)
         self.FCX     = W // 2
-        self.FCY     = 80 + self.FACE_SZ // 2
+        self.FCY     = int(H * 0.1) + self.FACE_SZ // 2
 
         # ── Durum ────────────────────────────────────────────────────────────
         config = self._get_config_internal()
@@ -345,10 +346,14 @@ class JarvisUI:
         self._face_scale_cache = None
         self._load_face(face_path)
 
-        # Classic look: No side panels
-        self.console_panel = None
-        self.stats_panel   = None
-        # self.stats_panel.geometry(f"{SW}x{SH}+{SX}+{(sh-SH)//2}")
+        # ── Sync Panels ──────────────────────────────────────────────────────
+        self.root.update_idletasks()
+        
+        # Position Console and Stats relative to Root
+        self.console_panel = ConsolePanel(self)
+        
+        self.stats_panel   = StatsPanel(self)
+        self.stats_panel.geometry(f"{SW}x{SH}+{SX}+{(sh-SH)//2}")
         
         # New Real Browser Panel
         self.web_panel = WebIntelManager(self)
@@ -359,13 +364,13 @@ class JarvisUI:
         self.bg.place(x=0, y=0)
 
         # ── Log alanı ────────────────────────────────────────────────────────
-        LW = int(W * 0.88)
-        LH = 140
-        LOG_Y = H - LH - 90
+        LW = int(W * 0.78)
+        LH = 90
+        LOG_Y = H - LH - 70
         self.log_frame = tk.Frame(self.root, bg=C_PANEL,
                                   highlightbackground=C_MID,
                                   highlightthickness=1)
-        self.log_frame.place(x=(W - LW) // 2, y=LOG_Y, width=LW, height=LH)
+        self.log_frame.place(x=(W - LW) // 2 + 30, y=LOG_Y, width=LW, height=LH)
         self.log_text = tk.Text(self.log_frame, fg=C_TEXT, bg=C_PANEL,
                                 insertbackground=C_TEXT, borderwidth=0,
                                 wrap="word", font=("Courier", 10), padx=10, pady=6)
@@ -421,9 +426,23 @@ class JarvisUI:
         """Force side panels to match main window visibility"""
         try:
             state = self.root.state()
-            # Classic Mode has no side panels to sync
-        except Exception:
-            pass
+            # On Windows: 'iconic' = minimized, 'normal'/'zoomed' = visible
+            if state == 'iconic':
+                self.console_panel.withdraw()
+                self.stats_panel.withdraw()
+            else:
+                self.console_panel.deiconify()
+                self.stats_panel.deiconify()
+                # Symmetric positioning on restore
+                ry = self.root.winfo_y()
+                self.console_panel.geometry(f"+{self.CX}+{ry}")
+                self.stats_panel.geometry(f"+{self.SX}+{ry}")
+                self.console_panel.lift()
+                self.stats_panel.lift()
+                if hasattr(self, "web_panel") and self.web_panel.proc is not None:
+                    # browser_panel replaced by web_panel (WebIntelManager), which doesn't have .lift()
+                    pass
+        except Exception: pass
 
     def _periodic_sync_check(self):
         """Heartbeat to catch programmatic state changes that might skip events"""
@@ -437,8 +456,8 @@ class JarvisUI:
 
     def _build_mute_button(self):
         BTN_W, BTN_H = 80, 28
-        BTN_X = 20
-        BTN_Y = self.H - 80
+        BTN_X = 10
+        BTN_Y = self.H - 64
 
         self._mute_canvas = tk.Canvas(
             self.root, width=BTN_W, height=BTN_H,
@@ -471,7 +490,7 @@ class JarvisUI:
             self.write_log("SYS: Microphone active.")
 
     def _build_input_bar(self, lw: int, y: int):
-        x0    = (self.W - lw) // 2
+        x0    = (self.W - lw) // 2 + 30
         BTN_W = 60
         INP_W = lw - BTN_W - 4
 
@@ -701,7 +720,10 @@ class JarvisUI:
     def _write_log_main_thread(self, text: str):
         """Internal handler that runs only on the main Tkinter thread."""
         with self._log_lock:
-            # Consolidated log queue
+            # Redirect to side console
+            if hasattr(self, 'console_panel'):
+                self.console_panel.write_log(text)
+
             self.typing_queue.append(text)
             tl = text.lower()
             if tl.startswith("you:"): 
