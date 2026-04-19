@@ -43,8 +43,7 @@ class ConsolePanel(tk.Toplevel):
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | DATA CONSOLE")
         x = parent_ui.CX
-        # Top-aligned with main window using fixed RY
-        self.geometry(f"220x360+{x}+{parent_ui.RY}")
+        self.geometry(f"240x450+{x}+{parent_ui.root.winfo_y()}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) # Attach to parent stacking order
         self.attributes("-alpha", 0.9)
@@ -108,8 +107,8 @@ class StatsPanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | HUD MODULE")
-        # Top-aligned with main window using fixed RY
-        self.geometry(f"220x360+{parent_ui.SX}+{parent_ui.RY}")
+        # Asymmetric height for Mini-Mark
+        self.geometry(f"230x520+{parent_ui.root.winfo_x() + parent_ui.W + 10}+{parent_ui.root.winfo_y()}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) 
         self.attributes("-alpha", 0.95)
@@ -174,7 +173,7 @@ class StatsPanel(tk.Toplevel):
             self.canvas.create_text(30, fy + (i*16), text=act, fill="#aaaaaa", font=("Courier", 8), anchor="w", tags="dynamic")
 
         # 6. ── Voice Visualizer ────────────────────
-        vy = 640
+        vy = 490
         for i in range(12):
             h = random.randint(5, 30) if status == "SPEAKING" else (random.randint(2, 8) if status == "LISTENING" else 3)
             x_pos = 70 + (i * 18)
@@ -276,22 +275,22 @@ class JarvisUI:
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         
-        # Panel Sizes (Tiny-Mark Bottom Docked)
-        W, H   = 480, 480   # Main (Much smaller)
-        CW, CH = 220, 360   # Console (Shorter)
-        SW, SH = 220, 360   # Stats (Shorter)
+        # Panel Sizes (Asymmetric Mini-Mark)
+        W, H   = 720, 600   # Main
+        CW, CH = 240, 450   # Console (Left)
+        SW, SH = 230, 520   # Stats (Right)
         
         # Margins & Spacing
         MARGIN = 30
         SPACING = (sw - W - CW - SW - 2*MARGIN) // 2
         SPACING = max(10, min(SPACING, 50)) # Clamp spacing
         
-        # Positions (Centered)
+        # Positions
         RX = (sw - W) // 2
         RY = (sh - H) // 2
         
-        CX = (RX - 5 - CW) 
-        SX = (RX + W + 5)
+        CX = (RX - SPACING - CW)
+        SX = (RX + W + SPACING)
         
         # Fallback for small screens
         if CX < MARGIN:
@@ -306,9 +305,9 @@ class JarvisUI:
         self.sw, self.sh = sw, sh
         self.CX, self.SX = CX, SX
 
-        self.FACE_SZ = 220
+        self.FACE_SZ = min(int(H * 0.5), 240)
         self.FCX     = W // 2
-        self.FCY     = 80 + self.FACE_SZ // 2
+        self.FCY     = int(H * 0.1) + self.FACE_SZ // 2
 
         # ── Durum ────────────────────────────────────────────────────────────
         config = self._get_config_internal()
@@ -352,8 +351,9 @@ class JarvisUI:
         
         # Position Console and Stats relative to Root
         self.console_panel = ConsolePanel(self)
+        
         self.stats_panel   = StatsPanel(self)
-        self.stats_panel.geometry(f"{SW}x{SH}+{SX}+{RY}")
+        self.stats_panel.geometry(f"{SW}x{SH}+{SX}+{(sh-SH)//2}")
         
         # New Real Browser Panel
         self.web_panel = WebIntelManager(self)
@@ -363,14 +363,14 @@ class JarvisUI:
                             bg=C_BG, highlightthickness=0)
         self.bg.place(x=0, y=0)
 
-        # ── Log alanı (Tiny Layout) ──────────────────────────────────────────
-        LW = int(W * 0.9)
-        LH = 80
-        LOG_Y = H - LH - 65
+        # ── Log alanı ────────────────────────────────────────────────────────
+        LW = int(W * 0.78)
+        LH = 90
+        LOG_Y = H - LH - 70
         self.log_frame = tk.Frame(self.root, bg=C_PANEL,
                                   highlightbackground=C_MID,
                                   highlightthickness=1)
-        self.log_frame.place(x=(W - LW) // 2, y=LOG_Y, width=LW, height=LH)
+        self.log_frame.place(x=(W - LW) // 2 + 30, y=LOG_Y, width=LW, height=LH)
         self.log_text = tk.Text(self.log_frame, fg=C_TEXT, bg=C_PANEL,
                                 insertbackground=C_TEXT, borderwidth=0,
                                 wrap="word", font=("Courier", 10), padx=10, pady=6)
@@ -433,7 +433,7 @@ class JarvisUI:
             else:
                 self.console_panel.deiconify()
                 self.stats_panel.deiconify()
-                # Top-aligned positioning on restore
+                # Pin to top alignment
                 ry = self.root.winfo_y()
                 self.console_panel.geometry(f"+{self.CX}+{ry}")
                 self.stats_panel.geometry(f"+{self.SX}+{ry}")
