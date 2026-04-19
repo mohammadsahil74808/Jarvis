@@ -435,8 +435,9 @@ class JarvisUI:
                 # Use lift to bring them up with the parent
                 self.console_panel.lift()
                 self.stats_panel.lift()
-                if self.browser_panel.winfo_viewable():
-                    self.browser_panel.lift()
+                if hasattr(self, "web_panel") and self.web_panel.proc is not None:
+                    # browser_panel replaced by web_panel (WebIntelManager), which doesn't have .lift()
+                    pass
         except Exception: pass
 
     def _periodic_sync_check(self):
