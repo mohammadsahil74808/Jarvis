@@ -394,6 +394,7 @@ class JarvisUI:
 
         # ── API key ───────────────────────────────────────────────────────────
         self._api_key_ready = self._api_keys_exist()
+        self._log_lock = threading.Lock()
         if not self._api_key_ready:
             self._show_setup_ui()
 
@@ -705,15 +706,25 @@ class JarvisUI:
         c.create_text(W//2, H-14, fill=C_DIM, font=("Courier", 8), text="FatihMakes Industries  ·  CLASSIFIED  ·  MARK XXXV", tags="anim")
 
     def write_log(self, text: str):
-        # Redirect to side console
-        if hasattr(self, 'console_panel'):
-            self.console_panel.write_log(text)
+        """Thread-safe way to log to the UI from any module."""
+        self.root.after(0, self._write_log_main_thread, text)
 
-        self.typing_queue.append(text)
-        tl = text.lower()
-        if tl.startswith("you:"): self.set_state("PROCESSING")
-        elif tl.startswith("jarvis:") or tl.startswith("ai:"): self.set_state("SPEAKING")
-        if not self.is_typing: self._start_typing()
+    def _write_log_main_thread(self, text: str):
+        """Internal handler that runs only on the main Tkinter thread."""
+        with self._log_lock:
+            # Redirect to side console
+            if hasattr(self, 'console_panel'):
+                self.console_panel.write_log(text)
+
+            self.typing_queue.append(text)
+            tl = text.lower()
+            if tl.startswith("you:"): 
+                self.set_state("PROCESSING")
+            elif tl.startswith("jarvis:") or tl.startswith("ai:"): 
+                self.set_state("SPEAKING")
+            
+            if not self.is_typing: 
+                self._start_typing()
 
     def show_suggestion(self, text: str):
         """Displays a predictive suggestion in the console with a special prefix."""
