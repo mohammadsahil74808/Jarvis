@@ -1103,11 +1103,15 @@ class JarvisLive:
             http_options={"api_version": "v1beta"}
         )
 
-        first_run = True
+        first_run   = True
+        retry_delay = 2 # Initial backoff seconds
+
         while True:
             try:
-                print("[JARVIS] 🔌 Connecting...")
+                print(f"[JARVIS] 🔌 Connecting (Retry delay: {retry_delay}s)...")
                 self.ui.set_state("THINKING")
+                self.ui.write_log("SYS: Connecting to Gemini...")
+                
                 config = self._build_config()
 
                 async with (
@@ -1117,11 +1121,14 @@ class JarvisLive:
                     self.session        = session
                     self._loop          = asyncio.get_running_loop()
                     self.audio_in_queue = asyncio.Queue()
-                    self.out_queue      = asyncio.Queue(maxsize=100) # Increased from 10
+                    self.out_queue      = asyncio.Queue(maxsize=100)
 
                     print("[JARVIS] ✅ Connected.")
                     self.ui.set_state("LISTENING")
-                    self.ui.write_log("SYS: JARVIS online.")
+                    self.ui.write_log("SYS: JARVIS online. Ready to help.")
+                    
+                    # Connection established, reset backoff
+                    retry_delay = 2
 
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
@@ -1136,15 +1143,21 @@ class JarvisLive:
                             turns={"parts": [{"text": "System call: Perform 'daily_briefing' for Sahil now."}]},
                             turn_complete=True
                         )
+                    
+                    # Ensure the loop within TaskGroup doesn't exit immediately unless exception occurs
+                    while True:
+                        await asyncio.sleep(1)
 
             except Exception as e:
-                print(f"[JARVIS] ⚠️ {e}")
-                traceback.print_exc()
-
-            self.set_speaking(False)
-            self.ui.set_state("THINKING")
-            print("[JARVIS] 🔄 Reconnecting in 3s...")
-            await asyncio.sleep(3)
+                print(f"[JARVIS] ⚠️ Connection error: {e}")
+                self.ui.write_log(f"SYS: Connection lost ({e}). Reconnecting in {retry_delay}s...")
+                self.ui.set_state("INITIALISING")
+                self.session = None
+                self.set_speaking(False)
+                
+                await asyncio.sleep(retry_delay)
+                # Exponential backoff: capped at 30s
+                retry_delay = min(retry_delay * 2, 30)
 
 
 def main():
