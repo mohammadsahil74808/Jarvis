@@ -16,10 +16,13 @@ from memory.memory_manager import (
 from core.clap_detector import ClapDetector
 from core.wake_detector import WakeWordDetector
 from core.utils import retry, async_retry
+from core.usage_tracker import UsageTracker
+from core.predictive_engine import PredictiveEngine
 
 from actions.flight_finder     import flight_finder
 from actions.open_app          import open_app
 from actions.weather_report    import weather_action
+from core.geo                 import get_current_location
 from actions.send_message      import send_message
 from actions.reminder          import reminder
 from actions.computer_settings import computer_settings
@@ -34,6 +37,7 @@ from actions.dev_agent         import dev_agent
 from actions.web_search        import web_search as web_search_action
 from actions.computer_control  import computer_control
 from actions.game_updater      import game_updater
+from actions.workflow_chains  import workflow_chains
 
 
 def get_base_dir():
@@ -474,6 +478,17 @@ TOOL_DECLARATIONS = [
             "required": []
         }
     },
+    {
+        "name": "workflow_chain",
+        "description": "Triggers a pre-defined sequence of actions for specific modes: study, coding, relax, presentation.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "mode": {"type": "STRING", "description": "Mode to activate: study | coding | relax | presentation"}
+            },
+            "required": ["mode"]
+        }
+    },
 ]
 
 
@@ -520,6 +535,15 @@ class JarvisLive:
         # Screen Awareness
         self.screen_context = None
 
+        # Predictive Engine
+        log_path = BASE_DIR / "memory" / "usage_log.json"
+        self.usage_tracker = UsageTracker(log_path)
+        self.predictive_engine = PredictiveEngine(log_path)
+        self.predictive_engine.set_mode(config.get("predictive_mode", True))
+        
+        # Start Prediction Heartbeat
+        self.ui.root.after(10000, self._prediction_loop)
+
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
@@ -530,6 +554,16 @@ class JarvisLive:
             ),
             self._loop
         )
+
+    def _prediction_loop(self):
+        """Periodic check for habit-based suggestions."""
+        if self.predictive_engine.predictive_mode:
+            suggestion = self.predictive_engine.get_suggestion()
+            if suggestion:
+                self.ui.show_suggestion(suggestion["text"])
+        
+        # Check every 10 minutes (600,000 ms)
+        self.ui.root.after(600000, self._prediction_loop)
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
@@ -651,6 +685,13 @@ class JarvisLive:
             if args.get("value"):
                 self.session_context["last_query"] = args.get("value")
 
+        # --- PREDICTIVE ENGINE LOGGING ---
+        if name == "open_app":
+            self.usage_tracker.log_event("app", args.get("app_name", "Unknown"))
+        elif name in ["web_search", "browser_control"]:
+             self.usage_tracker.log_event("command", name)
+        # --------------------------------
+
         # Fallback suggestions map
         FALLBACK_SUGGESTIONS = {
             "browser_control": "Sir, browser action failed. Maybe try 'computer_control' or 'cmd_control' as a fallback?",
@@ -714,7 +755,7 @@ class JarvisLive:
                 self.ui.set_state("THINKING")
                 
                 # Use a fast internal Gemini call for context
-                model = genai.Client(api_key=_get_api_key()).models.get("gemini-2.5-flash-lite")
+                model = genai.Client(api_key=_get_api_key()).models.get("gemini-1.5-flash")
                 prompt = (
                     "Analyze this screenshot. Describe: 1. The active window. "
                     "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
@@ -824,6 +865,9 @@ class JarvisLive:
                     break
 
                 elif name == "web_search":
+                    query = args.get("query")
+                    if query:
+                        self.ui.root.after(0, lambda: self.ui.open_browser_panel(query))
                     r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
@@ -852,6 +896,11 @@ class JarvisLive:
                 elif name == "daily_briefing":
                     from actions.daily_briefing import get_daily_briefing
                     r = await loop.run_in_executor(None, lambda: get_daily_briefing(parameters=args, player=self.ui))
+                    result = r or "Done."
+                    break
+
+                elif name == "workflow_chain":
+                    r = await loop.run_in_executor(None, lambda: workflow_chains(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
@@ -925,20 +974,21 @@ class JarvisLive:
                     {"data": data, "mime_type": "audio/pcm"}
                 )
 
-        try:
-            with sd.InputStream(
-                samplerate=SEND_SAMPLE_RATE,
-                channels=CHANNELS,
-                dtype="int16",
-                blocksize=CHUNK_SIZE,
-                callback=callback,
-            ):
-                print("[JARVIS] 🎤 Mic stream open")
-                while True:
-                    await asyncio.sleep(0.1)
-        except Exception as e:
-            print(f"[JARVIS] ❌ Mic: {e}")
-            raise
+        while True:
+            try:
+                with sd.InputStream(
+                    samplerate=SEND_SAMPLE_RATE,
+                    channels=CHANNELS,
+                    dtype="int16",
+                    blocksize=CHUNK_SIZE,
+                    callback=callback,
+                ):
+                    print("[JARVIS] 🎤 Mic stream open")
+                    while True:
+                        await asyncio.sleep(0.5)
+            except Exception as e:
+                print(f"[JARVIS] ❌ Mic Error: {e}. Retrying in 5s...")
+                await asyncio.sleep(5)
 
     async def _receive_audio(self):
         print("[JARVIS] 👂 Recv started")
@@ -1018,6 +1068,9 @@ class JarvisLive:
                 chunk = await self.audio_in_queue.get()
                 self.set_speaking(True)
                 await asyncio.to_thread(stream.write, chunk)
+                # Reset speaking state if no more chunks are immediately pending
+                if self.audio_in_queue.empty():
+                    self.set_speaking(False)
         except Exception as e:
             print(f"[JARVIS] ❌ Play: {e}")
             raise
@@ -1032,6 +1085,7 @@ class JarvisLive:
             http_options={"api_version": "v1beta"}
         )
 
+        first_run = True
         while True:
             try:
                 print("[JARVIS] 🔌 Connecting...")
@@ -1045,7 +1099,7 @@ class JarvisLive:
                     self.session        = session
                     self._loop          = asyncio.get_event_loop()
                     self.audio_in_queue = asyncio.Queue()
-                    self.out_queue      = asyncio.Queue(maxsize=10)
+                    self.out_queue      = asyncio.Queue(maxsize=100) # Increased from 10
 
                     print("[JARVIS] ✅ Connected.")
                     self.ui.set_state("LISTENING")
@@ -1056,12 +1110,14 @@ class JarvisLive:
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
 
-                    # Startup Briefing Trigger
-                    await asyncio.sleep(2) # Wait for audio setup
-                    await session.send_client_content(
-                        turns={"parts": [{"text": "System call: Perform 'daily_briefing' for Sahil now."}]},
-                        turn_complete=True
-                    )
+                    # Startup Briefing Trigger (Only on first run)
+                    if first_run:
+                        first_run = False
+                        await asyncio.sleep(2) # Wait for audio setup
+                        await session.send_client_content(
+                            turns={"parts": [{"text": "System call: Perform 'daily_briefing' for Sahil now."}]},
+                            turn_complete=True
+                        )
 
             except Exception as e:
                 print(f"[JARVIS] ⚠️ {e}")

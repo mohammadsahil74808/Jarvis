@@ -16,7 +16,14 @@ def weather_action(
 
     city = parameters.get("city")
     time = parameters.get("time")
+
     if not city or not isinstance(city, str):
+        # Try to get from local detection
+        from core.geo import get_current_location
+        city = get_current_location()
+        print(f"[Weather] No city in parameters, detected: {city}")
+
+    if not city:
         msg = "Sir, the city is missing for the weather report."
         _speak_and_log(msg, player)
         return msg
@@ -32,15 +39,8 @@ def weather_action(
     encoded_query = quote_plus(search_query)
     url = f"https://www.google.com/search?q={encoded_query}"
 
-    try:
-        import platform
-        import subprocess
-        if platform.system() == "Windows":
-             subprocess.Popen(["start", "msedge", url], shell=True)
-        else:
-             import webbrowser
-             webbrowser.open(url)
-    except Exception:
+    from core.utils import open_browser
+    if not open_browser(url):
         msg = f"Sir, I couldn't open the browser for the weather report."
         _speak_and_log(msg, player)
         return msg

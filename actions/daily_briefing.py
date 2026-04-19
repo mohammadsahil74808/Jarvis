@@ -34,7 +34,12 @@ def get_daily_briefing(
     # 1. Identity
     memory = load_memory()
     user_name = memory.get("identity", {}).get("name", {}).get("value", "Sahil")
-    city = memory.get("identity", {}).get("city", {}).get("value", "Mumbai")
+    city = memory.get("identity", {}).get("city", {}).get("value")
+    
+    if not city:
+        from core.geo import get_current_location
+        city = get_current_location()
+        print(f"[Briefing] No city in memory, detected: {city}")
 
     # 2. Weather (Open-Meteo Free API)
     weather_summary = f"Weather info for {city} is currently unavailable."

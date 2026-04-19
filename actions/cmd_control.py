@@ -106,7 +106,7 @@ def _ask_gemini(task: str) -> str:
     try:
         import google.generativeai as genai
         genai.configure(api_key=_get_api_key())
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        model = genai.GenerativeModel("gemini-1.5-flash")
 
         prompt = (
             f"Convert this request to a single Windows CMD command.\n"

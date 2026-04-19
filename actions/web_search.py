@@ -24,9 +24,9 @@ def _get_api_key() -> str:
 def _gemini_search(query: str) -> str:
     from google import genai
 
-    client = genai.Client(api_key=_get_api_key())
+    client = genai.Client(api_key=_get_api_key(), http_options={"api_version": "v1beta"})
     response = client.models.generate_content(
-        model="gemini-2.5-flash-lite",
+        model="gemini-1.5-flash",
         contents=query,
         config={"tools": [{"google_search": {}}]}
     )
@@ -44,15 +44,22 @@ def _ddg_search(query: str, max_results: int = 6) -> list:
     try:
         from ddgs import DDGS
     except ImportError:
-        from duckduckgo_search import DDGS
+        try:
+            from duckduckgo_search import DDGS
+        except ImportError:
+            return []
+    
     results = []
-    with DDGS() as ddgs:
-        for r in ddgs.text(query, max_results=max_results):
-            results.append({
-                "title":   r.get("title", ""),
-                "snippet": r.get("body", ""),
-                "url":     r.get("href", ""),
-            })
+    try:
+        with DDGS() as ddgs:
+            for r in ddgs.text(query, max_results=max_results):
+                results.append({
+                    "title":   r.get("title", ""),
+                    "snippet": r.get("body", ""),
+                    "url":     r.get("href", ""),
+                })
+    except Exception as e:
+        print(f"[WebSearch] ⚠️ DDG error: {e}")
     return results
 
 def _format_ddg(query: str, results: list) -> str:

@@ -55,3 +55,29 @@ def async_retry(max_attempts=3, delay=1, backoff=2, exceptions=(Exception,)):
             return None
         return wrapper
     return decorator
+
+def open_browser(url: str) -> bool:
+    """
+    Opens a URL in Microsoft Edge on Windows, or the system default on other platforms.
+    Forces Edge even if Chrome is the system default.
+    """
+    import platform
+    import subprocess
+    import webbrowser
+
+    current_os = platform.system()
+    try:
+        if current_os == "Windows":
+            # Using 'start msedge' is the most reliable way to force Edge on Windows
+            subprocess.Popen(["start", "msedge", url], shell=True)
+            return True
+        elif current_os == "Darwin": # macOS
+            subprocess.Popen(["open", "-a", "Microsoft Edge", url])
+            return True
+        else: # Linux
+            subprocess.Popen(["microsoft-edge", url])
+            return True
+    except Exception as e:
+        print(f"[Utils] ⚠️ Failed to launch Edge specifically: {e}. Falling back to default.")
+        webbrowser.open(url)
+        return True

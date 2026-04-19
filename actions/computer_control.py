@@ -218,7 +218,7 @@ def _move_mouse(x: int, y: int, duration: float = 0.3) -> str:
 def _drag(x1: int, y1: int, x2: int, y2: int, duration: float = 0.5) -> str:
     """Drags from (x1,y1) to (x2,y2)."""
     _ensure_pyautogui()
-    pyautogui.drag(x1 - pyautogui.position()[0], y1 - pyautogui.position()[1])
+    pyautogui.moveTo(x1, y1)
     pyautogui.dragTo(x2, y2, duration=duration)
     return f"Dragged from ({x1},{y1}) to ({x2},{y2})"
 
@@ -344,7 +344,7 @@ def _analyze_screen_for_element(description: str) -> tuple[int, int] | None:
             api_key = json.load(f)["gemini_api_key"]
 
         genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-2.5-flash-lite")
+        model = genai.GenerativeModel("gemini-1.5-flash")
 
 
         _ensure_pyautogui()

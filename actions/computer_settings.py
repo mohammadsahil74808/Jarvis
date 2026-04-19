@@ -40,8 +40,11 @@ API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
 
 import json
 def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
+    try:
+        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)["gemini_api_key"]
+    except Exception:
+        return ""
 
 
 def volume_up():
@@ -84,7 +87,12 @@ def volume_set(value: int):
             print(f"[Settings] 🔊 Volume → {value}%")
             return
         except Exception as e:
-            print(f"[Settings] ⚠️ pycaw failed: {e}")
+            print(f"[Settings] ⚠️ pycaw failed: {e}. Using keypress fallback.")
+            # Fallback: Many volumedown then specific volumeup
+            # Each press is 2%. To get to X%, we go to 0 then up X/2 times.
+            for _ in range(50): pyautogui.press("volumedown")
+            for _ in range(value // 2): pyautogui.press("volumeup")
+            return
     elif _OS == "Darwin":
         subprocess.run(["osascript", "-e", f"set volume output volume {value}"])
         return
@@ -94,8 +102,10 @@ def volume_set(value: int):
 
 def brightness_up():
     if _OS == "Windows":
-        pyautogui.hotkey("win", "a")
-        time.sleep(0.3)
+        try:
+            subprocess.run(["powershell", "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, 80)"], capture_output=True)
+        except Exception:
+            pyautogui.hotkey("win", "a")
     elif _OS == "Darwin":
         subprocess.run(["osascript", "-e", "tell application \"System Events\" to key code 144"])
     else:
@@ -103,8 +113,10 @@ def brightness_up():
 
 def brightness_down():
     if _OS == "Windows":
-        pyautogui.hotkey("win", "a")
-        time.sleep(0.3)
+        try:
+            subprocess.run(["powershell", "(Get-WmiObject -Namespace root/WMI -Class WmiMonitorBrightnessMethods).WmiSetBrightness(1, 30)"], capture_output=True)
+        except Exception:
+            pyautogui.hotkey("win", "a")
     elif _OS == "Darwin":
         subprocess.run(["osascript", "-e", "tell application \"System Events\" to key code 145"])
     else:
@@ -132,6 +144,14 @@ def full_screen():
 def minimize_window():
     if _OS == "Darwin":
         pyautogui.hotkey("command", "m")
+    elif _OS == "Windows":
+        try:
+            import pygetwindow as gw
+            win = gw.getActiveWindow()
+            if win: win.minimize()
+            else: pyautogui.hotkey("win", "down")
+        except Exception:
+            pyautogui.hotkey("win", "down")
     else:
         pyautogui.hotkey("win", "down")
 
@@ -139,6 +159,14 @@ def maximize_window():
     if _OS == "Darwin":
         subprocess.run(["osascript", "-e",
             'tell application "System Events" to keystroke "f" using {control down, command down}'])
+    elif _OS == "Windows":
+        try:
+            import pygetwindow as gw
+            win = gw.getActiveWindow()
+            if win: win.maximize()
+            else: pyautogui.hotkey("win", "up")
+        except Exception:
+            pyautogui.hotkey("win", "up")
     else:
         pyautogui.hotkey("win", "up")
 
@@ -514,7 +542,8 @@ def _detect_action(description: str) -> dict:
     """
     import google.generativeai as genai
     genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel("gemini-2.5-flash-lite")
+    # Fixed model name to a stable version
+    model = genai.GenerativeModel("gemini-1.5-flash")
 
     available = ", ".join(sorted(ACTION_MAP.keys())) + ", volume_set, type_text, write_on_screen, reload_n, press_key"
 

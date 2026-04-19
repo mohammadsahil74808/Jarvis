@@ -1,8 +1,8 @@
 {
   "identity": {
     "name": {
-      "value": "JARVIS",
-      "updated": "2026-04-16"
+      "value": "Sahil",
+      "updated": "2026-04-18"
     },
     "language": {
       "value": "Hindi",
@@ -17,7 +17,12 @@
       "updated": "2026-04-16"
     }
   },
-  "preferences": {},
+  "preferences": {
+    "weather_city": {
+      "value": "Delhi",
+      "updated": "2026-04-18"
+    }
+  },
   "projects": {
     "ai_assistant": {
       "value": "designed and customized by Sahil",
@@ -30,6 +35,10 @@
     "tomorrow_plan": {
       "value": "Make changes and customizations to JARVIS",
       "updated": "2026-04-17"
+    },
+    "basic_website_project": {
+      "value": "Created a basic website project in VS Code",
+      "updated": "2026-04-18"
     }
   },
   "relationships": {},
@@ -42,12 +51,24 @@
     "tomorrow_plan": {
       "value": "Fix some settings or features for JARVIS",
       "updated": "2026-04-17"
+    },
+    "searched_for": {
+      "value": "Samsung Galaxy A series phones",
+      "updated": "2026-04-18"
     }
   },
   "patterns": {
     "test_habit": {
       "value": "Always drinks coffee at 8 AM",
       "updated": "2026-04-17"
+    },
+    "file_folder_work_preference": {
+      "value": "Prefers working with files and folders",
+      "updated": "2026-04-19"
+    },
+    "coding_tools": {
+      "value": "Uses VS Code, Terminal, and GitHub as part of the coding workflow",
+      "updated": "2026-04-19"
     }
   }
 }

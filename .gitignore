@@ -12,3 +12,6 @@ venv/
 ENV/
 .vscode/
 .idea/
+memory/usage_log.json
+memory/long_term.json
+tmp_usage_log.json

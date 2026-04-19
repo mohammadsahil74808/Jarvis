@@ -193,7 +193,7 @@ def create_plan(goal: str, context: str = "") -> dict:
 
     genai.configure(api_key=_get_api_key())
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash-lite",
+        model_name="gemini-1.5-flash",
         system_instruction=PLANNER_PROMPT
     )
 
@@ -253,7 +253,7 @@ def replan(goal: str, completed_steps: list, failed_step: dict, error: str) -> d
 
     genai.configure(api_key=_get_api_key())
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name="gemini-1.5-flash",
         system_instruction=PLANNER_PROMPT
     )
 

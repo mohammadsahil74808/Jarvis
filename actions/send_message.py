@@ -87,14 +87,10 @@ def _send_instagram(receiver: str, message: str) -> str:
     Steps: Open Chrome → Go to instagram.com/direct → Search contact → Send
     """
     try:
-        # Force Microsoft Edge explicitly
+        # Force Microsoft Edge explicitly via helper
+        from core.utils import open_browser
         url = "https://www.instagram.com/direct/new/"
-        if platform.system() == "Windows":
-             import subprocess
-             subprocess.Popen(["start", "msedge", url], shell=True)
-        else:
-             import webbrowser
-             webbrowser.open(url)
+        open_browser(url)
         time.sleep(3.5)
 
         pyautogui.write(receiver, interval=0.05)

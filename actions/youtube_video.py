@@ -203,7 +203,7 @@ def _summarize_with_gemini(transcript: str, video_url: str) -> str:
 
     genai.configure(api_key=_get_api_key())
     model = genai.GenerativeModel(
-        model_name="gemini-2.5-flash",
+        model_name="gemini-1.5-flash",
         system_instruction=(
             "You are JARVIS, Tony Stark's AI assistant. "
             "Summarize YouTube video transcripts clearly and concisely. "
@@ -340,11 +340,8 @@ def _handle_play(parameters: dict, player) -> str:
             url = f"https://www.youtube.com/watch?v={video_id}"
             print(f"[YouTube] 🔗 Playing direct: {url}")
             
-            if platform.system() == "Windows":
-                 subprocess.Popen(["start", "msedge", url], shell=True)
-            else:
-                 import webbrowser
-                 webbrowser.open(url)
+            from core.utils import open_browser
+            open_browser(url)
             
             return f"Playing the first result for {query} on YouTube, sir."
             
