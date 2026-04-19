@@ -19,25 +19,8 @@ from core.utils import retry, async_retry
 from core.usage_tracker import UsageTracker
 from core.predictive_engine import PredictiveEngine
 
-from actions.flight_finder     import flight_finder
-from actions.open_app          import open_app
-from actions.weather_report    import weather_action
-from core.geo                 import get_current_location
-from actions.send_message      import send_message
-from actions.reminder          import reminder
-from actions.computer_settings import computer_settings
-from actions.screen_processor  import screen_process
-from actions.youtube_video     import youtube_video
-from actions.cmd_control       import cmd_control
-from actions.desktop           import desktop_control
-from actions.browser_control   import browser_control
-from actions.file_controller   import file_controller
-from actions.code_helper       import code_helper
-from actions.dev_agent         import dev_agent
-from actions.web_search        import web_search as web_search_action
-from actions.computer_control  import computer_control
-from actions.game_updater      import game_updater
-from actions.workflow_chains  import workflow_chains
+
+from core.geo import get_current_location # Some tools might need this early
 
 
 def get_base_dir():
@@ -809,41 +792,49 @@ class JarvisLive:
         while attempts < max_attempts:
             try:
                 if name == "open_app":
+                    from actions.open_app import open_app
                     r = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
                     result = r or f"Opened {args.get('app_name')}."
                     break # Success
 
                 elif name == "weather_report":
+                    from actions.weather_report import weather_action
                     r = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
                     result = r or "Weather delivered."
                     break
 
                 elif name == "browser_control":
+                    from actions.browser_control import browser_control
                     r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "file_controller":
+                    from actions.file_controller import file_controller
                     r = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "send_message":
+                    from actions.send_message import send_message
                     r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
                     result = r or f"Message sent to {args.get('receiver')}."
                     break
 
                 elif name == "reminder":
+                    from actions.reminder import reminder
                     r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
                     result = r or "Reminder set."
                     break
 
                 elif name == "youtube_video":
+                    from actions.youtube_video import youtube_video
                     r = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, response=None, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "screen_process":
+                    from actions.screen_processor import screen_process
                     threading.Thread(
                         target=screen_process,
                         kwargs={"parameters": args, "response": None,
@@ -854,26 +845,31 @@ class JarvisLive:
                     break
 
                 elif name == "computer_settings":
+                    from actions.computer_settings import computer_settings
                     r = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "cmd_control":
+                    from actions.cmd_control import cmd_control
                     r = await loop.run_in_executor(None, lambda: cmd_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "desktop_control":
+                    from actions.desktop import desktop_control
                     r = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "code_helper":
+                    from actions.code_helper import code_helper
                     r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
                     result = r or "Done."
                     break
 
                 elif name == "dev_agent":
+                    from actions.dev_agent import dev_agent
                     r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
                     result = r or "Done."
                     break
@@ -890,21 +886,25 @@ class JarvisLive:
                     query = args.get("query")
                     if query:
                         self.ui.root.after(0, lambda: self.ui.open_browser_panel(query))
+                    from actions.web_search import web_search as web_search_action
                     r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "computer_control":
+                    from actions.computer_control import computer_control
                     r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "game_updater":
+                    from actions.game_updater import game_updater
                     r = await loop.run_in_executor(None, lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
                     result = r or "Done."
                     break
 
                 elif name == "flight_finder":
+                    from actions.flight_finder import flight_finder
                     r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
@@ -922,6 +922,7 @@ class JarvisLive:
                     break
 
                 elif name == "workflow_chain":
+                    from actions.workflow_chains import workflow_chains
                     r = await loop.run_in_executor(None, lambda: workflow_chains(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
