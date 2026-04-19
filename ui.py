@@ -663,8 +663,13 @@ class JarvisUI:
         # Face/Orb
         if self._has_face:
             fw = int(FW * self.scale)
-            if self._face_scale_cache is None or abs(self._face_scale_cache[0] - self.scale) > 0.005:
+            if self._face_scale_cache is None or abs(self._face_scale_cache[0] - self.scale) > 0.02:
                 scaled = self._face_pil.resize((fw, fw), Image.BILINEAR)
+                
+                # Explicit cleanup to prevent Tkinter PhotoImage leak
+                if self._face_scale_cache is not None:
+                    del self._face_scale_cache
+                
                 self._face_scale_cache = (self.scale, ImageTk.PhotoImage(scaled))
             c.create_image(FCX, FCY, image=self._face_scale_cache[1], tags="anim")
         else:
