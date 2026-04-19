@@ -770,16 +770,19 @@ class JarvisLive:
                 self.ui.set_state("THINKING")
                 
                 # Use a fast internal Gemini call for context
-                model = genai.Client(api_key=_get_api_key()).models.get("gemini-1.5-flash")
+                client = genai.Client(api_key=_get_api_key())
                 prompt = (
                     "Analyze this screenshot. Describe: 1. The active window. "
                     "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
                     "Be concise. Format as a bulleted list."
                 )
-                response = model.generate_content([
-                    types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
-                    prompt
-                ])
+                response = client.models.generate_content(
+                    model="gemini-1.5-flash",
+                    contents=[
+                        types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                        prompt
+                    ]
+                )
                 self.screen_context = response.text.strip()
                 self.ui.write_log("SYS: Screen state analyzed and updated.")
                 result = f"Screen context updated: {self.screen_context}"
