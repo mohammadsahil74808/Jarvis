@@ -43,7 +43,8 @@ class ConsolePanel(tk.Toplevel):
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | DATA CONSOLE")
         x = parent_ui.CX
-        self.geometry(f"240x600+{x}+{parent_ui.root.winfo_y()}")
+        # Shorter height for Tiny-Mark
+        self.geometry(f"220x360+{x}+{parent_ui.root.winfo_y() + 120}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) # Attach to parent stacking order
         self.attributes("-alpha", 0.9)
@@ -107,8 +108,8 @@ class StatsPanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | HUD MODULE")
-        # Symmetric height for Mini-Mark
-        self.geometry(f"230x600+{parent_ui.root.winfo_x() + parent_ui.W + 10}+{parent_ui.root.winfo_y()}")
+        # Shorter height for Tiny-Mark
+        self.geometry(f"220x360+{parent_ui.root.winfo_x() + parent_ui.W + 5}+{parent_ui.root.winfo_y() + 120}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) 
         self.attributes("-alpha", 0.95)
@@ -275,22 +276,22 @@ class JarvisUI:
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         
-        # Panel Sizes (Symmetric Mini-Mark)
-        W, H   = 720, 600   # Main
-        CW, CH = 240, 600   # Console (Left)
-        SW, SH = 230, 600   # Stats (Right)
+        # Panel Sizes (Tiny-Mark Bottom Docked)
+        W, H   = 480, 480   # Main (Much smaller)
+        CW, CH = 220, 360   # Console (Shorter)
+        SW, SH = 220, 360   # Stats (Shorter)
         
         # Margins & Spacing
         MARGIN = 30
         SPACING = (sw - W - CW - SW - 2*MARGIN) // 2
         SPACING = max(10, min(SPACING, 50)) # Clamp spacing
         
-        # Positions
+        # Positions (Above Taskbar)
         RX = (sw - W) // 2
-        RY = (sh - H) // 2
+        RY = (sh - H - 70)  # ~70px above bottom (for taskbar)
         
-        CX = (RX - SPACING - CW)
-        SX = (RX + W + SPACING)
+        CX = (RX - 5 - CW) # Tight spacing
+        SX = (RX + W + 5)
         
         # Fallback for small screens
         if CX < MARGIN:
@@ -305,9 +306,9 @@ class JarvisUI:
         self.sw, self.sh = sw, sh
         self.CX, self.SX = CX, SX
 
-        self.FACE_SZ = min(int(H * 0.5), 240)
+        self.FACE_SZ = 220
         self.FCX     = W // 2
-        self.FCY     = int(H * 0.1) + self.FACE_SZ // 2
+        self.FCY     = 80 + self.FACE_SZ // 2
 
         # ── Durum ────────────────────────────────────────────────────────────
         config = self._get_config_internal()
@@ -363,14 +364,14 @@ class JarvisUI:
                             bg=C_BG, highlightthickness=0)
         self.bg.place(x=0, y=0)
 
-        # ── Log alanı ────────────────────────────────────────────────────────
-        LW = int(W * 0.78)
-        LH = 90
-        LOG_Y = H - LH - 70
+        # ── Log alanı (Tiny Layout) ──────────────────────────────────────────
+        LW = int(W * 0.9)
+        LH = 80
+        LOG_Y = H - LH - 65
         self.log_frame = tk.Frame(self.root, bg=C_PANEL,
                                   highlightbackground=C_MID,
                                   highlightthickness=1)
-        self.log_frame.place(x=(W - LW) // 2 + 30, y=LOG_Y, width=LW, height=LH)
+        self.log_frame.place(x=(W - LW) // 2, y=LOG_Y, width=LW, height=LH)
         self.log_text = tk.Text(self.log_frame, fg=C_TEXT, bg=C_PANEL,
                                 insertbackground=C_TEXT, borderwidth=0,
                                 wrap="word", font=("Courier", 10), padx=10, pady=6)
@@ -433,10 +434,10 @@ class JarvisUI:
             else:
                 self.console_panel.deiconify()
                 self.stats_panel.deiconify()
-                # Symmetric positioning on restore
+                # Tiny-Mark positioning on restore
                 ry = self.root.winfo_y()
-                self.console_panel.geometry(f"+{self.CX}+{ry}")
-                self.stats_panel.geometry(f"+{self.SX}+{ry}")
+                self.console_panel.geometry(f"+{self.CX}+{ry + 120}")
+                self.stats_panel.geometry(f"+{self.SX}+{ry + 120}")
                 self.console_panel.lift()
                 self.stats_panel.lift()
                 if hasattr(self, "web_panel") and self.web_panel.proc is not None:
