@@ -42,9 +42,8 @@ class ConsolePanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | DATA CONSOLE")
-        # Standardized size for symmetry
-        w, h = 320, 400
-        self.geometry(f"{w}x{h}+{parent_ui.CX}+{parent_ui.RY}")
+        x = parent_ui.CX
+        self.geometry(f"320x380+{x}+50")
         self.overrideredirect(True)
         self.transient(parent_ui.root) # Attach to parent stacking order
         self.attributes("-alpha", 0.9)
@@ -108,9 +107,8 @@ class StatsPanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | HUD MODULE")
-        # Match main window height for a balanced look
-        w, h = 300, 816
-        self.geometry(f"{w}x{h}+{parent_ui.SX}+{parent_ui.RY}")
+        # Larger panel for more data
+        self.geometry(f"340x680+{parent_ui.root.winfo_x() + parent_ui.W + 10}+{parent_ui.root.winfo_y()}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) 
         self.attributes("-alpha", 0.95)
@@ -219,19 +217,22 @@ class WebIntelManager:
                 self.proc.terminate()
             except: pass
         
+        # Anchor to actual Console position
         try:
-            # Anchor to actual Console position
+            # Use root level coordinates
+            rx = self.ui.root.winfo_x()
+            ry = self.ui.root.winfo_y()
             cx = self.ui.console_panel.winfo_x()
             cy = self.ui.console_panel.winfo_y()
             
-            x = cx
-            # Console height is 400, so browser goes exactly below with tiny margin
-            y = cy + 418
+            x = cx + 20
+            # Console height is 380, so browser goes below
+            y = cy +  750
         except Exception as e:
             print(f"[UI] [Browser] Pos calculation error: {e}")
-            x, y = self.ui.CX, self.ui.RY + 418
+            x, y = self.ui.CX + 20, 500
             
-        w, h = 320, 398 # Matches Console width, half of total stack height
+        w, h = 450, 500 # Smaller and Square-ish
         
         url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
         
@@ -284,9 +285,9 @@ class JarvisUI:
         SPACING = (sw - W - CW - SW - 2*MARGIN) // 2
         SPACING = max(10, min(SPACING, 50)) # Clamp spacing
         
-        # Center Positions with slight downward bias (+40px)
+        # Positions
         RX = (sw - W) // 2
-        RY = (sh - H) // 2 + 35 # Ground it better above taskbar
+        RY = (sh - H) // 2
         
         CX = (RX - SPACING - CW)
         SX = (RX + W + SPACING)
@@ -350,7 +351,9 @@ class JarvisUI:
         
         # Position Console and Stats relative to Root
         self.console_panel = ConsolePanel(self)
+        
         self.stats_panel   = StatsPanel(self)
+        self.stats_panel.geometry(f"300x650+{SX}+{(sh-650)//2}")
         
         # New Real Browser Panel
         self.web_panel = WebIntelManager(self)
@@ -660,10 +663,11 @@ class JarvisUI:
         # Face/Orb
         if self._has_face:
             fw = int(FW * self.scale)
+            # Threshold 0.005 -> 0.02 to reduce resize calls
             if self._face_scale_cache is None or abs(self._face_scale_cache[0] - self.scale) > 0.02:
                 scaled = self._face_pil.resize((fw, fw), Image.BILINEAR)
                 
-                # Explicit cleanup to prevent Tkinter PhotoImage leak
+                # Explicitly delete old PhotoImage to prevent Tkinter memory leak
                 if self._face_scale_cache is not None:
                     del self._face_scale_cache
                 
