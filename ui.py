@@ -169,7 +169,7 @@ class StatsPanel(tk.Toplevel):
         # 5. ── Mini Activity Feed ──────────────────
         fy = 500
         self.canvas.create_text(50, fy-20, text="ACTIVITY LOG", fill=C_MID, font=("Courier", 8, "bold"), anchor="w", tags="dynamic")
-        for i, act in enumerate(self.ui.activity_feed):
+        for i, act in enumerate(list(self.ui.activity_feed)):
             self.canvas.create_text(50, fy + (i*18), text=act, fill="#aaaaaa", font=("Courier", 8), anchor="w", tags="dynamic")
 
         # 6. ── Voice Visualizer ────────────────────
