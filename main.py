@@ -522,15 +522,10 @@ class JarvisLive:
         self.detector = ClapDetector() if self.clap_enabled else None
 
         # Wake Word Activation
-        self.wake_word_enabled = config.get("wake_word_activation", True)
         self.wake_detector = None
+        self.wake_word_enabled = config.get("wake_word_activation", True)
         if self.wake_word_enabled:
-            model_path = str(BASE_DIR / "models" / "vosk-model")
-            try:
-                self.wake_detector = WakeWordDetector(model_path)
-            except Exception as e:
-                print(f"[JARVIS] ⚠️ WakeWord error: {e}")
-                self.wake_word_enabled = False
+            threading.Thread(target=self._load_wake_detector, daemon=True).start()
 
         # Session Context
         self.session_context = {
@@ -555,6 +550,16 @@ class JarvisLive:
         
         # Start Prediction Heartbeat
         self.ui.root.after(10000, self._prediction_loop)
+
+    def _load_wake_detector(self):
+        """Background thread mein Vosk model load hoga - UI freeze nahi hogi"""
+        model_path = str(BASE_DIR / "models" / "vosk-model")
+        try:
+            self.wake_detector = WakeWordDetector(model_path)
+            self.ui.write_log("SYS: Wake word system ready hai.")
+        except Exception as e:
+            print(f"[JARVIS] ⚠️ WakeWord load failed: {e}")
+            self.wake_word_enabled = False
 
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
