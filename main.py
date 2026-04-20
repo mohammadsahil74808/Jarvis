@@ -14,12 +14,23 @@ from memory.memory_manager import (
     should_extract_memory, extract_memory, should_extract_memory_local
 )
 from core.clap_detector import ClapDetector
+from core.wake_detector import WakeWordDetector
 from core.utils import retry, async_retry
 from core.usage_tracker import UsageTracker
 from core.predictive_engine import PredictiveEngine
 
-
-from core.geo import get_current_location # Some tools might need this early
+from actions.open_app          import open_app
+from actions.weather_report    import weather_action
+from core.geo                 import get_current_location
+from actions.send_message      import send_message
+from actions.reminder          import reminder
+from actions.computer_settings import computer_settings
+from actions.screen_processor  import screen_process
+from actions.desktop           import desktop_control
+from actions.browser_control   import browser_control
+from actions.file_controller   import file_controller
+from actions.computer_control  import computer_control
+from actions.workflow_chains  import workflow_chains
 
 
 def get_base_dir():
@@ -514,7 +525,12 @@ class JarvisLive:
         self.wake_word_enabled = config.get("wake_word_activation", True)
         self.wake_detector = None
         if self.wake_word_enabled:
-            threading.Thread(target=self._load_wake_detector, daemon=True).start()
+            model_path = str(BASE_DIR / "models" / "vosk-model")
+            try:
+                self.wake_detector = WakeWordDetector(model_path)
+            except Exception as e:
+                print(f"[JARVIS] ⚠️ WakeWord error: {e}")
+                self.wake_word_enabled = False
 
         # Session Context
         self.session_context = {
@@ -560,17 +576,6 @@ class JarvisLive:
         
         # Check every 10 minutes (600,000 ms)
         self.ui.root.after(600000, self._prediction_loop)
-
-    def _load_wake_detector(self):
-        """Loads Vosk model in background to avoid freezing the UI."""
-        model_path = str(BASE_DIR / "models" / "vosk-model")
-        try:
-            from core.wake_detector import WakeWordDetector
-            self.wake_detector = WakeWordDetector(model_path)
-            self.ui.write_log("SYS: Wake word system ready.")
-        except Exception as e:
-            print(f"[JARVIS] ⚠️ WakeWord load failed: {e}")
-            self.wake_word_enabled = False
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
@@ -797,37 +802,31 @@ class JarvisLive:
         while attempts < max_attempts:
             try:
                 if name == "open_app":
-                    from actions.open_app import open_app
                     r = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
                     result = r or f"Opened {args.get('app_name')}."
                     break # Success
 
                 elif name == "weather_report":
-                    from actions.weather_report import weather_action
                     r = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
                     result = r or "Weather delivered."
                     break
 
                 elif name == "browser_control":
-                    from actions.browser_control import browser_control
                     r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "file_controller":
-                    from actions.file_controller import file_controller
                     r = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "send_message":
-                    from actions.send_message import send_message
                     r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
                     result = r or f"Message sent to {args.get('receiver')}."
                     break
 
                 elif name == "reminder":
-                    from actions.reminder import reminder
                     r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
                     result = r or "Reminder set."
                     break
@@ -839,7 +838,6 @@ class JarvisLive:
                     break
 
                 elif name == "screen_process":
-                    from actions.screen_processor import screen_process
                     threading.Thread(
                         target=screen_process,
                         kwargs={"parameters": args, "response": None,
@@ -850,7 +848,6 @@ class JarvisLive:
                     break
 
                 elif name == "computer_settings":
-                    from actions.computer_settings import computer_settings
                     r = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
                     result = r or "Done."
                     break
@@ -862,7 +859,6 @@ class JarvisLive:
                     break
 
                 elif name == "desktop_control":
-                    from actions.desktop import desktop_control
                     r = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
@@ -888,16 +884,15 @@ class JarvisLive:
                     break
 
                 elif name == "web_search":
+                    from actions.web_search import web_search as web_search_action
                     query = args.get("query")
                     if query:
                         self.ui.root.after(0, lambda: self.ui.open_browser_panel(query))
-                    from actions.web_search import web_search as web_search_action
                     r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "computer_control":
-                    from actions.computer_control import computer_control
                     r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
@@ -927,7 +922,6 @@ class JarvisLive:
                     break
 
                 elif name == "workflow_chain":
-                    from actions.workflow_chains import workflow_chains
                     r = await loop.run_in_executor(None, lambda: workflow_chains(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
