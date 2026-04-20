@@ -15,13 +15,7 @@ from pathlib import Path
 import sys
 
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR         = get_base_dir()
+from core.config import BASE_DIR
 MEMORY_PATH      = BASE_DIR / "memory" / "long_term.json"
 _lock            = RLock()
 MAX_VALUE_LENGTH = 400
@@ -158,23 +152,24 @@ def should_extract_memory(user_text: str, jarvis_text: str, api_key: str) -> boo
 
     # Second pass: AI verification (Detailed)
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        from google import genai
+        client = genai.Client(api_key=api_key)
 
-        # Her iki tarafı da gönder — Jarvis'in söyledikleri de bilgi içerebilir
         combined = f"User: {user_text[:300]}\nJarvis: {jarvis_text[:200]}"
 
-        check = model.generate_content(
-            f"Does this conversation contain ANY of the following?\n"
-            f"- Personal facts (name, age, city, job, birthday, nationality)\n"
-            f"- Preferences or favorites (food, color, music, sport, game, film, book, etc.)\n"
-            f"- Patterns of behavior (recurring habits, routines, schedule, usual activities)\n"
-            f"- Active projects or goals the user is working on\n"
-            f"- People in the user's life (friends, family, partner, colleagues)\n"
-            f"- Things the user wants to do or buy in the future\n"
-            f"- Any other fact worth remembering long-term\n\n"
-            f"Reply only YES or NO.\n\nConversation:\n{combined}"
+        check = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=(
+                f"Does this conversation contain ANY of the following?\n"
+                f"- Personal facts (name, age, city, job, birthday, nationality)\n"
+                f"- Preferences or favorites (food, color, music, sport, game, film, book, etc.)\n"
+                f"- Patterns of behavior (recurring habits, routines, schedule, usual activities)\n"
+                f"- Active projects or goals the user is working on\n"
+                f"- People in the user's life (friends, family, partner, colleagues)\n"
+                f"- Things the user wants to do or buy in the future\n"
+                f"- Any other fact worth remembering long-term\n\n"
+                f"Reply only YES or NO.\n\nConversation:\n{combined}"
+            )
         )
         return "YES" in check.text.upper()
     except Exception as e:
@@ -187,13 +182,14 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str) -> dict:
     Stage 2: Detaylı çıkarım. Her iki tarafı da analiz eder.
     """
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        from google import genai
+        client = genai.Client(api_key=api_key)
 
         combined = f"User: {user_text[:500]}\nJarvis: {jarvis_text[:300]}"
 
-        raw = model.generate_content(
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=(
             f"Extract ALL memorable personal facts from this conversation. Any language.\n"
             f"Return ONLY valid JSON. Use {{}} if truly nothing is worth saving.\n\n"
             f"Category guide:\n"
@@ -223,8 +219,9 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str) -> dict:
             f' "relationships":{{"friend_yusuf":{{"value":"close friend"}}}},\n'
             f' "wishes":{{"buy_guitar":{{"value":"wants an acoustic guitar"}}}},\n'
             f' "notes":{{"special_info":{{"value":"Some other detail"}}}}}}\n\n'
-            f"Conversation:\n{combined}\n\nJSON:"
-        ).text.strip()
+            )
+        )
+        raw = response.text.strip()
 
         import re
         raw = re.sub(r"```(?:json)?", "", raw).strip().rstrip("`").strip()

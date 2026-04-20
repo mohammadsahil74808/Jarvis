@@ -5,18 +5,9 @@ import re
 from pathlib import Path
 
 
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
 
 
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _get_platform() -> str:
@@ -119,9 +110,8 @@ def _is_safe(command: str) -> tuple[bool, str]:
 
 def _ask_gemini(task: str) -> str:
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=_get_api_key())
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        from google import genai
+        client = genai.Client(api_key=get_api_key())
 
         prompt = (
             f"Convert this request to a single Windows CMD command.\n"
@@ -129,11 +119,17 @@ def _ask_gemini(task: str) -> str:
             f"If unsafe or impossible, output: UNSAFE\n\n"
             f"Request: {task}\n\nCommand:"
         )
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
         command  = response.text.strip().strip("`").strip()
         if command.startswith("```"):
             lines   = command.split("\n")
-            command = "\n".join(lines[1:-1]).strip()
+            if len(lines) > 2:
+                command = "\n".join(lines[1:-1]).strip()
+            else:
+                command = lines[0].strip()
         return command
     except Exception as e:
         return f"ERROR: {e}"

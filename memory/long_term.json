@@ -21,6 +21,14 @@
     "weather_city": {
       "value": "Delhi",
       "updated": "2026-04-18"
+    },
+    "favorite_coding_language": {
+      "value": "Python",
+      "updated": "2026-04-20"
+    },
+    "favorite_movies_series": {
+      "value": "MCU movies and Hollywood web series",
+      "updated": "2026-04-20"
     }
   },
   "projects": {

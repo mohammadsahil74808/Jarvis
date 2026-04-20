@@ -7,11 +7,6 @@ import requests
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
 def news_report(
     parameters:     dict,
     player          = None,

@@ -18,18 +18,9 @@ from pathlib import Path
 from datetime import datetime
 
 
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
 
 
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def _get_desktop() -> Path:
@@ -59,10 +50,9 @@ def _ask_gemini_for_desktop_action(task: str) -> str:
     Asks Gemini to generate safe Python/pyautogui code
     to accomplish a desktop-related task.
     """
-    import google.generativeai as genai
-
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    from google import genai
+    client = genai.Client(api_key=get_api_key())
+    model_name = "gemini-1.5-flash"
 
     desktop = str(_get_desktop())
 
@@ -91,7 +81,10 @@ Task: {task}
 Python code:"""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=model_name,
+            contents=prompt
+        )
         code = response.text.strip()
         if code.startswith("```"):
             lines = code.split("\n")

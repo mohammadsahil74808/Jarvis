@@ -8,15 +8,7 @@ import sys
 from pathlib import Path
 
 
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
-
-
-BASE_DIR   = get_base_dir()
-CONFIG_DIR = BASE_DIR / "config"
-API_FILE   = CONFIG_DIR / "api_keys.json"
+from core.config import get_base_dir, BASE_DIR, CONFIG_DIR, API_CONFIG_PATH as API_FILE
 
 SYSTEM_NAME = "J.A.R.V.I.S"
 MODEL_BADGE = "MARK XXXV"
@@ -339,6 +331,7 @@ class JarvisUI:
             "weather": "CLEAR", "status": "ONLINE"
         }
         self.last_net_bytes = psutil.net_io_counters().bytes_sent + psutil.net_io_counters().bytes_recv
+        self._sync_pending = False
         self._start_stats_thread()
 
         self._face_pil         = None
@@ -402,8 +395,9 @@ class JarvisUI:
         
         # ── State Synchronization ────────────────────────────────────────────
         def sync_side_panels(event=None):
-            # Use after(0) to ensure the root state is updated before we check
-            self.root.after(10, self._perform_sync)
+            if not self._sync_pending:
+                self._sync_pending = True
+                self.root.after(100, self._do_sync_and_reset)
 
         self.root.bind("<Unmap>", sync_side_panels)
         self.root.bind("<Map>", sync_side_panels)
@@ -441,10 +435,16 @@ class JarvisUI:
                     pass
         except Exception: pass
 
+    def _do_sync_and_reset(self):
+        self._sync_pending = False
+        self._perform_sync()
+
     def _periodic_sync_check(self):
         """Heartbeat to catch programmatic state changes that might skip events"""
-        self._perform_sync()
-        self.root.after(400, self._periodic_sync_check)
+        if not self._sync_pending:
+            self._sync_pending = True
+            self.root.after(10, self._do_sync_and_reset)
+        self.root.after(1000, self._periodic_sync_check)
 
     def open_browser_panel(self, query=None):
         """External hook to launch search terminal"""

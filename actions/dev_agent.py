@@ -7,28 +7,17 @@ import webbrowser
 from pathlib import Path
 
 
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR         = get_base_dir()
-API_CONFIG_PATH  = BASE_DIR / "config" / "api_keys.json"
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
 PROJECTS_DIR     = Path.home() / "Desktop" / "JarvisProjects"
 MAX_FIX_ATTEMPTS = 5
 MODEL_PLANNER    = "gemini-1.5-flash"
 MODEL_WRITER     = "gemini-1.5-flash"
 
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
-def _get_model(model_name: str):
-    import google.generativeai as genai
-    genai.configure(api_key=_get_api_key())
-    return genai.GenerativeModel(model_name)
+def _get_client():
+    from google import genai
+    return genai.Client(api_key=get_api_key())
 
 
 def _strip_fences(text: str) -> str:
@@ -98,7 +87,7 @@ class RateLimitError(Exception):
 
 
 def _plan_project(description: str, language: str) -> dict:
-    model = _get_model(MODEL_PLANNER)
+    client = _get_client()
 
     prompt = f"""You are a senior software architect. Create a minimal, complete file plan for this project.
 
@@ -136,7 +125,10 @@ Critical rules:
 JSON:"""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=MODEL_PLANNER,
+            contents=prompt
+        )
         raw = _strip_fences(response.text)
         return json.loads(raw)
     except json.JSONDecodeError as e:
@@ -154,7 +146,7 @@ def _write_file(
     project_dir: Path,
     already_written: dict[str, str],
 ) -> str:
-    model = _get_model(MODEL_WRITER)
+    client = _get_client()
 
     file_path = file_info["path"]
     file_desc = file_info.get("description", "")
@@ -215,7 +207,10 @@ General rules:
 Code for {file_path}:"""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=MODEL_WRITER,
+            contents=prompt
+        )
         code = _strip_fences(response.text)
 
         full_path = project_dir / file_path
@@ -361,7 +356,7 @@ def _fix_files(
     entry_point: str,
 ) -> dict[str, str]:
 
-    model = _get_model(MODEL_PLANNER)
+    client = _get_client()
 
     error_file, error_line = _parse_traceback(error_output, list(file_codes.keys()))
     error_type = _classify_error(error_output)
@@ -423,7 +418,10 @@ Rules:
 Fixed code for {fix_path}:"""
 
         try:
-            response = model.generate_content(prompt)
+            response = client.models.generate_content(
+                model=MODEL_PLANNER,
+                contents=prompt
+            )
             fixed = _strip_fences(response.text)
 
             full_path = project_dir / fix_path

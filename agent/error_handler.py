@@ -5,14 +5,7 @@ from pathlib import Path
 from enum import Enum
 
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.config import get_api_key, BASE_DIR
 
 
 class ErrorDecision(Enum):
@@ -49,9 +42,6 @@ Return ONLY valid JSON:
 """
 
 
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 
 def analyze_error(
@@ -78,8 +68,6 @@ def analyze_error(
             "user_message": str
         }
     """
-    import google.generativeai as genai
-
     if attempt >= max_attempts:
         print(f"[ErrorHandler] ⚠️ Max attempts reached for step {step.get('step')} — forcing replan")
         return {
@@ -90,11 +78,9 @@ def analyze_error(
             "user_message":  "Trying a different approach, sir."
         }
 
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=ERROR_ANALYST_PROMPT
-    )
+    from google import genai
+    from google.genai import types
+    client = genai.Client(api_key=get_api_key())
 
     prompt = f"""Failed step:
 Tool: {step.get('tool')}
@@ -108,7 +94,13 @@ Error:
 Attempt number: {attempt}"""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            config=types.GenerateContentConfig(
+                system_instruction=ERROR_ANALYST_PROMPT
+            ),
+            contents=prompt
+        )
         text     = response.text.strip()
         text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
 
@@ -148,10 +140,9 @@ def generate_fix(step: dict, error: str, fix_suggestion: str) -> dict:
 
     Returns a modified step dict.
     """
-    import google.generativeai as genai
-
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+    from google import genai
+    from google.genai import types
+    client = genai.Client(api_key=_get_api_key())
 
     prompt = f"""A task step failed. Generate a replacement step.
 
@@ -167,7 +158,10 @@ Write a Python script that accomplishes the same goal differently.
 Return ONLY the Python code, no explanation."""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
         code = response.text.strip()
         code = re.sub(r"```(?:python)?", "", code).strip().rstrip("`").strip()
 

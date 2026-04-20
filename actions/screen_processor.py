@@ -23,18 +23,10 @@ except ImportError:
 from google import genai
 from google.genai import types
 
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
-
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
-CHANNELS            = 1
-RECEIVE_SAMPLE_RATE = 24000
-CHUNK_SIZE          = 1024
+from core.config import (
+    get_api_key, BASE_DIR, API_CONFIG_PATH,
+    LIVE_MODEL, CHANNELS, RECEIVE_SAMPLE_RATE, CHUNK_SIZE
+)
 
 IMG_MAX_W = 640
 IMG_MAX_H = 360
@@ -51,16 +43,6 @@ SYSTEM_PROMPT = (
 )
 
 
-def _get_api_key() -> str:
-    try:
-        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-            keys = json.load(f)
-        key = keys.get("gemini_api_key", "")
-        if not key:
-            raise ValueError("gemini_api_key not found")
-        return key
-    except Exception as e:
-        raise RuntimeError(f"Could not load API key: {e}")
 
 
 def _get_camera_index() -> int:
@@ -181,7 +163,7 @@ class _LiveSession:
         self._send_lock = asyncio.Lock()
 
         client = genai.Client(
-            api_key=_get_api_key(),
+            api_key=get_api_key(),
             http_options={"api_version": "v1beta"}
         )
 

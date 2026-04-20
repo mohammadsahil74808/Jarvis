@@ -8,12 +8,7 @@ from datetime import datetime
 from pathlib import Path
 
 # Fix path for imports
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-BASE_DIR = get_base_dir()
+from core.config import BASE_DIR
 if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
 

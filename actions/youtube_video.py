@@ -25,14 +25,7 @@ except ImportError:
     _TRANSCRIPT_OK = False
 
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
 
 HEADERS = {
     "User-Agent": (
@@ -44,9 +37,6 @@ HEADERS = {
 }
 
 
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
 
 def _get_default_browser_name() -> str | None:
     return "msedge"
@@ -199,25 +189,26 @@ def _get_transcript(video_id: str) -> str | None:
 
 
 def _summarize_with_gemini(transcript: str, video_url: str) -> str:
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=(
-            "You are JARVIS, Tony Stark's AI assistant. "
-            "Summarize YouTube video transcripts clearly and concisely. "
-            "Structure: 1-sentence overview, then 3-5 key points. "
-            "Be direct. Address the user as 'sir'. "
-            "Match the language of the transcript."
-        )
-    )
+    client = genai.Client(api_key=get_api_key())
 
     max_chars = 80000
     truncated = transcript[:max_chars] + ("..." if len(transcript) > max_chars else "")
 
-    response = model.generate_content(
-        f"Please summarize this YouTube video transcript:\n\n{truncated}"
+    response = client.models.generate_content(
+        model="gemini-1.5-flash",
+        config=types.GenerateContentConfig(
+            system_instruction=(
+                "You are JARVIS, Tony Stark's AI assistant. "
+                "Summarize YouTube video transcripts clearly and concisely. "
+                "Structure: 1-sentence overview, then 3-5 key points. "
+                "Be direct. Address the user as 'sir'. "
+                "Match the language of the transcript."
+            )
+        ),
+        contents=f"Please summarize this YouTube video transcript:\n\n{truncated}"
     )
     return response.text.strip()
 

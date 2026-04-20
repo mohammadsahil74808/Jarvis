@@ -30,21 +30,9 @@ except ImportError:
 
 _OS = platform.system() 
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
 
 import json
-def _get_api_key() -> str:
-    try:
-        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)["gemini_api_key"]
-    except Exception:
-        return ""
 
 
 def volume_up():
@@ -527,11 +515,10 @@ ACTION_MAP = {
     "select_all":              select_all,
     "save":                    save_file,
     "save_file":               save_file,
-    "enter":                   press_enter,
-    "press_enter":             press_enter,
     "escape":                  press_escape,
-    "press_escape":            press_escape,
     "cancel":                  press_escape,
+    "set_volume":              volume_set,
+    "set_brightness":          brightness_up,
 }
 
 def _detect_action(description: str) -> dict:
@@ -540,10 +527,8 @@ def _detect_action(description: str) -> dict:
     Herhangi bir dilde çalışır.
     Döner: {"action": str, "value": optional}
     """
-    import google.generativeai as genai
-    genai.configure(api_key=_get_api_key())
-    # Fixed model name to a stable version
-    model = genai.GenerativeModel("gemini-1.5-flash")
+    from google import genai
+    client = genai.Client(api_key=get_api_key())
 
     available = ", ".join(sorted(ACTION_MAP.keys())) + ", volume_set, type_text, write_on_screen, reload_n, press_key"
 
@@ -615,7 +600,10 @@ IMPORTANT:
 - Return ONLY the JSON object, no explanation, no markdown."""
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=prompt
+        )
         text = response.text.strip()
         text = __import__("re").sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
         return json.loads(text)
@@ -659,12 +647,25 @@ def computer_settings(
     print(f"[Settings] ⚙️ Action: {action}  Value: {value}")
 
 
-    if action == "volume_set":
+    if action in ("volume_set", "set_volume", "volume"):
         try:
+            # Handle "volume=50" or similar string values
+            if isinstance(value, str) and "=" in value:
+                value = value.split("=")[-1]
             volume_set(int(value or 50))
             return f"Volume set to {value}%."
         except Exception as e:
             return f"Could not set volume: {e}"
+
+    if action in ("brightness_set", "set_brightness", "brightness"):
+        try:
+            val = int(value or 50)
+            if val > 70: brightness_up()
+            else: brightness_down()
+            return f"Brightness adjusted to {val}% (approx)."
+        except:
+            brightness_up()
+            return "Brightness adjusted."
 
     if action in ("type_text", "write_on_screen", "type", "write"):
         text = str(value or params.get("text", ""))

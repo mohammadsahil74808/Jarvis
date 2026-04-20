@@ -25,19 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
-def get_base_dir() -> Path:
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent.parent
-
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
-
-
-def _get_api_key() -> str:
-    with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)["gemini_api_key"]
+from core.config import get_api_key, BASE_DIR
 
 
 def _parse_date(raw: str) -> str:
@@ -71,13 +59,15 @@ def _parse_date(raw: str) -> str:
             return val.strftime("%Y-%m-%d")
 
     try:
-        import google.generativeai as genai
-        genai.configure(api_key=_get_api_key())
-        model    = genai.GenerativeModel("gemini-1.5-flash")
+        from google import genai
+        client = genai.Client(api_key=_get_api_key())
         today_str = today.strftime("%Y-%m-%d")
-        response = model.generate_content(
-            f"Today is {today_str}. Convert this date to YYYY-MM-DD format: '{raw}'. "
-            f"Return ONLY the date string, nothing else."
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            contents=(
+                f"Today is {today_str}. Convert this date to YYYY-MM-DD format: '{raw}'. "
+                f"Return ONLY the date string, nothing else."
+            )
         )
         result = response.text.strip()
         if re.match(r"\d{4}-\d{2}-\d{2}", result):
@@ -181,17 +171,10 @@ def _parse_flights_with_gemini(
     Sends raw page text to Gemini and extracts structured flight data.
     Returns list of flight dicts.
     """
-    import google.generativeai as genai
+    from google import genai
+    from google.genai import types
 
-    genai.configure(api_key=_get_api_key())
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=(
-            "You are a flight data extraction expert. "
-            "Extract flight information from raw webpage text. "
-            "Return ONLY valid JSON array. No explanation, no markdown."
-        )
-    )
+    client = genai.Client(api_key=_get_api_key())
 
     truncated = raw_text[:12000]
 
@@ -205,7 +188,17 @@ def _parse_flights_with_gemini(
     )
 
     try:
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model="gemini-1.5-flash",
+            config=types.GenerateContentConfig(
+                system_instruction=(
+                    "You are a flight data extraction expert. "
+                    "Extract flight information from raw webpage text. "
+                    "Return ONLY valid JSON array. No explanation, no markdown."
+                )
+            ),
+            contents=prompt
+        )
         text     = response.text.strip()
         text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
         flights  = json.loads(text)
