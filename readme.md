@@ -8,7 +8,7 @@ Built for intelligent automation.
 ---
 ## ✨ Overview
 
-**MARK XXXV** is an advanced voice-driven AI assistant designed to turn your computer into an interactive intelligent system.
+**MJarvis** is an advanced voice-driven AI assistant designed to turn your computer into an interactive intelligent system.
 Speak naturally — it listens, understands context, responds with a human-like voice, and executes tasks across your system automatically.
 Designed for speed, autonomy, and real-world usability.
 ---
@@ -24,7 +24,7 @@ Designed for speed, autonomy, and real-world usability.
 * **Keyboard input** — Type commands directly from the UI without speaking
 
 ---
-## 🆕 What's New in XXXV
+## 🆕 What's New in Jarvis
 
 * 🎮 Steam & Epic Games integration — install, update, schedule, auto-shutdown
 * 🔇 Mute button (F4 / click) — no more Jarvis picking up side conversations
