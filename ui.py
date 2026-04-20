@@ -517,11 +517,6 @@ class JarvisUI:
             threading.Thread(target=self.on_text_command, args=(text,), daemon=True).start()
 
     def set_state(self, state: str):
-        """Thread-safe way to update the UI state."""
-        self.root.after(0, self._set_state_main_thread, state)
-
-    def _set_state_main_thread(self, state: str):
-        """Internal handler for state changes, runs on main thread."""
         self._jarvis_state = state
         if state == "MUTED":
             self.status_text, self.speaking = "MUTED", False
