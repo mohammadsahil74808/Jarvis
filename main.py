@@ -25,6 +25,7 @@ from core.wake_detector import WakeWordDetector
 from core.utils import retry, async_retry
 from core.usage_tracker import UsageTracker
 from core.predictive_engine import PredictiveEngine
+from core.ai_router import is_coding_request, handle_coding_task
 
 from actions.open_app          import open_app
 from actions.weather_report    import weather_action
@@ -698,6 +699,24 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
+            
+        # Coding Intent Detection
+        if is_coding_request(text):
+            self.ui.write_log(f"You: {text}")
+            self.ui.write_log("[Groq] Coding intent detected. Routing to Groq...")
+            
+            def _handle_groq():
+                res = handle_coding_task(text)
+                # Parse to remove large code blocks from UI log
+                clean_log = re.sub(r'```.*?```', '[Code Block Saved to Desktop/Opened in VS Code]', res, flags=re.DOTALL)
+                self.ui.write_log(f"Jarvis (Groq):\n{clean_log.strip()}")
+                
+                # Speak only a summary
+                self.speak("Sir, I have generated the code and opened it in VS Code for you.")
+
+            threading.Thread(target=_handle_groq, daemon=True).start()
+            return
+
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},
@@ -1084,15 +1103,32 @@ class JarvisLive:
                     break
 
                 elif name == "code_helper":
-                    from actions.code_helper import code_helper
-                    r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
-                    result = r or "Done."
+                    from core.ai_router import handle_coding_task
+                    prompt = args.get("description", "")
+                    if not prompt:
+                        prompt = f"Action: {args.get('action')}, Language: {args.get('language')}, File: {args.get('file_path')}"
+                    
+                    self.ui.write_log("[Groq] Coding Model routing coding task...")
+                    result = await loop.run_in_executor(None, handle_coding_task, prompt)
+                    
+                    if "Groq Error" in result:
+                        from actions.code_helper import code_helper
+                        self.ui.write_log("[Groq] Fallback to Gemini due to error.")
+                        r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
+                        result = r or "Done."
                     break
 
                 elif name == "dev_agent":
-                    from actions.dev_agent import dev_agent
-                    r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
-                    result = r or "Done."
+                    from core.ai_router import handle_coding_task
+                    prompt = args.get("description", "")
+                    self.ui.write_log("[Groq] Coding Model building project...")
+                    result = await loop.run_in_executor(None, handle_coding_task, prompt)
+                    
+                    if "Groq Error" in result:
+                        from actions.dev_agent import dev_agent
+                        self.ui.write_log("[Groq] Fallback to Gemini due to error.")
+                        r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
+                        result = r or "Done."
                     break
 
                 elif name == "agent_task":
@@ -1273,6 +1309,16 @@ class JarvisLive:
                             if full_in:
                                 self.memory_executor.submit(_update_memory_async, full_in, full_out)
                                 self.memory_executor.submit(_index_conversation_async, full_in, full_out)
+                                
+                                # Coding Intent Detection for Voice
+                                if is_coding_request(full_in):
+                                    self.ui.write_log("[Groq] Coding intent detected in voice. Routing...")
+                                    def _handle_voice_groq():
+                                        res = handle_coding_task(full_in)
+                                        clean_log = re.sub(r'```.*?```', '[Code Block Saved to Desktop]', res, flags=re.DOTALL)
+                                        self.ui.write_log(f"Jarvis (Groq):\n{clean_log.strip()}")
+                                        self.speak("Sir, coding task complete. The file is open in VS Code.")
+                                    threading.Thread(target=_handle_voice_groq, daemon=True).start()
 
                     if response.tool_call:
                         fn_responses = []

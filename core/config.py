@@ -38,3 +38,7 @@ def get_config() -> dict:
 def get_api_key() -> str:
     """Helper to retrieve the Gemini API key."""
     return get_config().get("gemini_api_key", "")
+
+def get_groq_api_key() -> str:
+    """Helper to retrieve the Groq API key."""
+    return get_config().get("groq_api_key", "")
