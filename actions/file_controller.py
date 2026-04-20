@@ -7,11 +7,14 @@ from datetime import datetime
 import send2trash
 
 def _get_desktop() -> Path:
-    """Returns desktop path — works on Windows, Mac, Linux."""
+    one_drive = Path.home() / "OneDrive" / "Desktop"
+    if one_drive.exists(): return one_drive
     return Path.home() / "Desktop"
 
 
 def _get_downloads() -> Path:
+    one_drive = Path.home() / "OneDrive" / "Downloads"
+    if one_drive.exists(): return one_drive
     return Path.home() / "Downloads"
 
 

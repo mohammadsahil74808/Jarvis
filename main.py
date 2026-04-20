@@ -1,5 +1,6 @@
 import asyncio
 import threading
+from concurrent.futures import ThreadPoolExecutor
 import json
 import sys
 import traceback
@@ -9,6 +10,12 @@ import sounddevice as sd
 from google import genai
 from google.genai import types
 from ui import JarvisUI
+from core.config import (
+    get_base_dir, get_config, get_api_key, 
+    BASE_DIR, API_CONFIG_PATH, PROMPT_PATH,
+    LIVE_MODEL, CHANNELS, SEND_SAMPLE_RATE,
+    RECEIVE_SAMPLE_RATE, CHUNK_SIZE
+)
 from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
     should_extract_memory, extract_memory, should_extract_memory_local
@@ -31,34 +38,19 @@ from actions.browser_control   import browser_control
 from actions.file_controller   import file_controller
 from actions.computer_control  import computer_control
 from actions.workflow_chains  import workflow_chains
-
-
-def get_base_dir():
-    if getattr(sys, "frozen", False):
-        return Path(sys.executable).parent
-    return Path(__file__).resolve().parent
-
-
-BASE_DIR        = get_base_dir()
-API_CONFIG_PATH = BASE_DIR / "config" / "api_keys.json"
-PROMPT_PATH     = BASE_DIR / "core" / "prompt.txt"
-LIVE_MODEL          = "models/gemini-2.5-flash-native-audio-preview-12-2025"
-CHANNELS            = 1
-SEND_SAMPLE_RATE    = 16000
-RECEIVE_SAMPLE_RATE = 24000
-CHUNK_SIZE          = 1024
+from actions.browser_agent    import browser_agent
+from actions.screen_vision    import screen_vision
+from actions.file_brain       import file_brain
+from actions.research_mode    import research_mode
+from memory.semantic_memory   import add_semantic_memory, search_semantic_memory
 
 
 def _get_api_key() -> str:
-    return _get_config().get("gemini_api_key", "")
+    return get_api_key()
 
 
 def _get_config() -> dict:
-    try:
-        with open(API_CONFIG_PATH, "r", encoding="utf-8") as f:
-            return json.load(f)
-    except Exception:
-        return {}
+    return get_config()
 
 
 def _load_system_prompt() -> str:
@@ -101,9 +93,7 @@ def _update_memory_async(user_text: str, jarvis_text: str) -> None:
         return
     _last_memory_input = user_text
 
-    # Quick Local Check to save Quota
-    if not should_extract_memory_local(user_text):
-        return
+    # API check (it will do its own local check internally)
 
     try:
         api_key = _get_api_key()
@@ -115,7 +105,17 @@ def _update_memory_async(user_text: str, jarvis_text: str) -> None:
             print(f"[Memory] ✅ {list(data.keys())}")
     except Exception as e:
         if "429" not in str(e):
-            print(f"[Memory] ⚠️ {e}")
+            print(f"[Memory] ⚠️ Async update failed: {e}")
+
+def _index_conversation_async(user_text: str, jarvis_text: str) -> None:
+    """Saves every conversation turn as an embedding for semantic search."""
+    if not user_text.strip() and not jarvis_text.strip():
+        return
+    combined = f"User: {user_text}\nJarvis: {jarvis_text}"
+    try:
+        add_semantic_memory(combined)
+    except Exception as e:
+        print(f"[Memory] ⚠️ Indexing failed: {e}")
 
 
 # ── Tool declarations ─────────────────────────────────────────────────────────
@@ -237,10 +237,9 @@ TOOL_DECLARATIONS = [
     {
         "name": "computer_settings",
         "description": (
-            "Controls the computer: volume, brightness, window management, keyboard shortcuts, "
-            "typing text on screen, closing apps, fullscreen, dark mode, WiFi, restart, shutdown, "
-            "scrolling, tab management, zoom, screenshots, lock screen, refresh/reload page. "
-            "Use for ANY single computer control command. NEVER route to agent_task."
+            "SYSTEM SETTINGS CONTROL: Use ONLY for Volume, Brightness, Mute, Dark Mode, WiFi, and Window State (maximize/minimize/close). "
+            "Example: 'set volume to 50', 'mute', 'brighten screen'. "
+            "Do NOT use for mouse movement or visual pixel tasks."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -373,7 +372,11 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "computer_control",
-        "description": "Direct computer control: type, click, hotkeys, scroll, move mouse, screenshots, find elements on screen.",
+        "description": (
+            "LOW-LEVEL PIXEL CONTROL: Use for mouse clicks (x,y), typing text at a specific cursor, scrolls, and finding objects on screen. "
+            "Example: 'click at 500,500', 'type hello', 'scroll down'. "
+            "Never use for Volume or System Settings."
+        ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -501,6 +504,134 @@ TOOL_DECLARATIONS = [
             "required": ["mode"]
         }
     },
+    {
+        "name": "browser_agent",
+        "description": (
+            "Advanced web automation agent. Use this for complex web tasks, "
+            "logins, form filling, and intelligent data extraction. "
+            "Supports headless and visible modes."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING", 
+                    "description": "go_to | search | click | type | scroll | extract | fill_form | login_helper | close"
+                },
+                "url": {"type": "STRING", "description": "Target URL"},
+                "query": {"type": "STRING", "description": "Search query"},
+                "selector": {"type": "STRING", "description": "CSS selector"},
+                "text": {"type": "STRING", "description": "Text to type or click"},
+                "description": {"type": "STRING", "description": "Intelligent description of the element (e.g. 'login button')"},
+                "press_enter": {"type": "BOOLEAN", "description": "Press Enter after typing (default: false)"},
+                "direction": {"type": "STRING", "description": "Scroll direction: up | down"},
+                "amount": {"type": "INTEGER", "description": "Scroll amount in pixels"},
+                "headless": {"type": "BOOLEAN", "description": "Run in background (default: false for login, true for extraction)"},
+                "data": {"type": "OBJECT", "description": "Data for fill_form action (description: value mappings)"},
+                "timeout": {"type": "INTEGER", "description": "Timeout for login_helper in seconds"}
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "screen_vision",
+        "description": (
+            "Analyzes the screen to extract text (OCR) and detect UI elements. "
+            "Use this to read error messages, detect buttons, or extract structured screen data."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "analyze (OCR + Detect) | ocr (Text only) | detect (Buttons only)"
+                },
+                "region": {
+                    "type": "OBJECT",
+                    "description": "Optional: {'top', 'left', 'width', 'height'} of the area to analyze"
+                }
+            },
+            "required": []
+        }
+    },
+    {
+        "name": "recall_memory",
+        "description": "Searches past conversations and memories semantically to find relevant context or user preferences.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {
+                    "type": "STRING",
+                    "description": "The search query (e.g. 'favourite sports' or 'previous chat about coding')"
+                },
+                "k": {
+                    "type": "INTEGER",
+                    "description": "Number of relevant memories to retrieve (default: 5)"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
+        "name": "file_brain",
+        "description": "Intelligent file manager: search, deep_search, read, copy, move, delete (Trash), rename, open, find_duplicates, and clean_downloads.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "read | copy | move | delete | rename | open | search | deep_search | find_duplicates | clean_downloads"
+                },
+                "path": {
+                    "type": "STRING",
+                    "description": "Source file/folder path (or 'desktop'/'downloads')"
+                },
+                "destination": {
+                    "type": "STRING",
+                    "description": "Destination folder for 'copy' or 'move'"
+                },
+                "new_name": {
+                    "type": "STRING",
+                    "description": "New name for 'rename' action"
+                },
+                "days": {
+                    "type": "INTEGER",
+                    "description": "Threshold days for 'clean_downloads' (default: 30)"
+                },
+                "count": {
+                    "type": "INTEGER",
+                    "description": "Number of files for 'recent' action (default: 5)"
+                }
+            },
+            "required": ["action"]
+        }
+    },
+    {
+        "name": "research_mode",
+        "description": "Deep web research: search multiple sites, extract articles, and specialize in UPSC, Tech, or News.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "action": {
+                    "type": "STRING",
+                    "description": "research | summarize | compare"
+                },
+                "query": {
+                    "type": "STRING",
+                    "description": "Research topic or question"
+                },
+                "research_mode": {
+                    "type": "STRING",
+                    "description": "upsc | tech | news | general"
+                },
+                "max_sites": {
+                    "type": "INTEGER",
+                    "description": "Number of sources to research (default: 3)"
+                }
+            },
+            "required": ["action", "query"]
+        }
+    },
 ]
 
 
@@ -541,6 +672,9 @@ class JarvisLive:
 
         # Screen Awareness
         self.screen_context = None
+
+        # Memory Worker (BUG-08 Fix: Single worker to prevent thread accumulation)
+        self.memory_executor = ThreadPoolExecutor(max_workers=1)
 
         # Predictive Engine
         log_path = BASE_DIR / "memory" / "usage_log.json"
@@ -697,10 +831,12 @@ class JarvisLive:
         elif name == "browser_control":
             self.session_context["last_query"] = args.get("query") or args.get("url")
             self.session_context["last_action"] = args.get("action")
-        elif name == "computer_settings":
+        elif name == "browser_agent":
+            self.session_context["last_query"] = args.get("query") or args.get("url")
             self.session_context["last_action"] = args.get("action")
-            if args.get("value"):
-                self.session_context["last_query"] = args.get("value")
+
+        elif name == "screen_vision":
+            self.session_context["last_action"] = args.get("action", "analyze")
 
         # --- PREDICTIVE ENGINE LOGGING ---
         if name == "open_app":
@@ -766,30 +902,36 @@ class JarvisLive:
 
         # ── capture_screen_context ───────────────────────────────────────────
         if name == "capture_screen_context":
-            from actions.screen_processor import _capture_screenshot
+            self.ui.set_state("THINKING")
+            loop = asyncio.get_running_loop()
+            
+            def _blocking_capture():
+                from actions.screen_processor import _capture_screenshot
+                try:
+                    img_bytes = _capture_screenshot()
+                    client = genai.Client(api_key=_get_api_key())
+                    prompt = (
+                        "Analyze this screenshot. Describe: 1. The active window. "
+                        "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
+                        "Be concise. Format as a bulleted list."
+                    )
+                    response = client.models.generate_content(
+                        model="gemini-1.5-flash-latest",
+                        contents=[
+                            types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                            prompt
+                        ]
+                    )
+                    return response.text.strip()
+                except Exception as e:
+                    return f"Screen capture failed: {e}"
+
             try:
-                img_bytes = _capture_screenshot()
-                self.ui.set_state("THINKING")
-                
-                # Use a fast internal Gemini call for context
-                client = genai.Client(api_key=_get_api_key())
-                prompt = (
-                    "Analyze this screenshot. Describe: 1. The active window. "
-                    "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
-                    "Be concise. Format as a bulleted list."
-                )
-                response = client.models.generate_content(
-                    model="gemini-1.5-flash",
-                    contents=[
-                        types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
-                        prompt
-                    ]
-                )
-                self.screen_context = response.text.strip()
+                self.screen_context = await loop.run_in_executor(None, _blocking_capture)
                 self.ui.write_log("SYS: Screen state analyzed and updated.")
                 result = f"Screen context updated: {self.screen_context}"
             except Exception as e:
-                result = f"Screen capture failed: {e}"
+                result = f"Process failed: {e}"
             
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
@@ -799,6 +941,79 @@ class JarvisLive:
             )
 
         loop   = asyncio.get_running_loop()
+        
+        if name == "browser_agent":
+            try:
+                result = await loop.run_in_executor(None, browser_agent, args)
+            except Exception as e:
+                result = f"Browser Agent failed: {e}"
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+
+        if name == "screen_vision":
+            try:
+                result = await loop.run_in_executor(None, screen_vision, args)
+            except Exception as e:
+                result = f"Screen Vision failed: {e}"
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+
+        if name == "recall_memory":
+            try:
+                query = args.get("query")
+                k = args.get("k", 5)
+                memories = await loop.run_in_executor(None, lambda: search_semantic_memory(query, k))
+                if not memories:
+                    result = "No similar memories found, sir."
+                else:
+                    formatted = []
+                    for m in memories:
+                        formatted.append(f"[{m['timestamp']}] {m['text']}")
+                    result = "Found similar memories:\n" + "\n".join(formatted)
+            except Exception as e:
+                result = f"Recall failed: {e}"
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+
+        if name == "recall_memory":
+            try:
+                query = args.get("query")
+                k = args.get("k", 5)
+                memories = await loop.run_in_executor(None, lambda: search_semantic_memory(query, k))
+                if not memories:
+                    result = "No similar memories found, sir."
+                else:
+                    formatted = []
+                    for m in memories:
+                        formatted.append(f"[{m['timestamp']}] {m['text']}")
+                    result = "Found similar memories:\n" + "\n".join(formatted)
+            except Exception as e:
+                result = f"Recall failed: {e}"
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+
+        if name == "file_brain":
+            try:
+                result = await loop.run_in_executor(None, file_brain, args)
+            except Exception as e:
+                result = f"File Brain failed: {e}"
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+
+        if name == "research_mode":
+            try:
+                result = await loop.run_in_executor(None, research_mode, args)
+            except Exception as e:
+                result = f"Research Mode failed: {e}"
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+
         result = "Done."
 
         # Self-healing retry loop
@@ -1055,12 +1270,9 @@ class JarvisLive:
                                 self.ui.write_log(f"Jarvis: {full_out}")
                             out_buf = []
 
-                            if full_in and len(full_in) > 5:
-                                threading.Thread(
-                                    target=_update_memory_async,
-                                    args=(full_in, full_out),
-                                    daemon=True
-                                ).start()
+                            if full_in:
+                                self.memory_executor.submit(_update_memory_async, full_in, full_out)
+                                self.memory_executor.submit(_index_conversation_async, full_in, full_out)
 
                     if response.tool_call:
                         fn_responses = []
