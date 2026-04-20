@@ -242,7 +242,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
             raise ValueError("generated_code requires a 'description' parameter.")
         return _run_generated_code(description, speak=speak)
 
-    elif name == "flight_finder":
+    elif tool == "flight_finder":
         from actions.flight_finder import flight_finder
         return flight_finder(parameters=parameters, player=None, speak=speak) or "Done."
 
