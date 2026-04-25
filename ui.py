@@ -1,6 +1,11 @@
 import os, json, time, math, random, threading, psutil, subprocess, shutil
+try:
+    from ctypes import windll
+    windll.shcore.SetProcessDpiAwareness(1)
+except Exception:
+    pass
+
 import tkinter as tk
-from tkinterweb import HtmlFrame
 from collections import deque
 from PIL import Image, ImageTk, ImageDraw
 #: Error (duplicate): f.recv_excn is not implemet -> Fixed in backend summary, not UI.
@@ -11,7 +16,7 @@ from pathlib import Path
 from core.config import get_base_dir, BASE_DIR, CONFIG_DIR, API_CONFIG_PATH as API_FILE
 
 SYSTEM_NAME = "J.A.R.V.I.S"
-MODEL_BADGE = "MARK XXXV"
+MODEL_BADGE = "JARVIS"
 
 C_BG     = "#000000"
 C_PRI    = "#00d4ff"
@@ -35,7 +40,8 @@ class ConsolePanel(tk.Toplevel):
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | DATA CONSOLE")
         x = parent_ui.CX
-        self.geometry(f"320x380+{x}+50")
+        # Fixed geometry to match CW/CH
+        self.geometry(f"{parent_ui.CW}x{parent_ui.CH}+{x}+50")
         self.overrideredirect(True)
         self.transient(parent_ui.root) # Attach to parent stacking order
         self.attributes("-alpha", 0.9)
@@ -47,16 +53,16 @@ class ConsolePanel(tk.Toplevel):
         self.text_area = tk.Text(
             self.canvas, fg=C_TEXT, bg=C_PANEL,
             insertbackground=C_TEXT, borderwidth=0,
-            wrap="word", font=("Courier", 10), padx=10, pady=10
+            wrap="word", font=("Courier", 10), padx=8, pady=8
         )
-        self.text_area.place(relx=0.05, rely=0.05, relwidth=0.9, relheight=0.9)
+        self.text_area.place(relx=0.05, rely=0.1, relwidth=0.9, relheight=0.85)
         self.text_area.configure(state="disabled")
         self.text_area.tag_config("you", foreground="#e8e8e8")
         self.text_area.tag_config("ai",  foreground=C_PRI)
         self.text_area.tag_config("sys", foreground=C_ACC2)
         self.text_area.tag_config("err", foreground=C_RED)
 
-        self.canvas.create_text(200, 15, text="LIVE DATA STREAM", fill=C_MID, font=("Courier", 8, "bold"))
+        self.canvas.create_text(parent_ui.CW//2, 15, text="LIVE DATA STREAM", fill=C_ACC, font=("Courier", 10, "bold"))
         self._typing_queue = deque()
         self._is_typing = False
 
@@ -99,8 +105,9 @@ class StatsPanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | HUD MODULE")
-        # Larger panel for more data
-        self.geometry(f"340x680+{parent_ui.root.winfo_x() + parent_ui.W + 10}+{parent_ui.root.winfo_y()}")
+        # Vertically Centered relative to Main Window (Right Side)
+        SY = parent_ui.root.winfo_y() + (parent_ui.H - parent_ui.SH) // 2
+        self.geometry(f"{parent_ui.SW}x{parent_ui.SH}+{parent_ui.root.winfo_x() + parent_ui.W + 15}+{SY}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) 
         self.attributes("-alpha", 0.95)
@@ -117,28 +124,28 @@ class StatsPanel(tk.Toplevel):
         self.canvas.delete("dynamic")
         
         # 1. ── HUD Animation (Top) ──────────────────
-        cx, cy = 170, 100
+        cx, cy = 190, 100
         # Rotating Scanner Arc
-        self.canvas.create_arc(cx-60, cy-60, cx+60, cy+60, start=(self.tick*4)%360, extent=120, 
-                               outline=C_PRI, width=2, style="arc", tags="dynamic")
-        self.canvas.create_arc(cx-70, cy-70, cx+70, cy+70, start=(self.tick*-2)%360, extent=60, 
+        self.canvas.create_arc(cx-80, cy-80, cx+80, cy+80, start=(self.tick*4)%360, extent=120, 
+                               outline=C_PRI, width=3, style="arc", tags="dynamic")
+        self.canvas.create_arc(cx-95, cy-95, cx+95, cy+95, start=(self.tick*-2)%360, extent=60, 
                                outline="#ff3333", width=2, style="arc", tags="dynamic")
         # Inner Rotating Lines
         angle = math.radians(self.tick * 6)
-        x2, y2 = cx + 40 * math.cos(angle), cy + 40 * math.sin(angle)
+        x2, y2 = cx + 60 * math.cos(angle), cy + 60 * math.sin(angle)
         self.canvas.create_line(cx, cy, x2, y2, fill=C_PRI, width=1, tags="dynamic")
-        self.canvas.create_oval(cx-4, cy-4, cx+4, cy+4, fill=C_PRI, outline="", tags="dynamic")
+        self.canvas.create_oval(cx-6, cy-6, cx+6, cy+6, fill=C_PRI, outline="", tags="dynamic")
 
         # 2. ── Clock & Greeting ─────────────────────
-        now = time.strftime("%H:%M:%S")
+        time_str = time.strftime("%I:%M:%S %p")
         date = time.strftime("%d %b %Y").upper()
-        # Layered text for glow effect
-        self.canvas.create_text(cx+1, 180+1, text=now, fill=C_DIM, font=("Courier", 24, "bold"), tags="dynamic")
-        self.canvas.create_text(cx, 180, text=now, fill="#ffffff", font=("Courier", 24, "bold"), tags="dynamic")
-        self.canvas.create_text(cx, 210, text=date, fill=C_MID, font=("Courier", 10), tags="dynamic")
+        ty = 200
+        self.canvas.create_text(cx+1, ty+1, text=time_str, fill=C_DIM, font=("Courier", 24, "bold"), tags="dynamic")
+        self.canvas.create_text(cx, ty, text=time_str, fill="#ffffff", font=("Courier", 24, "bold"), tags="dynamic")
+        self.canvas.create_text(cx, ty+35, text=date, fill=C_PRI, font=("Courier", 10), tags="dynamic")
         
-        self.canvas.create_text(cx, 240, text="SYSTEM STATUS: READY", fill="#00ff88", font=("Courier", 9, "bold"), tags="dynamic")
-        self.canvas.create_text(cx, 255, text="WELCOME BACK SAHIL", fill=C_PRI, font=("Courier", 8), tags="dynamic")
+        self.canvas.create_text(cx, ty+65, text="STATUS: READY", fill="#00ff88", font=("Courier", 9, "bold"), tags="dynamic")
+        self.canvas.create_text(cx, ty+82, text="WELCOME BACK, SAHIL", fill=C_MID, font=("Courier", 8), tags="dynamic")
 
         # 3. ── Live JARVIS Status ──────────────────
         status = self.ui._jarvis_state
@@ -148,38 +155,42 @@ class StatsPanel(tk.Toplevel):
         elif status == "SPEAKING": color = C_PRI
         elif status == "MUTED": color = "#ff3333"
         
-        self.canvas.create_rectangle(60, 280, 280, 310, outline=color, width=1, tags="dynamic")
-        self.canvas.create_text(170, 295, text=status, fill=color, font=("Courier", 12, "bold"), tags="dynamic")
+        SY_RECT = 320
+        self.canvas.create_rectangle(60, SY_RECT, 320, SY_RECT+35, outline=color, width=2, tags="dynamic")
+        self.canvas.create_text(190, SY_RECT+17, text=status, fill=color, font=("Courier", 12, "bold"), tags="dynamic")
 
         # 4. ── Core Performance (Bars) ──────────────
-        sy = 340
+        sy = 400
         stats = self.ui.stats
         self._draw_bar(sy, "CPU LOAD", stats.get('cpu', 0), "#ff3333" if stats.get('cpu',0)>80 else C_PRI)
-        self._draw_bar(sy+60, "RAM USAGE", stats.get('ram', 0), "#ff3333" if stats.get('ram',0)>80 else "#00ff88")
-        self.canvas.create_text(50, sy+110, text=f"NETWORK: {stats.get('net', '0 KB/s')}", fill="#ffffff", font=("Courier", 9), anchor="w", tags="dynamic")
+        self._draw_bar(sy+65, "RAM USAGE", stats.get('ram', 0), "#ff3333" if stats.get('ram',0)>80 else "#00ff88")
+        self.canvas.create_text(30, sy+120, text=f"NET CONNECTIVITY: {stats.get('net', '0 KB/s')}", fill="#ffffff", font=("Courier", 9), anchor="w", tags="dynamic")
 
         # 5. ── Mini Activity Feed ──────────────────
-        fy = 500
-        self.canvas.create_text(50, fy-20, text="ACTIVITY LOG", fill=C_MID, font=("Courier", 8, "bold"), anchor="w", tags="dynamic")
+        fy = 580
+        self.canvas.create_text(30, fy-25, text="LIVE SYSTEM LOG", fill=C_PRI, font=("Courier", 9, "bold"), anchor="w", tags="dynamic")
         for i, act in enumerate(list(self.ui.activity_feed)):
-            self.canvas.create_text(50, fy + (i*18), text=act, fill="#aaaaaa", font=("Courier", 8), anchor="w", tags="dynamic")
+            self.canvas.create_text(30, fy + (i*18), text=act, fill="#aaaaaa", font=("Courier", 9), anchor="w", tags="dynamic")
 
         # 6. ── Voice Visualizer ────────────────────
-        vy = 640
-        for i in range(12):
-            h = random.randint(5, 30) if status == "SPEAKING" else (random.randint(2, 8) if status == "LISTENING" else 3)
-            x_pos = 70 + (i * 18)
+        vy = 750
+        N_BARS = 18
+        for i in range(N_BARS):
+            h = random.randint(10, 40) if status == "SPEAKING" else (random.randint(4, 12) if status == "LISTENING" else 5)
+            x_pos = 65 + (i * 16)
             self.canvas.create_rectangle(x_pos, vy-h, x_pos+10, vy, fill=C_PRI if status != "MUTED" else "#330000", outline="", tags="dynamic")
 
         self.after(50, self._animate)
 
     def _draw_bar(self, y, label, val, col):
-        self.canvas.create_text(50, y, text=label, fill="#ffffff", font=("Courier", 8), anchor="w", tags="dynamic")
-        self.canvas.create_rectangle(50, y+10, 290, y+22, outline=C_DIM, width=1, tags="dynamic")
-        w = int(240 * (val/100.0))
+        self.canvas.create_text(30, y, text=label, fill="#ffffff", font=("Courier", 8), anchor="w", tags="dynamic")
+        # Wider bars for 380px panel
+        self.canvas.create_rectangle(30, y+10, 350, y+24, outline=C_DIM, width=1, tags="dynamic")
+        w_max = 320
+        w = int(w_max * (val/100.0))
         if w > 0:
-            self.canvas.create_rectangle(50, y+10, 50+w, y+22, fill=col, outline="", tags="dynamic")
-        self.canvas.create_text(295, y+16, text=f"{val:.1f}%", fill=col, font=("Courier", 8), anchor="w", tags="dynamic")
+            self.canvas.create_rectangle(30, y+10, 30+w, y+24, fill=col, outline="", tags="dynamic")
+        self.canvas.create_text(360, y+17, text=f"{val:.0f}%", fill=col, font=("Courier", 8, "bold"), anchor="e", tags="dynamic")
 
 class WebIntelManager:
     """Managed Edge Browser in App Mode (Left Bottom)"""
@@ -211,25 +222,19 @@ class WebIntelManager:
         
         # Anchor to actual Console position
         try:
-            # Use root level coordinates
-            rx = self.ui.root.winfo_x()
-            ry = self.ui.root.winfo_y()
-            cx = self.ui.console_panel.winfo_x()
-            cy = self.ui.console_panel.winfo_y()
-            
-            x = cx + 20
-            # Console height is 380, so browser goes below
-            y = cy +  750
+            # Bilkul niche aur left (Left panel ke niche)
+            # Use hard coordinates for Bottom-Left focus
+            x, y = 160, 920
         except Exception as e:
             print(f"[UI] [Browser] Pos calculation error: {e}")
-            x, y = self.ui.CX + 20, 500
+            x, y = 200, 700
             
-        w, h = 450, 500 # Smaller and Square-ish
+        w, h = 550, 600 # Smaller and Square-ish
         
         url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
         
-        # Use a FIXED session path to skip first-run screens
-        data_dir = os.path.join(os.environ.get("LOCALAPPDATA", "C:\\Temp"), "JarvisEdgeData")
+        # Wapas fixed profile par switch kar raha hoon taaki "Sync" popup na aaye
+        data_dir = os.path.join(os.environ.get("LOCALAPPDATA", "C:\\Temp"), "JarvisEdgeProfile")
         
         flags = [
             self.edge_path,
@@ -241,7 +246,9 @@ class WebIntelManager:
             "--new-window",
             "--no-first-run",
             "--no-default-browser-check",
-            "--guest"
+            "--disable-first-run-ui",
+            "--disable-sync",
+            "--disable-features=msEdgeSocialSidebar,msEdgeInPrivateSync"
         ]
         
         print(f"[UI] [Browser] Launching Edge: {x},{y} {w}x{h}")
@@ -267,19 +274,20 @@ class JarvisUI:
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
         
-        # Panel Sizes
-        W, H   = 984, 816   # Main
-        CW, CH = 320, 550   # Console (Left)
-        SW, SH = 300, 650   # Stats (Right)
+        # Panel Sizes (ULTRA-LARGE Scaling)
+        self.W, self.H   = 950, 800  # Massive Main
+        self.CW, self.CH = 320, 500  # Wide Console
+        self.SW, self.SH = 380, 800  # Detailed Stats
+        W, H, CW, CH, SW, SH = self.W, self.H, self.CW, self.CH, self.SW, self.SH
         
         # Margins & Spacing
         MARGIN = 30
         SPACING = (sw - W - CW - SW - 2*MARGIN) // 2
         SPACING = max(10, min(SPACING, 50)) # Clamp spacing
         
-        # Positions
+        # Positions (Above Center)
         RX = (sw - W) // 2
-        RY = (sh - H) // 2
+        RY = (sh - H) // 2 - 60
         
         CX = (RX - SPACING - CW)
         SX = (RX + W + SPACING)
@@ -290,16 +298,16 @@ class JarvisUI:
         if SX + SW > sw - MARGIN:
             SX = sw - SW - MARGIN
 
-        self.W, self.H = W, H
         self.root.geometry(f"{W}x{H}+{RX}+{RY}")
         self.root.configure(bg=C_BG)
 
         self.sw, self.sh = sw, sh
         self.CX, self.SX = CX, SX
 
-        self.FACE_SZ = min(int(H * 0.54), 400)
+        self.FACE_SZ = min(int(H * 0.52), 600)
         self.FCX     = W // 2
-        self.FCY     = int(H * 0.13) + self.FACE_SZ // 2
+        # Offset for Ultra-Large H
+        self.FCY     = int(H * 0.16) + self.FACE_SZ // 2
 
         # ── Durum ────────────────────────────────────────────────────────────
         config = self._get_config_internal()
@@ -346,7 +354,8 @@ class JarvisUI:
         self.console_panel = ConsolePanel(self)
         
         self.stats_panel   = StatsPanel(self)
-        self.stats_panel.geometry(f"300x650+{SX}+{(sh-650)//2}")
+        # Stats panel ko upar shift kiya (centered relative to screen)
+        self.stats_panel.geometry(f"{SW}x{SH}+{SX}+{(sh - SH) // 2 - 60}")
         
         # New Real Browser Panel
         self.web_panel = WebIntelManager(self)
@@ -356,17 +365,19 @@ class JarvisUI:
                             bg=C_BG, highlightthickness=0)
         self.bg.place(x=0, y=0)
 
-        # ── Log alanı ────────────────────────────────────────────────────────
-        LW = int(W * 0.72)
-        LH = 110
-        LOG_Y = H - LH - 80
+        # ── Log alanı (Shrunk) ────────────────────────────────────────────────────────
+        LW = int(W * 0.65)
+        LH = 80
+        # Align interaction cluster higher
+        INPUT_Y = H - 45 
+        LOG_Y   = INPUT_Y - LH
         self.log_frame = tk.Frame(self.root, bg=C_PANEL,
                                   highlightbackground=C_MID,
                                   highlightthickness=1)
         self.log_frame.place(x=(W - LW) // 2, y=LOG_Y, width=LW, height=LH)
         self.log_text = tk.Text(self.log_frame, fg=C_TEXT, bg=C_PANEL,
                                 insertbackground=C_TEXT, borderwidth=0,
-                                wrap="word", font=("Courier", 10), padx=10, pady=6)
+                                wrap="word", font=("Courier", 10), padx=10, pady=8)
         self.log_text.pack(fill="both", expand=True)
         self.log_text.configure(state="disabled")
         self.log_text.tag_config("you", foreground="#e8e8e8")
@@ -376,7 +387,6 @@ class JarvisUI:
         self.MAX_LOG_LINES = 1000
 
         # ── Klavye girişi ─────────────────────────────────────────────────────
-        INPUT_Y = LOG_Y + LH + 6
         self._build_input_bar(LW, INPUT_Y)
 
         # ── Mute butonu ───────────────────────────────────────────────────────
@@ -403,8 +413,7 @@ class JarvisUI:
         self.root.bind("<Map>", sync_side_panels)
         self.root.bind("<Configure>", sync_side_panels) # Detects state changes
         
-        # Periodic "Heartbeat" sync for programmatic changes
-        self._periodic_sync_check()
+        # Periodic "Heartbeat" removed to save CPU. Windows events handle sync.
         
         def on_closing():
             try:
@@ -439,12 +448,7 @@ class JarvisUI:
         self._sync_pending = False
         self._perform_sync()
 
-    def _periodic_sync_check(self):
-        """Heartbeat to catch programmatic state changes that might skip events"""
-        if not self._sync_pending:
-            self._sync_pending = True
-            self.root.after(10, self._do_sync_and_reset)
-        self.root.after(1000, self._periodic_sync_check)
+    # _periodic_sync_check removed for performance.
 
     def open_browser_panel(self, query=None):
         """External hook to launch search terminal"""
@@ -452,12 +456,16 @@ class JarvisUI:
             self.web_panel.search(query)
 
     def _build_mute_button(self):
-        BTN_W, BTN_H = 110, 32
-        BTN_X = 18
-        BTN_Y = self.H - 70
+        self.BTN_W, self.BTN_H = 120, 30
+        # Align to the left of the input bar (x0)
+        lw = int(self.W * 0.65)
+        x0 = (self.W - lw) // 2
+        BTN_X = x0 - self.BTN_W - 10
+        # Match Input bar Y exactly
+        BTN_Y = self.H - 45 - 4 # Slight vertical center alignment
 
         self._mute_canvas = tk.Canvas(
-            self.root, width=BTN_W, height=BTN_H,
+            self.root, width=self.BTN_W, height=self.BTN_H,
             bg=C_BG, highlightthickness=0, cursor="hand2"
         )
         self._mute_canvas.place(x=BTN_X, y=BTN_Y)
@@ -472,8 +480,8 @@ class JarvisUI:
         else:
             border, fill, icon, label, fg = C_MID, C_PANEL, "🎙", " LIVE", C_GREEN
 
-        c.create_rectangle(0, 0, 110, 32, outline=border, fill=fill, width=1)
-        c.create_text(55, 16, text=f"{icon}{label}",
+        c.create_rectangle(0, 0, self.BTN_W, self.BTN_H, outline=border, fill=fill, width=1)
+        c.create_text(self.BTN_W//2, self.BTN_H//2, text=f"{icon}{label}",
                       fill=fg, font=("Courier", 10, "bold"))
 
     def _toggle_mute(self):
@@ -494,19 +502,19 @@ class JarvisUI:
         self._input_var = tk.StringVar()
         self._input_entry = tk.Entry(
             self.root, textvariable=self._input_var, fg=C_TEXT, bg="#000d12",
-            insertbackground=C_TEXT, borderwidth=0, font=("Courier", 10),
+            insertbackground=C_TEXT, borderwidth=0, font=("Courier", 8),
             highlightthickness=1, highlightbackground=C_DIM, highlightcolor=C_PRI,
         )
-        self._input_entry.place(x=x0, y=y, width=INP_W, height=28)
+        self._input_entry.place(x=x0, y=y, width=INP_W, height=22)
         self._input_entry.bind("<Return>", self._on_input_submit)
         
         self._send_btn = tk.Button(
             self.root, text="SEND ▸", command=self._on_input_submit,
             fg=C_PRI, bg=C_PANEL, activeforeground=C_BG, activebackground=C_PRI,
-            font=("Courier", 9, "bold"), borderwidth=0, cursor="hand2",
+            font=("Courier", 7, "bold"), borderwidth=0, cursor="hand2",
             highlightthickness=1, highlightbackground=C_MID,
         )
-        self._send_btn.place(x=x0 + INP_W + 4, y=y, width=BTN_W, height=28)
+        self._send_btn.place(x=x0 + INP_W + 4, y=y, width=BTN_W, height=22)
 
     def _on_input_submit(self, event=None):
         text = self._input_var.get().strip()
@@ -543,8 +551,8 @@ class JarvisUI:
                     self.last_net_bytes = curr_bytes
                     net_str = f"{diff:.1f} KB/s" if diff < 1024 else f"{diff/1024:.1f} MB/s"
                     self.stats.update({"cpu": cpu, "ram": ram, "net": net_str})
-                    time.sleep(2)
-                except Exception: time.sleep(5)
+                    time.sleep(5) # Decreased frequency
+                except Exception: time.sleep(10)
         threading.Thread(target=_update_loop, daemon=True).start()
 
     def _load_face(self, path):
@@ -598,7 +606,7 @@ class JarvisUI:
 
         if t % 40 == 0: self.status_blink = not self.status_blink
         self._draw()
-        self.root.after(25, self._animate) # Optimized to 40fps
+        self.root.after(50, self._animate) # Optimized to 20fps for performance
 
     def _draw(self):
         c = self.bg
@@ -685,20 +693,20 @@ class JarvisUI:
                           font=("Courier", 14, "bold"), tags="anim")
 
         # Header/Footer
-        HDR = 62
+        HDR = 45
         c.create_rectangle(0, 0, W, HDR, fill="#00080d", outline="", tags="anim")
         c.create_line(0, HDR, W, HDR, fill=C_MID, width=1, tags="anim")
-        c.create_text(W//2, 44, text="Just A Rather Very Intelligent System", fill=C_MID, font=("Courier", 9), tags="anim")
-        c.create_text(16, 31, text=MODEL_BADGE, fill=C_DIM, font=("Courier", 9), anchor="w", tags="anim")
-        c.create_text(W-16, 31, text=time.strftime("%I:%M:%S %p"), fill=C_PRI, font=("Courier", 14, "bold"), anchor="e", tags="anim")
+        c.create_text(W//2, 28, text="Just A Rather Very Intelligent System", fill=C_MID, font=("Courier", 9), tags="anim")
+        c.create_text(16, 28, text=MODEL_BADGE, fill=C_DIM, font=("Courier", 9), anchor="w", tags="anim")
+        c.create_text(W-16, 28, text=time.strftime("%I:%M:%S %p"), fill=C_PRI, font=("Courier", 13, "bold"), anchor="e", tags="anim")
 
-        # Status
+        # Status (Ultra-Scaled)
         sc = C_MUTED if self.muted else (C_ACC if self.speaking else (C_GREEN if self._jarvis_state=="LISTENING" else C_PRI))
-        c.create_text(W//2, FCY + FW//2 + 45, text=f"{( '⊘' if self.muted else ('●' if self.status_blink else '○') )} {self.status_text}",
+        c.create_text(W//2, FCY + FW//2 + 70, text=f"{( '⊘' if self.muted else ('●' if self.status_blink else '○') )} {self.status_text}",
                       fill=sc, font=("Courier", 11, "bold"), tags="anim")
 
-        # Soundwave
-        wy, N, BH, bw = FCY + FW//2 + 67, 32, 18, 8
+        # Soundwave (Ultra-Scaled)
+        wy, N, BH, bw = FCY + FW//2 + 95, 48, 12, 10
         wx0 = (W - N*bw) // 2
         for i in range(N):
             hb = 2 if self.muted else (random.randint(3, BH) if self.speaking else int(3 + 2*math.sin(t*0.08 + i*0.55)))
@@ -706,10 +714,10 @@ class JarvisUI:
             c.create_rectangle(wx0+i*bw, wy+BH-hb, wx0+i*bw+bw-1, wy+BH, fill=col, outline="", tags="anim")
 
         # Footer Lines
-        c.create_rectangle(0, H-28, W, H, fill="#00080d", outline="", tags="anim")
-        c.create_line(0, H-28, W, H-28, fill=C_DIM, width=1, tags="anim")
-        c.create_text(W-16, H-14, fill=C_DIM, font=("Courier", 8), text="[F4] MUTE", anchor="e", tags="anim")
-        c.create_text(W//2, H-14, fill=C_DIM, font=("Courier", 8), text="FatihMakes Industries  ·  CLASSIFIED  ·  MARK XXXV", tags="anim")
+        c.create_rectangle(0, H-22, W, H, fill="#00080d", outline="", tags="anim")
+        c.create_line(0, H-22, W, H-22, fill=C_DIM, width=1, tags="anim")
+        c.create_text(W-16, H-11, fill=C_DIM, font=("Courier", 7), text="[F4] MUTE", anchor="e", tags="anim")
+        c.create_text(W//2, H-11, fill=C_DIM, font=("Courier", 7), text="FatihMakes Industries  ·  MARK XXXV", tags="anim")
 
     def write_log(self, text: str):
         """Thread-safe way to log to the UI from any module."""

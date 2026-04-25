@@ -1,0 +1,63 @@
+{
+  "personal_info": {
+    "name": "Sahil",
+    "dob": "2006-01-26",
+    "location": "Delhi",
+    "college": "Lingaya's Vidyapeeth",
+    "college_city": "Faridabad",
+    "course": "B.Tech CSE",
+    "specialization": "AI / ML"
+  },
+  "skills": [
+    "HTML",
+    "CSS",
+    "Python",
+    "Basic Backend",
+    "MongoDB",
+    "Supabase",
+    "Built many websites"
+  ],
+  "interests": [
+    "Building projects",
+    "Coding",
+    "AI",
+    "Automation",
+    "Guitar",
+    "Music",
+    "Learning useful things"
+  ],
+  "personality": {
+    "traits": [
+      "Finisher mindset",
+      "Wants growth",
+      "Focused",
+      "Practical",
+      "Learner mindset",
+      "Ambitious"
+    ],
+    "description": "Sahil doesn't leave work until it's done. He is ambitious and always looking for growth."
+  },
+  "preferences": {
+    "favorite_color": "Black",
+    "speech_style": "Hinglish",
+    "tone": "Smart, premium, human-like, motivating",
+    "vibe": "Respectful friend + elite assistant"
+  },
+  "routine": {
+    "wake_time": "07:00",
+    "commute": "Delhi to Faridabad for college"
+  },
+  "gaming": {
+    "level": "Decent all-rounder",
+    "priority": "Low"
+  },
+  "goals": {
+    "projects": "Wants many future projects",
+    "tracking": "Loves progress tracking",
+    "reminders": "Wants smart reminders",
+    "suggestions": "Wants personalized suggestions"
+  },
+  "metadata": {
+    "last_updated": "2026-04-22"
+  }
+}

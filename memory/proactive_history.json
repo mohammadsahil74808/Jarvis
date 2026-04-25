@@ -1,0 +1,54 @@
+{
+  "logs": [
+    {
+      "timestamp": 1776799169.9220006,
+      "date": "2026-04-22T00:49:29.922006",
+      "rule_id": "high_usage",
+      "text": "Sir, CPU usage is very high. Should I check for heavy processes?",
+      "status": "queued"
+    },
+    {
+      "timestamp": 1776799470.0410836,
+      "date": "2026-04-22T00:54:30.041089",
+      "rule_id": "coding_workflow",
+      "text": "Sir, I see you are coding. Shall I start your coding environment (Music + Do Not Disturb)?",
+      "status": "queued"
+    },
+    {
+      "timestamp": 1776929461.169009,
+      "date": "2026-04-23T13:01:01.169009",
+      "rule_id": "no_internet",
+      "text": "Sir, internet connection is lost. Would you like me to troubleshoot WiFi?",
+      "status": "queued"
+    },
+    {
+      "timestamp": 1776932638.580132,
+      "date": "2026-04-23T13:53:58.580132",
+      "rule_id": "low_battery",
+      "text": "Sir, battery is at 19%. Enable saver mode?",
+      "status": "queued"
+    }
+  ],
+  "stats": {
+    "high_usage": {
+      "accepted": 0,
+      "rejected": 0,
+      "total": 1
+    },
+    "coding_workflow": {
+      "accepted": 0,
+      "rejected": 0,
+      "total": 1
+    },
+    "no_internet": {
+      "accepted": 0,
+      "rejected": 0,
+      "total": 1
+    },
+    "low_battery": {
+      "accepted": 0,
+      "rejected": 0,
+      "total": 1
+    }
+  }
+}

@@ -42,3 +42,11 @@ def get_api_key() -> str:
 def get_groq_api_key() -> str:
     """Helper to retrieve the Groq API key."""
     return get_config().get("groq_api_key", "")
+
+def get_together_api_key() -> str:
+    """Helper to retrieve the Together AI API key."""
+    return get_config().get("together_api_key", "")
+
+def get_huggingface_api_key() -> str:
+    """Helper to retrieve the Hugging Face API key."""
+    return get_config().get("huggingface_api_key", "")

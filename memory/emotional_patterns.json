@@ -1,0 +1,913 @@
+{
+  "history": [
+    {
+      "time": "2026-04-25 19:58",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 19:59",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 19:59",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:00",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:00",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:01",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:01",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:01",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:04",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:04",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:05",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:06",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:07",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:07",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:07",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:08",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:08",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:08",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:09",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:09",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:09",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:10",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:11",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:14",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:14",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:14",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:15",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:15",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:16",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:16",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:16",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:16",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:17",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:17",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:20",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:20",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:20",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:21",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:21",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:21",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:21",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:21",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": true,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:21",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:22",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:22",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:22",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:22",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:23",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:23",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:24",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:24",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:25",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:25",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:25",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:25",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:25",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:25",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:25",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:26",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:26",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:26",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:26",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:26",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:27",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:27",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:27",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:28",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:28",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:29",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:29",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:29",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:31",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:32",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:32",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:32",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:32",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:33",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:33",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:33",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:34",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:34",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:34",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:35",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:35",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:36",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:36",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:37",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:37",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:37",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:38",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:38",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:38",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:38",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:39",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-04-25 20:39",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    }
+  ],
+  "productive_hours": {
+    "13": 2,
+    "19": 9,
+    "20": 97
+  },
+  "low_points": {
+    "15": 2
+  },
+  "mood_swings": 0
+}
