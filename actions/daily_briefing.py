@@ -4,6 +4,7 @@ import sys
 import os
 import subprocess
 import requests
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -26,16 +27,16 @@ def get_daily_briefing(
     now = datetime.now()
     time_str = now.strftime("%A, %B %d, %I:%M %p")
     
-    # 1. Identity
-    memory = load_memory()
-    user_name = memory.get("identity", {}).get("name", {}).get("value", "Sahil")
-    city = memory.get("identity", {}).get("city", {}).get("value")
+    # 1. Identity & Personalized Context
+    from memory.profile_manager import get_manager
+    pm = get_manager()
+    profile = pm.get_profile()
     
-    if not city:
-        from core.geo import get_current_location
-        city = get_current_location()
-        print(f"[Briefing] No city in memory, detected: {city}")
-
+    user_name = profile["personal_info"].get("name", "Sahil")
+    age = profile["personal_info"].get("age")
+    city = profile["personal_info"].get("location", "Delhi")
+    specialization = profile["personal_info"].get("specialization", "AI / ML")
+    
     # 2. Weather (Open-Meteo Free API)
     weather_summary = f"Weather info for {city} is currently unavailable."
     try:
@@ -52,55 +53,53 @@ def get_daily_briefing(
     except Exception as e:
         print(f"[Briefing] Weather error: {e}")
 
-    # 3. News (Top 3 from our news tool)
+    # 3. News
     try:
-        news_data = news_report({"category": "world"})
-        # Extract just the top 3 headlines if possible
-        headlines = news_data.split("\n")[1:4] # Skip header, take 3
-        news_summary = "Latest updates:\n" + "\n".join(headlines) if headlines else "No news updates found."
+        news_data = news_report({"category": "technology"}) # Focused on Tech for Sahil
+        headlines = news_data.split("\n")[1:4]
+        news_summary = "Latest tech headlines:\n" + "\n".join(headlines) if headlines else "No tech news today."
     except Exception:
-        news_summary = "News updates are unavailable right now."
+        news_summary = "News updates are unavailable."
 
-    # 4. Reminders (Query schtasks)
-    reminders = []
+    # 4. Reminders
+    reminders_list = []
     try:
-        # Querying schtasks for MARKReminder tasks
-        res = subprocess.run('schtasks /Query /FO CSV /NH', shell=True, capture_output=True, text=True)
-        if res.returncode == 0:
-            lines = res.stdout.strip().split('\n')
-            for line in lines:
-                if "MARKReminder_" in line:
-                    parts = line.split(',')
-                    if len(parts) >= 2:
-                        name = parts[0].strip('"').replace("MARKReminder_", "")
-                        # Task name usually has timestamp, we can't easily get the message here 
-                        # without reading the XML, but we can report that reminders exist.
-                        reminders.append(f"Scheduled reminder detected.")
-    except Exception:
-        pass
+        reminders_file = BASE_DIR / "memory" / "reminders.json"
+        if reminders_file.exists():
+            with open(reminders_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                now_dt = datetime.now()
+                for r in data:
+                    try:
+                        r_dt = datetime.strptime(r['datetime'], "%Y-%m-%d %H:%M")
+                        if r_dt > now_dt:
+                            reminders_list.append(f"{r['message']} at {r_dt.strftime('%I:%M %p')}")
+                    except Exception:
+                        pass
+    except Exception as e:
+        print(f"[Briefing] Reminder read error: {e}")
     
-    reminders_status = f"You have {len(reminders)} pending reminder(s)." if reminders else "You have no pending reminders for today."
+    reminders_status = f"You have {len(reminders_list)} pending reminders." if reminders_list else "No pending reminders for today."
 
-    # 5. Personality/Dynamic Suggestion
-    # Check if there's a project to suggest
-    projects = memory.get("projects", {})
-    suggestion = ""
-    if projects:
-        proj_name = list(projects.keys())[0]
-        suggestion = f"By the way, you were working on {proj_name.replace('_', ' ')} recently. Should we continue that?"
+    # 5. Personalized Suggestion
+    suggestion = f"As an {specialization} student, maybe we should work on a new AI project today?"
+    if profile["routine"]["commute"]:
+        suggestion += f" Also, don't forget your commute from {profile['routine']['commute']}."
 
     # 6. Formatting for JARVIS
-    # The return string will be processed by the Hinglish persona
     result = (
         f"DAILY BRIEFING DATA:\n"
-        f"- Target User: {user_name}\n"
+        f"- Target User: {user_name} ({age} years old)\n"
         f"- Current Time: {time_str}\n"
         f"- Location: {city}\n"
+        f"- Specialization: {specialization}\n"
         f"- Weather: {weather_summary}\n"
         f"- News: {news_summary}\n"
         f"- Reminders: {reminders_status}\n"
         f"- Suggestion: {suggestion}\n"
-        f"\nJarvis, please summarize this for Sahil in short conversational Hinglish (3-5 lines)."
+        f"\nJarvis, greet Sahil as a respectful friend + elite assistant. "
+        f"Summarize this in short conversational Hinglish (3-5 lines). "
+        f"Mention his age or specialization naturally."
     )
     
     if player:
