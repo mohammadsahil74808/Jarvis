@@ -28,3 +28,5 @@ sentence-transformers
 PyPDF2
 python-docx
 newspaper3k
+together
+python-dotenv

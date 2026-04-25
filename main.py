@@ -1,3 +1,4 @@
+from __future__ import annotations
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -6,9 +7,6 @@ import sys
 import traceback
 from pathlib import Path
 
-import sounddevice as sd
-from google import genai
-from google.genai import types
 from ui import JarvisUI
 from core.config import (
     get_base_dir, get_config, get_api_key, 
@@ -20,30 +18,24 @@ from memory.memory_manager import (
     load_memory, update_memory, format_memory_for_prompt,
     should_extract_memory, extract_memory, should_extract_memory_local
 )
-from core.clap_detector import ClapDetector
-from core.wake_detector import WakeWordDetector
+from memory.profile_manager import get_manager
+from intelligence.personal_context import get_personal_context
+from emotion.companion_engine import get_companion_engine
 from core.utils import retry, async_retry
-from core.usage_tracker import UsageTracker
-from core.predictive_engine import PredictiveEngine
-from core.ai_router import is_coding_request, handle_coding_task
 
-from actions.open_app          import open_app
-from actions.weather_report    import weather_action
-from core.geo                 import get_current_location
-from actions.send_message      import send_message
-from actions.reminder          import reminder
-from actions.computer_settings import computer_settings
-from actions.screen_processor  import screen_process
-from actions.desktop           import desktop_control
-from actions.browser_control   import browser_control
-from actions.file_controller   import file_controller
-from actions.computer_control  import computer_control
-from actions.workflow_chains  import workflow_chains
-from actions.browser_agent    import browser_agent
-from actions.screen_vision    import screen_vision
-from actions.file_brain       import file_brain
-from actions.research_mode    import research_mode
-from memory.semantic_memory   import add_semantic_memory, search_semantic_memory
+# Heavy imports — lazy loaded at point of use
+def _lazy_sd():
+    import sounddevice as sd
+    return sd
+
+def _lazy_proactive():
+    from intelligence.proactive_engine import ProactiveEngine
+    return ProactiveEngine
+
+def _lazy_genai():
+    from google import genai
+    from google.genai import types
+    return genai, types
 
 
 def _get_api_key() -> str:
@@ -114,6 +106,7 @@ def _index_conversation_async(user_text: str, jarvis_text: str) -> None:
         return
     combined = f"User: {user_text}\nJarvis: {jarvis_text}"
     try:
+        from memory.semantic_memory import add_semantic_memory
         add_semantic_memory(combined)
     except Exception as e:
         print(f"[Memory] ⚠️ Indexing failed: {e}")
@@ -188,15 +181,16 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "reminder",
-        "description": "Sets a timed reminder using Windows Task Scheduler.",
+        "description": "Sets, lists, or deletes timed reminders using Windows Task Scheduler and local storage.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "date":    {"type": "STRING", "description": "Date in YYYY-MM-DD format"},
-                "time":    {"type": "STRING", "description": "Time in HH:MM format (24h)"},
-                "message": {"type": "STRING", "description": "Reminder message text"}
+                "action":  {"type": "STRING", "description": "set (default) | list | delete"},
+                "date":    {"type": "STRING", "description": "Date in YYYY-MM-DD format (for 'set')"},
+                "time":    {"type": "STRING", "description": "Time in HH:MM format (24h) (for 'set')"},
+                "message": {"type": "STRING", "description": "Reminder message text (for 'set' or search key for 'delete')"}
             },
-            "required": ["date", "time", "message"]
+            "required": []
         }
     },
     {
@@ -250,6 +244,21 @@ TOOL_DECLARATIONS = [
                 "value":       {"type": "STRING", "description": "Optional value: volume level, text to type, etc."}
             },
             "required": []
+        }
+    },
+    {
+        "name": "generate_image",
+        "description": (
+            "Generates an AI image based on a prompt. "
+            "Use for: 'make an image', 'generate wallpaper', 'create photo', etc. "
+            "Automatically saves and opens the image for the user."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "prompt_text": {"type": "STRING", "description": "Descriptive prompt for the image"}
+            },
+            "required": ["prompt_text"]
         }
     },
     {
@@ -651,7 +660,16 @@ class JarvisLive:
         # Clap Activation
         config = _get_config()
         self.clap_enabled = config.get("clap_activation", False)
-        self.detector = ClapDetector() if self.clap_enabled else None
+        if self.clap_enabled:
+            try:
+                from core.clap_detector import ClapDetector
+                self.detector = ClapDetector()
+            except Exception as e:
+                print(f"[JARVIS] ClapDetector failed: {e}")
+                self.detector = None
+                self.clap_enabled = False
+        else:
+            self.detector = None
 
         # Wake Word Activation
         self.wake_detector = None
@@ -674,22 +692,82 @@ class JarvisLive:
         # Screen Awareness
         self.screen_context = None
 
-        # Memory Worker (BUG-08 Fix: Single worker to prevent thread accumulation)
+        # Memory Worker
         self.memory_executor = ThreadPoolExecutor(max_workers=1)
+        
+        # Placeholders
+        self.usage_tracker = None
+        self.predictive_engine = None
+        self.proactive_engine = None
 
+        # Profile & Context
+        self.profile_manager = get_manager()
+        self.personal_context = get_personal_context()
+        self.companion_engine = get_companion_engine(self)
+
+        # Delayed Initialization (Lazy Mode)
+        self.ui.root.after(15000, self._background_lazy_init)
+
+    def _background_lazy_init(self):
+        """Loads heavy background modules after a delay to ensure fast UI startup."""
+        config = _get_config()
+        
         # Predictive Engine
-        log_path = BASE_DIR / "memory" / "usage_log.json"
-        self.usage_tracker = UsageTracker(log_path)
-        self.predictive_engine = PredictiveEngine(log_path)
-        self.predictive_engine.set_mode(config.get("predictive_mode", True))
+        def _load_predictive():
+            try:
+                from core.usage_tracker import UsageTracker
+                from core.predictive_engine import PredictiveEngine
+                log_path = BASE_DIR / "memory" / "usage_log.json"
+                self.usage_tracker = UsageTracker(log_path)
+                self.predictive_engine = PredictiveEngine(log_path)
+                self.predictive_engine.set_mode(config.get("predictive_mode", True))
+            except Exception as e:
+                print(f"[JARVIS] Predictive engine failed: {e}")
+        threading.Thread(target=_load_predictive, daemon=True).start()
         
         # Start Prediction Heartbeat
-        self.ui.root.after(10000, self._prediction_loop)
+        self.ui.root.after(5000, self._prediction_loop)
+
+        # Proactive Intelligence System
+        def _load_proactive_sys():
+            try:
+                ProactiveEngine = _lazy_proactive()
+                history_path = BASE_DIR / "memory" / "proactive_history.json"
+                self.proactive_engine = ProactiveEngine(self, history_path)
+                self.proactive_engine.start()
+                self.ui.write_log("SYS: Intelligence module active.")
+            except Exception as e:
+                print(f"[JARVIS] Proactive system failed to load: {e}")
+        
+        threading.Thread(target=_load_proactive_sys, daemon=True).start()
+
+        # Companion Engine Heartbeat (Every 15 mins)
+        self.ui.root.after(900000, self._companion_heartbeat)
+
+    def _companion_heartbeat(self):
+        """Periodic check for proactive emotional engagement."""
+        if self.companion_engine:
+            msg = self.companion_engine.check_proactive()
+            if msg:
+                self.notify(msg, voice=True)
+        
+        self.ui.root.after(900000, self._companion_heartbeat)
+
+    def notify(self, text: str, voice: bool = True):
+        """Proactive notification hook."""
+        self.ui.show_suggestion(text)
+        if voice and not self._is_speaking and not self.ui.muted:
+            self.speak(f"Sir, {text}")
+
+    def write_log(self, text: str):
+        """Proxy for UI logging — used by many tools."""
+        self.ui.write_log(text)
 
     def _load_wake_detector(self):
         """Background thread mein Vosk model load hoga - UI freeze nahi hogi"""
         model_path = str(BASE_DIR / "models" / "vosk-model")
         try:
+            from core.wake_detector import WakeWordDetector
             self.wake_detector = WakeWordDetector(model_path)
             self.ui.write_log("SYS: Wake word system ready hai.")
         except Exception as e:
@@ -699,24 +777,6 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
-            
-        # Coding Intent Detection
-        if is_coding_request(text):
-            self.ui.write_log(f"You: {text}")
-            self.ui.write_log("[Groq] Coding intent detected. Routing to Groq...")
-            
-            def _handle_groq():
-                res = handle_coding_task(text)
-                # Parse to remove large code blocks from UI log
-                clean_log = re.sub(r'```.*?```', '[Code Block Saved to Desktop/Opened in VS Code]', res, flags=re.DOTALL)
-                self.ui.write_log(f"Jarvis (Groq):\n{clean_log.strip()}")
-                
-                # Speak only a summary
-                self.speak("Sir, I have generated the code and opened it in VS Code for you.")
-
-            threading.Thread(target=_handle_groq, daemon=True).start()
-            return
-
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},
@@ -727,7 +787,7 @@ class JarvisLive:
 
     def _prediction_loop(self):
         """Periodic check for habit-based suggestions."""
-        if self.predictive_engine.predictive_mode:
+        if self.predictive_engine and self.predictive_engine.predictive_mode:
             suggestion = self.predictive_engine.get_suggestion()
             if suggestion:
                 self.ui.show_suggestion(suggestion["text"])
@@ -759,7 +819,11 @@ class JarvisLive:
         self.ui.write_log(f"ERR: {tool_name} — {short}")
         self.speak(f"Sir, {tool_name} encountered an error. {short}")
 
-    def _build_config(self) -> types.LiveConnectConfig:
+    def get_user_context(self):
+        """Helper to get consolidated user profile context."""
+        return self.personal_context.get_context_summary()
+
+    def _build_config(self) -> "types.LiveConnectConfig":
         from datetime import datetime
 
         memory     = load_memory()
@@ -811,25 +875,35 @@ class JarvisLive:
             parts.append(screen_ctx_str)
         if mem_str:
             parts.append(mem_str)
+        
+        # User Profile Context
+        user_ctx = self.personal_context.get_context_summary()
+        parts.append(f"[USER PERSONAL CONTEXT]\n{user_ctx}\n")
+
+        # Emotional Context
+        emotional_ctx = self.companion_engine.get_emotional_context()
+        parts.append(f"{emotional_ctx}\n")
+
         parts.append(sys_prompt)
 
-        return types.LiveConnectConfig(
+        _genai, _types = _lazy_genai()
+        return _types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction="\n".join(parts),
             tools=[{"function_declarations": TOOL_DECLARATIONS}],
-            session_resumption=types.SessionResumptionConfig(),
-            speech_config=types.SpeechConfig(
-                voice_config=types.VoiceConfig(
-                    prebuilt_voice_config=types.PrebuiltVoiceConfig(
+            session_resumption=_types.SessionResumptionConfig(),
+            speech_config=_types.SpeechConfig(
+                voice_config=_types.VoiceConfig(
+                    prebuilt_voice_config=_types.PrebuiltVoiceConfig(
                         voice_name="Charon"
                     )
                 )
             ),
         )
 
-    async def _execute_tool(self, fc) -> types.FunctionResponse:
+    async def _execute_tool(self, fc) -> "types.FunctionResponse":
         name = fc.name
         args = dict(fc.args or {})
 
@@ -883,7 +957,7 @@ class JarvisLive:
                 print(f"[Memory] [SAVE] save_memory: {category}/{key} = {value}")
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(
+            return _lazy_genai()[1].FunctionResponse(
                 id=fc.id, name=name,
                 response={"result": "ok", "silent": True}
             )
@@ -914,7 +988,7 @@ class JarvisLive:
             
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(
+            return _lazy_genai()[1].FunctionResponse(
                 id=fc.id, name=name,
                 response={"result": result}
             )
@@ -928,7 +1002,8 @@ class JarvisLive:
                 from actions.screen_processor import _capture_screenshot
                 try:
                     img_bytes = _capture_screenshot()
-                    client = genai.Client(api_key=_get_api_key())
+                    _genai, _types = _lazy_genai()
+                    client = _genai.Client(api_key=_get_api_key())
                     prompt = (
                         "Analyze this screenshot. Describe: 1. The active window. "
                         "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
@@ -937,7 +1012,7 @@ class JarvisLive:
                     response = client.models.generate_content(
                         model="gemini-1.5-flash-latest",
                         contents=[
-                            types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                            _types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
                             prompt
                         ]
                     )
@@ -954,7 +1029,7 @@ class JarvisLive:
             
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(
+            return _lazy_genai()[1].FunctionResponse(
                 id=fc.id, name=name,
                 response={"result": result}
             )
@@ -963,26 +1038,45 @@ class JarvisLive:
         
         if name == "browser_agent":
             try:
+                from actions.browser_agent import browser_agent
                 result = await loop.run_in_executor(None, browser_agent, args)
             except Exception as e:
                 result = f"Browser Agent failed: {e}"
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+            return _lazy_genai()[1].FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": result}
+            )
+
+        if name == "generate_image":
+            try:
+                from actions.image_generator import generate_image
+                result = await loop.run_in_executor(None, generate_image, args, self)
+            except Exception as e:
+                result = f"Image Generation failed: {e}"
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+            return _lazy_genai()[1].FunctionResponse(
+                id=fc.id, name=name,
+                response={"result": result}
+            )
 
         if name == "screen_vision":
             try:
+                from actions.screen_vision import screen_vision
                 result = await loop.run_in_executor(None, screen_vision, args)
             except Exception as e:
                 result = f"Screen Vision failed: {e}"
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
 
         if name == "recall_memory":
             try:
                 query = args.get("query")
                 k = args.get("k", 5)
+                from memory.semantic_memory import search_semantic_memory
                 memories = await loop.run_in_executor(None, lambda: search_semantic_memory(query, k))
                 if not memories:
                     result = "No similar memories found, sir."
@@ -995,12 +1089,13 @@ class JarvisLive:
                 result = f"Recall failed: {e}"
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
 
         if name == "recall_memory":
             try:
                 query = args.get("query")
                 k = args.get("k", 5)
+                from memory.semantic_memory import search_semantic_memory
                 memories = await loop.run_in_executor(None, lambda: search_semantic_memory(query, k))
                 if not memories:
                     result = "No similar memories found, sir."
@@ -1013,25 +1108,27 @@ class JarvisLive:
                 result = f"Recall failed: {e}"
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
 
         if name == "file_brain":
             try:
+                from actions.file_brain import file_brain
                 result = await loop.run_in_executor(None, file_brain, args)
             except Exception as e:
                 result = f"File Brain failed: {e}"
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
 
         if name == "research_mode":
             try:
+                from actions.research_mode import research_mode
                 result = await loop.run_in_executor(None, research_mode, args)
             except Exception as e:
                 result = f"Research Mode failed: {e}"
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
-            return types.FunctionResponse(id=fc.id, name=name, response={"result": result})
+            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
 
         result = "Done."
 
@@ -1041,31 +1138,37 @@ class JarvisLive:
         while attempts < max_attempts:
             try:
                 if name == "open_app":
+                    from actions.open_app import open_app
                     r = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
                     result = r or f"Opened {args.get('app_name')}."
                     break # Success
 
                 elif name == "weather_report":
+                    from actions.weather_report import weather_action
                     r = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
                     result = r or "Weather delivered."
                     break
 
                 elif name == "browser_control":
+                    from actions.browser_control import browser_control
                     r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "file_controller":
+                    from actions.file_controller import file_controller
                     r = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "send_message":
+                    from actions.send_message import send_message
                     r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
                     result = r or f"Message sent to {args.get('receiver')}."
                     break
 
                 elif name == "reminder":
+                    from actions.reminder import reminder
                     r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
                     result = r or "Reminder set."
                     break
@@ -1077,6 +1180,7 @@ class JarvisLive:
                     break
 
                 elif name == "screen_process":
+                    from actions.screen_processor import screen_process
                     threading.Thread(
                         target=screen_process,
                         kwargs={"parameters": args, "response": None,
@@ -1087,6 +1191,7 @@ class JarvisLive:
                     break
 
                 elif name == "computer_settings":
+                    from actions.computer_settings import computer_settings
                     r = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
                     result = r or "Done."
                     break
@@ -1098,37 +1203,21 @@ class JarvisLive:
                     break
 
                 elif name == "desktop_control":
+                    from actions.desktop import desktop_control
                     r = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
                 elif name == "code_helper":
-                    from core.ai_router import handle_coding_task
-                    prompt = args.get("description", "")
-                    if not prompt:
-                        prompt = f"Action: {args.get('action')}, Language: {args.get('language')}, File: {args.get('file_path')}"
-                    
-                    self.ui.write_log("[Groq] Coding Model routing coding task...")
-                    result = await loop.run_in_executor(None, handle_coding_task, prompt)
-                    
-                    if "Groq Error" in result:
-                        from actions.code_helper import code_helper
-                        self.ui.write_log("[Groq] Fallback to Gemini due to error.")
-                        r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
-                        result = r or "Done."
+                    from actions.code_helper import code_helper
+                    r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
+                    result = r or "Done."
                     break
 
                 elif name == "dev_agent":
-                    from core.ai_router import handle_coding_task
-                    prompt = args.get("description", "")
-                    self.ui.write_log("[Groq] Coding Model building project...")
-                    result = await loop.run_in_executor(None, handle_coding_task, prompt)
-                    
-                    if "Groq Error" in result:
-                        from actions.dev_agent import dev_agent
-                        self.ui.write_log("[Groq] Fallback to Gemini due to error.")
-                        r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
-                        result = r or "Done."
+                    from actions.dev_agent import dev_agent
+                    r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
+                    result = r or "Done."
                     break
 
                 elif name == "agent_task":
@@ -1149,6 +1238,7 @@ class JarvisLive:
                     break
 
                 elif name == "computer_control":
+                    from actions.computer_control import computer_control
                     r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
@@ -1178,6 +1268,7 @@ class JarvisLive:
                     break
 
                 elif name == "workflow_chain":
+                    from actions.workflow_chains import workflow_chains
                     r = await loop.run_in_executor(None, lambda: workflow_chains(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
@@ -1206,7 +1297,7 @@ class JarvisLive:
         print(f"[JARVIS] 📤 {name} → {str(result)[:80]}")
 
         # ── Result: tek cümle söyle, dur ──────────────────────────────────────
-        return types.FunctionResponse(
+        return _lazy_genai()[1].FunctionResponse(
             id=fc.id, name=name,
             response={"result": result}
         )
@@ -1254,7 +1345,7 @@ class JarvisLive:
 
         while True:
             try:
-                with sd.InputStream(
+                with _lazy_sd().InputStream(
                     samplerate=SEND_SAMPLE_RATE,
                     channels=CHANNELS,
                     dtype="int16",
@@ -1310,15 +1401,10 @@ class JarvisLive:
                                 self.memory_executor.submit(_update_memory_async, full_in, full_out)
                                 self.memory_executor.submit(_index_conversation_async, full_in, full_out)
                                 
-                                # Coding Intent Detection for Voice
-                                if is_coding_request(full_in):
-                                    self.ui.write_log("[Groq] Coding intent detected in voice. Routing...")
-                                    def _handle_voice_groq():
-                                        res = handle_coding_task(full_in)
-                                        clean_log = re.sub(r'```.*?```', '[Code Block Saved to Desktop]', res, flags=re.DOTALL)
-                                        self.ui.write_log(f"Jarvis (Groq):\n{clean_log.strip()}")
-                                        self.speak("Sir, coding task complete. The file is open in VS Code.")
-                                    threading.Thread(target=_handle_voice_groq, daemon=True).start()
+                                # Emotional Awareness Support
+                                caring_msg = self.companion_engine.process_interaction(full_in)
+                                if caring_msg:
+                                    self.ui.root.after(2000, lambda m=caring_msg: self.notify(m, voice=True))
 
                     if response.tool_call:
                         fn_responses = []
@@ -1341,7 +1427,7 @@ class JarvisLive:
         loop = asyncio.get_event_loop()
 
         # Sürekli açık output stream — PyAudio'daki stream.write() davranışıyla aynı
-        stream = sd.RawOutputStream(
+        stream = _lazy_sd().RawOutputStream(
             samplerate=RECEIVE_SAMPLE_RATE,
             channels=CHANNELS,
             dtype="int16",
@@ -1365,7 +1451,8 @@ class JarvisLive:
             stream.close()
 
     async def run(self):
-        client = genai.Client(
+        _genai, _types = _lazy_genai()
+        client = _genai.Client(
             api_key=_get_api_key(),
             http_options={"api_version": "v1beta"}
         )
