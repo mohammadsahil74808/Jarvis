@@ -144,37 +144,10 @@ def should_extract_memory_local(user_text: str) -> bool:
 
 def should_extract_memory(user_text: str, jarvis_text: str, api_key: str) -> bool:
     """
-    Stage 1: Pre-check (local) then AI confirmation.
+    Stage 1: Pre-check (local only). API confirmation removed for speed.
     """
-    # First pass: Local regex (Fast & Free)
-    if not should_extract_memory_local(user_text):
-        return False
-
-    # Second pass: AI verification (Detailed)
-    try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
-
-        combined = f"User: {user_text[:300]}\nJarvis: {jarvis_text[:200]}"
-
-        check = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=(
-                f"Does this conversation contain ANY of the following?\n"
-                f"- Personal facts (name, age, city, job, birthday, nationality)\n"
-                f"- Preferences or favorites (food, color, music, sport, game, film, book, etc.)\n"
-                f"- Patterns of behavior (recurring habits, routines, schedule, usual activities)\n"
-                f"- Active projects or goals the user is working on\n"
-                f"- People in the user's life (friends, family, partner, colleagues)\n"
-                f"- Things the user wants to do or buy in the future\n"
-                f"- Any other fact worth remembering long-term\n\n"
-                f"Reply only YES or NO.\n\nConversation:\n{combined}"
-            )
-        )
-        return "YES" in check.text.upper()
-    except Exception as e:
-        print(f"[Memory] ⚠️ Stage1 check failed: {e}")
-        return False
+    # Local regex (Fast & Free)
+    return should_extract_memory_local(user_text)
 
 
 def extract_memory(user_text: str, jarvis_text: str, api_key: str) -> dict:

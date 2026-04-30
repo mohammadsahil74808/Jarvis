@@ -21,6 +21,7 @@ class SemanticMemory:
         self._index = None
         self._db_conn = None
         self._dimension = 384 # Dimension for all-MiniLM-L6-v2
+        self._unflushed_writes = 0
         
         # Ensure directory exists
         DB_PATH.parent.mkdir(parents=True, exist_ok=True)
@@ -91,7 +92,10 @@ class SemanticMemory:
             # 2. Add to FAISS
             embedding = self._get_model().encode([text])[0]
             self._index.add(np.array([embedding]).astype('float32'))
-            self._save_index()
+            self._unflushed_writes += 1
+            if self._unflushed_writes >= 10:
+                self._save_index()
+                self._unflushed_writes = 0
             print(f"[SemanticMemory] ✅ Added memory: {text[:50]}...")
 
     def search(self, query: str, k: int = 5):

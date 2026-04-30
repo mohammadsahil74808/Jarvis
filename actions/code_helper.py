@@ -22,14 +22,52 @@ from pathlib import Path
 from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
 DESKTOP            = Path.home() / "Desktop"
 MAX_BUILD_ATTEMPTS = 3
-GEMINI_MODEL       = "gemini-1.5-flash"
+GEMINI_MODEL       = "gemini-2.0-flash"
 
 
 
 
-def _get_client():
-    from google import genai
-    return genai.Client(api_key=get_api_key())
+def _generate_content_with_fallback(prompt: str) -> str:
+    from core.config import get_groq_api_key, get_api_key
+    
+    # 1. First try Groq API which has a massive code quota (if available)
+    groq_key = get_groq_api_key()
+    if groq_key:
+        try:
+            import groq
+            client = groq.Groq(api_key=groq_key)
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            print(f"[CodeHelper] ⚠️ Groq fallback failed: {e}")
+
+    # 2. Try Gemini 2.0
+    try:
+        from google import genai
+        client = genai.Client(api_key=get_api_key())
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        print(f"[CodeHelper] ⚠️ Gemini 2.0 Flash failed: {e}, falling back to lightweight...")
+
+    # 3. Try Gemini 1.5 Flash 8B (Highest Limits Free Tier)
+    try:
+        from google import genai
+        client = genai.Client(api_key=get_api_key())
+        response = client.models.generate_content(
+            model="gemini-1.5-flash-8b",
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        raise RuntimeError(f"All coding models exhausted quota/failed: {e}")
 
 
 def _clean_code(text: str) -> str:
@@ -150,8 +188,6 @@ def _detect_intent(description: str, file_path: str, code: str) -> str:
 
 def _write(description: str, language: str, output_path: str, player=None) -> tuple[str, Path]:
     lang  = language or "python"
-    client = _get_client()
-
     prompt = f"""You are an expert {lang} developer.
 Write clean, working, well-commented {lang} code for the description below.
 
@@ -164,19 +200,14 @@ Rules:
 Description: {description}
 
 Code:"""
-
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt
-    )
-    code     = _clean_code(response.text)
+    response_text = _generate_content_with_fallback(prompt)
+    code     = _clean_code(response_text)
     path     = _resolve_save_path(output_path, lang)
     _save_file(path, code)
     return code, path
 
 
 def _fix_code(code: str, error_output: str, description: str) -> str:
-    client = _get_client()
     prompt = f"""You are an expert debugger.
 The code below failed with the following error. Fix it.
 Return ONLY the corrected code — no explanation, no markdown, no backticks.
@@ -190,12 +221,8 @@ Broken code:
 {code}
 
 Fixed code:"""
-
-    response = client.models.generate_content(
-        model=GEMINI_MODEL,
-        contents=prompt
-    )
-    return _clean_code(response.text)
+    response_text = _generate_content_with_fallback(prompt)
+    return _clean_code(response_text)
 
 
 def _run_file(path: Path, args: list, timeout: int) -> str:
@@ -313,7 +340,6 @@ def _edit_action(file_path, instruction, player) -> str:
     if player:
         player.write_log("[Code] Editing file...")
 
-    client = _get_client()
     prompt = f"""You are an expert code editor.
 Apply the following change to the code below.
 Return ONLY the complete updated code — no explanation, no markdown, no backticks.
@@ -324,13 +350,9 @@ Original code:
 {content}
 
 Updated code:"""
-
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
-        edited   = _clean_code(response.text)
+        response_text = _generate_content_with_fallback(prompt)
+        edited   = _clean_code(response_text)
     except Exception as e:
         return f"Could not edit code: {e}"
 
@@ -350,7 +372,6 @@ def _explain_action(file_path, code, player) -> str:
     if player:
         player.write_log("[Code] Analyzing code...")
 
-    client = _get_client()
     prompt = f"""Explain what this code does in simple, clear language.
 Focus on: what it does, how it works, and any important details.
 Be concise — 3 to 6 sentences maximum.
@@ -359,13 +380,9 @@ Code:
 {code[:4000]}
 
 Explanation:"""
-
     try:
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
-        return response.text.strip()
+        response_text = _generate_content_with_fallback(prompt)
+        return response_text.strip()
     except Exception as e:
         return f"Could not explain code: {e}"
 
@@ -394,8 +411,6 @@ def _optimize_action(file_path, code, language, output_path, player) -> str:
         player.write_log("[Code] Optimizing code...")
 
     lang  = language or "python"
-    client = _get_client()
-
     prompt = f"""You are an expert {lang} developer and code reviewer.
 Optimize the following code for:
 1. Performance — eliminate unnecessary operations, use efficient data structures
@@ -409,13 +424,9 @@ Original code:
 {code[:6000]}
 
 Optimized code:"""
-
     try:
-        response  = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=prompt
-        )
-        optimized = _clean_code(response.text)
+        response_text = _generate_content_with_fallback(prompt)
+        optimized = _clean_code(response_text)
     except Exception as e:
         return f"Could not optimize code: {e}"
 
@@ -492,7 +503,7 @@ Be specific and actionable. If you see an error message, quote it exactly."""
         ]
 
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=contents,
         )
 

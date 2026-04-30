@@ -1,0 +1,19 @@
+AI/ML Study Roadmap:
+
+1. Prerequisites:
+   - Python (Aapko pehle se pata hai)
+   - Mathematics: Linear Algebra, Calculus, Probability & Statistics
+
+2. Core Machine Learning:
+   - Supervised Learning: Regression, Classification (SVM, Decision Trees, wagera)
+   - Unsupervised Learning: Clustering (K-Means), Dimensionality Reduction (PCA)
+   - Model Evaluation and Selection
+
+3. Deep Learning:
+   - Neural Networks: CNNs, RNNs, Transformers
+   - Frameworks: TensorFlow, PyTorch
+
+4. Practical Application:
+   - Build projects (Finisher mindset ke hisaab se)
+   - Kaggle competitions
+   - Explore specific domains (jaise NLP, Computer Vision)

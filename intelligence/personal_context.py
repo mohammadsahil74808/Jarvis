@@ -9,6 +9,9 @@ class PersonalContext:
         profile = self.manager.get_profile()
         p = profile["personal_info"]
         
+        from intelligence.interaction_layer import get_interaction_layer
+        interaction = get_interaction_layer().get_prompt_injection()
+        
         context = (
             f"User Profile: {p['name']}, {p['age']} years old. "
             f"Lives in {p['location']}, studies {p['course']} ({p['specialization']}) at {p['college']}, {p['college_city']}. "
@@ -16,7 +19,8 @@ class PersonalContext:
             f"Interests: {', '.join(profile['interests'])}. "
             f"Personality: {', '.join(profile['personality']['traits'])}. "
             f"Tone Preference: {profile['preferences']['tone']}. "
-            f"Routine: {profile['routine']['commute']}. "
+            f"Routine: {profile['routine']['commute']}. \n"
+            f"{interaction}"
         )
         return context
 

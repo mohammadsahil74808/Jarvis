@@ -16,11 +16,20 @@ def _gemini_search(query: str) -> str:
     from google import genai
 
     client = genai.Client(api_key=get_api_key(), http_options={"api_version": "v1beta"})
-    response = client.models.generate_content(
-        model="gemini-1.5-flash",
-        contents=query,
-        config={"tools": [{"google_search": {}}]}
-    )
+    
+    try:
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=query,
+            config={"tools": [{"google_search": {}}]}
+        )
+    except Exception as e:
+        print(f"[WebSearch] ⚠️ Gemini 2.0 quota full, trying 1.5-flash-8b... ({e})")
+        response = client.models.generate_content(
+            model="gemini-1.5-flash-8b",
+            contents=query,
+            config={"tools": [{"google_search": {}}]}
+        )
     text = ""
     for part in response.candidates[0].content.parts:
         if hasattr(part, "text") and part.text:

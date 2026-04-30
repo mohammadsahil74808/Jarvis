@@ -7,8 +7,8 @@ class UsageTracker:
     def __init__(self, log_path: Path):
         self.log_path = log_path
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.log_path.exists():
-            self._save_log([])
+        self._cached_log = self._load_log()
+        self._unflushed = 0
 
     def _load_log(self):
         try:
@@ -27,7 +27,6 @@ class UsageTracker:
         event_type: 'app', 'command', 'habit'
         event_name: 'VS Code', 'coding', 'study'
         """
-        log = self._load_log()
         entry = {
             "timestamp": datetime.now().isoformat(),
             "type": event_type,
@@ -35,12 +34,15 @@ class UsageTracker:
             "hour": datetime.now().hour,
             "weekday": datetime.now().weekday()
         }
-        log.append(entry)
+        self._cached_log.append(entry)
         
         # Keep only last 1000 events to stay lightweight
-        if len(log) > 1000:
-            log = log[-1000:]
+        if len(self._cached_log) > 1000:
+            self._cached_log = self._cached_log[-1000:]
             
-        self._save_log(log)
+        self._unflushed += 1
+        if self._unflushed >= 5:
+            self._save_log(self._cached_log)
+            self._unflushed = 0
 
 tracker = None # Singleton-like instance initialized in main

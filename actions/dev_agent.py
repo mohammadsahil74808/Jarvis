@@ -8,16 +8,63 @@ from pathlib import Path
 
 
 from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
-PROJECTS_DIR     = Path.home() / "Desktop" / "JarvisProjects"
+PROJECTS_DIR     = BASE_DIR / "workspaces" / "dev_projects"
 MAX_FIX_ATTEMPTS = 5
-MODEL_PLANNER    = "gemini-1.5-flash"
-MODEL_WRITER     = "gemini-1.5-flash"
+MODEL_PLANNER    = "gemini-2.0-flash"
+MODEL_WRITER     = "gemini-2.0-flash"
+
+def _create_backup(file_path: Path):
+    """Creates a .bak copy of the file if it exists."""
+    if file_path.exists():
+        try:
+            import shutil
+            backup_path = file_path.with_suffix(file_path.suffix + ".bak")
+            shutil.copy2(file_path, backup_path)
+            return True
+        except Exception:
+            pass
+    return False
 
 
 
-def _get_client():
-    from google import genai
-    return genai.Client(api_key=get_api_key())
+def _generate_content_with_fallback(prompt: str) -> str:
+    from core.config import get_groq_api_key, get_api_key
+    
+    groq_key = get_groq_api_key()
+    if groq_key:
+        try:
+            import groq
+            client = groq.Groq(api_key=groq_key)
+            completion = client.chat.completions.create(
+                model="llama-3.3-70b-versatile",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.2
+            )
+            return completion.choices[0].message.content
+        except Exception as e:
+            print(f"[DevAgent] ⚠️ Groq fallback failed: {e}")
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=get_api_key())
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        print(f"[DevAgent] ⚠️ Gemini 2.0 Flash failed: {e}")
+
+    try:
+        from google import genai
+        client = genai.Client(api_key=get_api_key())
+        response = client.models.generate_content(
+            model="gemini-1.5-flash-8b",
+            contents=prompt
+        )
+        return response.text
+    except Exception as e:
+        raise RuntimeError(f"All coding models exhausted quota/failed: {e}")
 
 
 def _strip_fences(text: str) -> str:
@@ -87,7 +134,6 @@ class RateLimitError(Exception):
 
 
 def _plan_project(description: str, language: str) -> dict:
-    client = _get_client()
 
     prompt = f"""You are a senior software architect. Create a minimal, complete file plan for this project.
 
@@ -125,14 +171,11 @@ Critical rules:
 JSON:"""
 
     try:
-        response = client.models.generate_content(
-            model=MODEL_PLANNER,
-            contents=prompt
-        )
-        raw = _strip_fences(response.text)
+        response_text = _generate_content_with_fallback(prompt)
+        raw = _strip_fences(response_text)
         return json.loads(raw)
     except json.JSONDecodeError as e:
-        raise ValueError(f"Planner returned invalid JSON: {e}\nRaw: {response.text[:300]}")
+        raise ValueError(f"Planner returned invalid JSON: {e}\nRaw: {response_text[:300]}")
     except Exception as e:
         if _is_rate_limit(e):
             raise RateLimitError(str(e))
@@ -146,8 +189,6 @@ def _write_file(
     project_dir: Path,
     already_written: dict[str, str],
 ) -> str:
-    client = _get_client()
-
     file_path = file_info["path"]
     file_desc = file_info.get("description", "")
     file_imports = file_info.get("imports", [])
@@ -207,13 +248,11 @@ General rules:
 Code for {file_path}:"""
 
     try:
-        response = client.models.generate_content(
-            model=MODEL_WRITER,
-            contents=prompt
-        )
-        code = _strip_fences(response.text)
+        response_text = _generate_content_with_fallback(prompt)
+        code = _strip_fences(response_text)
 
         full_path = project_dir / file_path
+        _create_backup(full_path) # Safe backup
         full_path.parent.mkdir(parents=True, exist_ok=True)
         full_path.write_text(code, encoding="utf-8")
 
@@ -356,8 +395,6 @@ def _fix_files(
     entry_point: str,
 ) -> dict[str, str]:
 
-    client = _get_client()
-
     error_file, error_line = _parse_traceback(error_output, list(file_codes.keys()))
     error_type = _classify_error(error_output)
 
@@ -418,13 +455,11 @@ Rules:
 Fixed code for {fix_path}:"""
 
         try:
-            response = client.models.generate_content(
-                model=MODEL_PLANNER,
-                contents=prompt
-            )
-            fixed = _strip_fences(response.text)
+            response_text = _generate_content_with_fallback(prompt)
+            fixed = _strip_fences(response_text)
 
             full_path = project_dir / fix_path
+            _create_backup(full_path) # Safe backup
             full_path.parent.mkdir(parents=True, exist_ok=True)
             full_path.write_text(fixed, encoding="utf-8")
 
@@ -443,6 +478,7 @@ def _build_project(
     language: str,
     project_name: str,
     timeout: int,
+    confirmed: bool = False,
     speak=None,
     player=None,
 ) -> str:
@@ -475,6 +511,22 @@ def _build_project(
     dependencies = plan.get("dependencies", [])
 
     log(f"Project: {proj_name} | Files: {len(files)} | Entry: {entry_point}")
+
+    # --- PERMISSION CHECK (MANDATORY) ---
+    if not confirmed:
+        plan_text = f"--- DEV_AGENT PLAN ---\nProject: {proj_name}\nLanguage: {language}\nTarget Dir: {project_dir}\n\nFiles to be created/modified:\n"
+        for f in files:
+            plan_text += f"  - {f['path']}: {f.get('description', '')}\n"
+        
+        if dependencies:
+            plan_text += f"\nExternal Dependencies to install:\n  - {', '.join(dependencies)}\n"
+            
+        plan_text += f"\nRun Command: {run_command}\n"
+        plan_text += "\nDo you want me to apply these changes? (yes/no)"
+        
+        if speak: speak("I have created a plan for your project. Please review it and say yes to proceed.")
+        return plan_text
+    # ------------------------------------
 
     def _dep_sort_key(fi: dict) -> int:
         return len(fi.get("imports", []))
@@ -586,6 +638,32 @@ def _build_project(
     return f"{msg}\n\nLast error:\n{last_output[:600]}"
 
 
+def _analyze_code(description: str, language: str, path: str = None) -> str:
+    """Performs analysis without making changes."""
+    context = f"Project Description: {description}\nLanguage: {language}\n"
+    if path:
+        p = Path(path).expanduser()
+        if p.exists() and p.is_file():
+            try:
+                code = p.read_text(encoding="utf-8", errors="replace")
+                context += f"\nTarget File: {p}\nCode Snippet:\n{code[:5000]}\n"
+            except Exception as e:
+                context += f"\nCould not read file {p}: {e}\n"
+    
+    prompt = f"""You are a senior software analyst. Analyze the following project context or code.
+Detect potential errors, architectural flaws, and suggest specific improvements.
+Do NOT write the implementation code, just the analysis.
+
+Context:
+{context}
+
+Analysis Report:"""
+    
+    try:
+        return _generate_content_with_fallback(prompt)
+    except Exception as e:
+        return f"Analysis failed: {e}"
+
 def dev_agent(
     parameters: dict,
     response=None,
@@ -598,15 +676,28 @@ def dev_agent(
     language     = p.get("language", "python").strip()
     project_name = p.get("project_name", "").strip()
     timeout      = int(p.get("timeout", 30))
+    action       = p.get("action", "build").lower().strip()
+    confirmed    = p.get("confirmed", False)
+    path         = p.get("path")
 
-    if not description:
-        return "Please describe the project you want me to build, sir."
+    try:
+        if action == "analyze":
+            return _analyze_code(description, language, path)
 
-    return _build_project(
-        description  = description,
-        language     = language,
-        project_name = project_name,
-        timeout      = timeout,
-        speak        = speak,
-        player       = player,
-    )
+        if not description:
+            return "Please describe the project you want me to build, sir."
+
+        return _build_project(
+            description  = description,
+            language     = language,
+            project_name = project_name,
+            timeout      = timeout,
+            confirmed    = confirmed,
+            speak        = speak,
+            player       = player,
+        )
+    except Exception as e:
+        error_msg = f"DevAgent Error: {str(e)}"
+        if "quota" in error_msg.lower() or "429" in error_msg:
+            return "I've hit a rate limit with the AI models, sir. Please wait a moment before trying again."
+        return f"Something went wrong while building the project: {str(e)}"

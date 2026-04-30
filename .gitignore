@@ -16,3 +16,10 @@ memory/usage_log.json
 memory/long_term.json
 test_out.txt
 search_results.txt
+
+# Runtime state and generated files
+generated_images/
+memory/*.json
+memory/*.db
+memory/*.faiss
+config/browser_signal.json

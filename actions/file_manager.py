@@ -1,31 +1,62 @@
-# actions/file_controller.py
-# File management — create, delete, move, rename, list, find, organize
-
+# actions/file_manager.py
 import shutil
-from pathlib import Path
-from datetime import datetime
 import send2trash
+import os
+import hashlib
+from pathlib import Path
+from datetime import datetime, timedelta
+import PyPDF2
+from docx import Document
 
 def _get_desktop() -> Path:
-    one_drive = Path.home() / "OneDrive" / "Desktop"
-    if one_drive.exists(): return one_drive
-    return Path.home() / "Desktop"
+    """Dynamically detects the Windows Desktop path, handling OneDrive redirection."""
+    # 1. Try winshell (if available)
+    try:
+        import winshell
+        return Path(winshell.desktop())
+    except Exception:
+        pass
 
+    # 2. Use reliable Windows API via ctypes (Standard on Windows)
+    try:
+        import ctypes.wintypes
+        CSIDL_DESKTOP = 0x0000 
+        buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
+        ctypes.windll.shell32.SHGetSpecialFolderPathW(None, buf, CSIDL_DESKTOP, False)
+        if buf.value:
+            return Path(buf.value)
+    except Exception:
+        pass
+
+    # 3. Fallback to environment variable or Path.home()
+    user_profile = os.environ.get("USERPROFILE")
+    if user_profile:
+        path = Path(user_profile) / "Desktop"
+        if path.exists(): return path
+
+    return Path.home() / "Desktop"
 
 def _get_downloads() -> Path:
     one_drive = Path.home() / "OneDrive" / "Downloads"
     if one_drive.exists(): return one_drive
     return Path.home() / "Downloads"
 
+def _get_documents() -> Path:
+    one_drive = Path.home() / "OneDrive" / "Documents"
+    if one_drive.exists(): return one_drive
+    return Path.home() / "Documents"
 
 def _resolve_path(raw: str) -> Path:
     """
     Resolves a path from user input.
     Supports shortcuts: 'desktop', 'downloads', 'documents', 'home'
     """
+    if not raw or not str(raw).strip():
+        raise ValueError("File path cannot be empty. Please specify a valid path.")
+    raw = raw.strip().strip("'\"")
     shortcuts = {
-        "desktop":   Path.home() / "Desktop",
-        "downloads": Path.home() / "Downloads",
+        "desktop":   _get_desktop(),
+        "downloads": _get_downloads(),
         "documents": Path.home() / "Documents",
         "pictures":  Path.home() / "Pictures",
         "music":     Path.home() / "Music",
@@ -37,7 +68,6 @@ def _resolve_path(raw: str) -> Path:
         return shortcuts[lower]
     return Path(raw).expanduser()
 
-
 def _format_size(bytes_size: int) -> str:
     """Converts bytes to human readable format."""
     for unit in ["B", "KB", "MB", "GB", "TB"]:
@@ -45,7 +75,6 @@ def _format_size(bytes_size: int) -> str:
             return f"{bytes_size:.1f} {unit}"
         bytes_size /= 1024
     return f"{bytes_size:.1f} TB"
-
 
 def list_files(path: str = "desktop", show_hidden: bool = False) -> str:
     """Lists files and folders in a directory."""
@@ -76,7 +105,6 @@ def list_files(path: str = "desktop", show_hidden: bool = False) -> str:
     except Exception as e:
         return f"Error listing files: {e}"
 
-
 def create_file(path: str, content: str = "") -> str:
     """Creates a new file with optional content."""
     try:
@@ -87,7 +115,6 @@ def create_file(path: str, content: str = "") -> str:
     except Exception as e:
         return f"Could not create file: {e}"
 
-
 def create_folder(path: str) -> str:
     """Creates a new folder (and parent folders if needed)."""
     try:
@@ -96,7 +123,6 @@ def create_folder(path: str) -> str:
         return f"Folder created: {target}"
     except Exception as e:
         return f"Could not create folder: {e}"
-
 
 def delete_file(path: str, confirm: bool = True) -> str:
     """
@@ -128,7 +154,6 @@ def delete_file(path: str, confirm: bool = True) -> str:
     except Exception as e:
         return f"Could not delete: {e}"
 
-
 def move_file(source: str, destination: str) -> str:
     """Moves a file or folder to a new location."""
     try:
@@ -147,7 +172,6 @@ def move_file(source: str, destination: str) -> str:
 
     except Exception as e:
         return f"Could not move: {e}"
-
 
 def copy_file(source: str, destination: str) -> str:
     """Copies a file or folder."""
@@ -173,7 +197,6 @@ def copy_file(source: str, destination: str) -> str:
     except Exception as e:
         return f"Could not copy: {e}"
 
-
 def rename_file(path: str, new_name: str) -> str:
     """Renames a file or folder."""
     try:
@@ -191,25 +214,6 @@ def rename_file(path: str, new_name: str) -> str:
     except Exception as e:
         return f"Could not rename: {e}"
 
-
-def read_file(path: str, max_chars: int = 3000) -> str:
-    """Reads and returns the content of a text file."""
-    try:
-        target = Path(path).expanduser()
-        if not target.exists():
-            return f"File not found: {path}"
-        if not target.is_file():
-            return f"Not a file: {path}"
-
-        content = target.read_text(encoding="utf-8", errors="ignore")
-        if len(content) > max_chars:
-            content = content[:max_chars] + f"\n\n... (truncated, {len(content)} total chars)"
-        return content
-
-    except Exception as e:
-        return f"Could not read file: {e}"
-
-
 def write_file(path: str, content: str, append: bool = False) -> str:
     """Writes or appends content to a file."""
     try:
@@ -223,14 +227,48 @@ def write_file(path: str, content: str, append: bool = False) -> str:
     except Exception as e:
         return f"Could not write file: {e}"
 
-
 def find_files(name: str = "", extension: str = "", path: str = "home",
                max_results: int = 20) -> str:
     """
-    Searches for files by name or extension.
-    Example: find_files(extension=".pdf", path="documents")
+    Searches for files or folders. If no extension is provided, performs a smart folder search.
     """
     try:
+        # 1. Real Folder Search Logic (Requested for accuracy)
+        if not extension and name:
+            name_lower = name.lower().strip()
+            # Check common directories
+            roots = [_get_desktop(), _get_documents(), _get_downloads(), Path.home()]
+            
+            # Phase A: Quick check (Immediate children)
+            for root in roots:
+                if not root.exists(): continue
+                try:
+                    for item in root.iterdir():
+                        if item.is_dir() and item.name.lower() == name_lower:
+                            return str(item)
+                except Exception: continue
+
+            # Phase B: os.walk search (Limited depth for speed)
+            for root in roots:
+                if not root.exists(): continue
+                root_str = str(root)
+                for dirpath, dirnames, filenames in os.walk(root_str):
+                    # Limit depth to 2 levels
+                    rel = os.path.relpath(dirpath, root_str)
+                    depth = 0 if rel == "." else len(Path(rel).parts)
+                    if depth >= 2:
+                        dirnames[:] = []
+                        continue
+                    
+                    for d in dirnames:
+                        if d.lower() == name_lower:
+                            return os.path.join(dirpath, d)
+
+            # If it's likely a folder request (no extension), return "not found" instead of defaulting to desktop files
+            if path == "desktop" or path == "home":
+                return "Folder not found on system"
+
+        # 2. Standard File Search Logic
         search_path = _resolve_path(path)
         if not search_path.exists():
             return f"Search path not found: {path}"
@@ -255,7 +293,6 @@ def find_files(name: str = "", extension: str = "", path: str = "home",
 
     except Exception as e:
         return f"Search error: {e}"
-
 
 def get_largest_files(path: str = "home", count: int = 10) -> str:
     """Returns the largest files in a directory."""
@@ -287,7 +324,6 @@ def get_largest_files(path: str = "home", count: int = 10) -> str:
     except Exception as e:
         return f"Error: {e}"
 
-
 def get_disk_usage(path: str = "home") -> str:
     """Returns disk usage information."""
     try:
@@ -306,7 +342,6 @@ def get_disk_usage(path: str = "home") -> str:
         )
     except Exception as e:
         return f"Could not get disk usage: {e}"
-
 
 def organize_desktop() -> str:
     """
@@ -366,7 +401,6 @@ def organize_desktop() -> str:
     except Exception as e:
         return f"Could not organize desktop: {e}"
 
-
 def get_file_info(path: str) -> str:
     """Returns detailed information about a file."""
     try:
@@ -390,96 +424,193 @@ def get_file_info(path: str) -> str:
     except Exception as e:
         return f"Could not get file info: {e}"
 
-def file_controller(
-    parameters: dict,
-    response=None,
-    player=None,
-    session_memory=None
-) -> str:
-    action  = (parameters or {}).get("action", "").lower().strip()
+def read_document(path: str) -> str:
+    """Reads text from .txt, .pdf, or .docx files."""
+    p = Path(path).expanduser()
+    if not p.exists():
+        return f"Error: File {path} not found."
+    
+    ext = p.suffix.lower()
+    try:
+        if ext == ".txt":
+            return p.read_text(encoding="utf-8", errors="ignore")[:5000]
+        
+        elif ext == ".pdf":
+            text = []
+            with open(p, "rb") as f:
+                reader = PyPDF2.PdfReader(f)
+                for page in reader.pages[:10]: # Limit to first 10 pages
+                    text.append(page.extract_text())
+            return "\n".join(text)[:5000]
+        
+        elif ext == ".docx":
+            doc = Document(p)
+            text = [para.text for para in doc.paragraphs]
+            return "\n".join(text)[:5000]
+        
+        else:
+            return f"Unsupported file type: {ext}. JARVIS can only read .txt, .pdf, and .docx directly."
+    except Exception as e:
+        return f"Error reading {ext} file: {str(e)}"
+
+def find_duplicates(directory: str) -> str:
+    """Finds duplicate files based on MD5 content hash."""
+    target = Path(directory).expanduser()
+    if not target.is_dir():
+        return f"Error: {directory} is not a directory."
+    
+    hashes = {} # hash -> list of paths
+    duplicates = []
+    
+    for item in target.rglob("*"):
+        if item.is_file():
+            try:
+                file_hash = hashlib.md5(item.read_bytes()).hexdigest()
+                if file_hash in hashes:
+                    hashes[file_hash].append(str(item))
+                    duplicates.append(str(item))
+                else:
+                    hashes[file_hash] = [str(item)]
+            except Exception:
+                continue
+    
+    if not duplicates:
+        return f"No duplicate files found in {target.name}."
+    
+    res = ["Duplicate files found:"]
+    for h, paths in hashes.items():
+        if len(paths) > 1:
+            res.append(f"\nHash {h}:")
+            for p in paths:
+                res.append(f"  - {p}")
+    return "\n".join(res)
+
+def clean_downloads(days=30) -> str:
+    """Moves files older than X days to a Cleanup folder."""
+    downloads = _get_downloads()
+    cleanup_dir = downloads / "JARVIS_Cleanup"
+    cleanup_dir.mkdir(exist_ok=True)
+    
+    threshold = datetime.now() - timedelta(days=days)
+    moved = []
+    
+    for item in downloads.iterdir():
+        if item.is_file() and not item.name.startswith("."):
+            mtime = datetime.fromtimestamp(item.stat().st_mtime)
+            if mtime < threshold:
+                try:
+                    shutil.move(str(item), str(cleanup_dir / item.name))
+                    moved.append(item.name)
+                except Exception:
+                    continue
+    
+    if not moved:
+        return f"Downloads folder is already clean (no files older than {days} days)."
+    return f"Moved {len(moved)} old files to {cleanup_dir.name}/ folder."
+
+def deep_search(query: str, start_path: Path = None) -> str:
+    """Searches extensively for a file starting from a path (default: Home)."""
+    if start_path is None:
+        start_path = Path.home()
+        
+    print(f"[FileBrain] 🔍 Deep search for '{query}' in {start_path}...")
+    results = []
+    
+    # Simple rglob search first (fast but might hit permission errors)
+    try:
+        # We search inside major subdirs first to avoid scanning everything at once
+        major_dirs = [start_path / "Desktop", start_path / "Downloads", start_path / "Documents", start_path / "Videos", start_path / "Pictures"]
+        
+        # Add the ones that exist
+        targets = [d for d in major_dirs if d.exists()]
+        if not targets: targets = [start_path] # Fallback
+        
+        for target in targets:
+            try:
+                found = list(target.rglob(f"*{query}*"))
+                for item in found:
+                    if item.is_file():
+                        results.append(str(item))
+                    if len(results) >= 20: break
+            except PermissionError:
+                continue
+            if len(results) >= 20: break
+            
+    except Exception as e:
+        return f"Deep Search Error: {str(e)}"
+                
+    if not results:
+        # Last resort: direct glob in home (non-recursive) just in case
+        results = [str(p) for p in start_path.glob(f"*{query}*") if p.is_file()]
+        if not results:
+            return f"No files matching '{query}' found even after deep search in {start_path}."
+        
+    return f"Found {len(results)} matches:\n" + "\n".join(results[:15])
+
+def get_recent_files(directory: str, count=5) -> str:
+    """Returns the most recently modified files."""
+    target = Path(directory).expanduser()
+    if not target.is_dir():
+        return f"Error: {directory} is not a directory."
+    
+    files = []
+    for item in target.rglob("*"):
+        if item.is_file():
+            try:
+                files.append((item.stat().st_mtime, item))
+            except Exception:
+                continue
+    
+    files.sort(key=lambda x: x[0], reverse=True)
+    recent = files[:count]
+    
+    if not recent:
+        return "No recent files found."
+    
+    res = [f"Recent files in {target.name}:"]
+    for mtime, p in recent:
+        dt = datetime.fromtimestamp(mtime).strftime("%Y-%m-%d %H:%M")
+        res.append(f"  [{dt}] {p.name}")
+    return "\n".join(res)
+
+def file_manager(parameters: dict, response=None, player=None, session_memory=None) -> str:
+    action  = (parameters or {}).get("action", "info").lower().strip()
     path    = (parameters or {}).get("path", "desktop")
     name    = (parameters or {}).get("name", "")
     content = (parameters or {}).get("content", "")
 
     def _full_path(p: str, n: str) -> str:
         base = _resolve_path(p)
-        if n:
-            return str(base / n)
+        if n: return str(base / n)
         return str(base)
 
     result = "Unknown action."
-
     try:
-        if action == "list":
-            result = list_files(path)
-
-        elif action == "create_file":
-            full = _full_path(path, name)
-            result = create_file(full, content=content)
-
-        elif action == "create_folder":
-            full = _full_path(path, name)
-            result = create_folder(full)
-
-        elif action == "delete":
-            full = _full_path(path, name)
-            result = delete_file(full)
-
-        elif action == "move":
-            full = _full_path(path, name)
-            result = move_file(full, parameters.get("destination", ""))
-
-        elif action == "copy":
-            full = _full_path(path, name)
-            result = copy_file(full, parameters.get("destination", ""))
-
-        elif action == "rename":
-            full = _full_path(path, name)
-            result = rename_file(full, parameters.get("new_name", ""))
-
-        elif action == "read":
-            full = _full_path(path, name)
-            result = read_file(full)
-
-        elif action == "write":
-            full = _full_path(path, name)
-            result = write_file(
-                full,
-                content=content,
-                append=parameters.get("append", False)
-            )
-
-        elif action == "find":
-            result = find_files(
-                name=name or parameters.get("name", ""),
-                extension=parameters.get("extension", ""),
-                path=path,
-                max_results=parameters.get("max_results", 20)
-            )
-
-        elif action == "largest":
-            result = get_largest_files(
-                path=path,
-                count=parameters.get("count", 10)
-            )
-
-        elif action == "disk_usage":
-            result = get_disk_usage(path)
-
-        elif action == "organize_desktop":
-            result = organize_desktop()
-
-        elif action == "info":
-            full = _full_path(path, name)
-            result = get_file_info(full)
-
-        else:
-            result = f"Unknown action: '{action}'"
-
+        if action == "list": result = list_files(path)
+        elif action == "create_file": result = create_file(_full_path(path, name), content=content)
+        elif action == "create_folder": result = create_folder(_full_path(path, name))
+        elif action == "delete": result = delete_file(_full_path(path, name))
+        elif action == "move": result = move_file(_full_path(path, name), parameters.get("destination", ""))
+        elif action == "copy": result = copy_file(_full_path(path, name), parameters.get("destination", ""))
+        elif action == "rename": result = rename_file(_full_path(path, name), parameters.get("new_name", ""))
+        elif action == "read": result = read_document(_full_path(path, name))
+        elif action == "write": result = write_file(_full_path(path, name), content=content, append=parameters.get("append", False))
+        elif action in ["find", "search"]: result = find_files(name=name or parameters.get("query", ""), extension=parameters.get("extension", ""), path=path, max_results=parameters.get("max_results", 20))
+        elif action == "largest": result = get_largest_files(path=path, count=parameters.get("count", 10))
+        elif action == "disk_usage": result = get_disk_usage(path)
+        elif action == "organize_desktop": result = organize_desktop()
+        elif action == "info": result = get_file_info(_full_path(path, name))
+        elif action == "find_duplicates": result = find_duplicates(_full_path(path, name))
+        elif action == "clean_downloads": result = clean_downloads(parameters.get("days", 30))
+        elif action == "recent": result = get_recent_files(_full_path(path, name), count=parameters.get("count", 5))
+        elif action == "deep_search": result = deep_search(parameters.get("query", ""), start_path=Path(path).expanduser())
+        elif action == "open":
+            target = Path(_full_path(path, name)).expanduser()
+            os.startfile(str(target))
+            result = f"Opening {target.name}..."
+        else: result = f"Unknown action: '{action}'"
     except Exception as e:
-        result = f"File controller error: {e}"
+        result = f"File manager error: {e}"
 
-    if player:
-        player.write_log(f"[file] {result[:60]}")
-
+    if player: player.write_log(f"[file] {result[:60]}")
     return result

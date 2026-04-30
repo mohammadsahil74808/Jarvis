@@ -14,13 +14,7 @@ from core.config import (
     LIVE_MODEL, CHANNELS, SEND_SAMPLE_RATE,
     RECEIVE_SAMPLE_RATE, CHUNK_SIZE
 )
-from memory.memory_manager import (
-    load_memory, update_memory, format_memory_for_prompt,
-    should_extract_memory, extract_memory, should_extract_memory_local
-)
-from memory.profile_manager import get_manager
-from intelligence.personal_context import get_personal_context
-from emotion.companion_engine import get_companion_engine
+# Heavy memory imports deferred to runtime
 from core.utils import retry, async_retry
 
 # Heavy imports — lazy loaded at point of use
@@ -76,25 +70,31 @@ def startup_check():
 _last_memory_input = ""
 
 
-def _update_memory_async(user_text: str, jarvis_text: str) -> None:
+def _update_memory_async(jarvis, user_text: str, jarvis_text: str) -> None:
     global _last_memory_input
 
     user_text   = (user_text   or "").strip()
     jarvis_text = (jarvis_text or "").strip()
 
+    try:
+        from intelligence.interaction_layer import get_interaction_layer
+        get_interaction_layer().track_interaction(user_text, jarvis_text, jarvis)
+    except Exception as e:
+        print(f"[Interaction Layer] Error: {e}")
+
     if len(user_text) < 5 or user_text == _last_memory_input:
         return
     _last_memory_input = user_text
 
-    # API check (it will do its own local check internally)
-
     try:
+        from memory.memory_manager import should_extract_memory, extract_memory, update_memory
         api_key = _get_api_key()
         if not should_extract_memory(user_text, jarvis_text, api_key):
             return
         data = extract_memory(user_text, jarvis_text, api_key)
         if data:
             update_memory(data)
+            jarvis._config_dirty = True
             print(f"[Memory] ✅ {list(data.keys())}")
     except Exception as e:
         if "429" not in str(e):
@@ -284,19 +284,21 @@ TOOL_DECLARATIONS = [
         }
     },
     {
-        "name": "file_controller",
-        "description": "Manages files and folders: list, create, delete, move, copy, rename, read, write, find, disk usage.",
+        "name": "file_manager",
+        "description": "Unified intelligent file manager. Manages files and folders: list, create, delete, move, copy, rename, read (txt/pdf/docx), write, find, search, deep_search, disk usage, organize, find_duplicates, clean_downloads, recent, info, open.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":      {"type": "STRING", "description": "list | create_file | create_folder | delete | move | copy | rename | read | write | find | largest | disk_usage | organize_desktop | info"},
+                "action":      {"type": "STRING", "description": "list | create_file | create_folder | delete | move | copy | rename | read | write | find | search | deep_search | largest | disk_usage | organize_desktop | info | find_duplicates | clean_downloads | recent | open"},
                 "path":        {"type": "STRING", "description": "File/folder path or shortcut: desktop, downloads, documents, home"},
                 "destination": {"type": "STRING", "description": "Destination path for move/copy"},
                 "new_name":    {"type": "STRING", "description": "New name for rename"},
                 "content":     {"type": "STRING", "description": "Content for create_file/write"},
                 "name":        {"type": "STRING", "description": "File name to search for"},
+                "query":       {"type": "STRING", "description": "Query for search/deep_search"},
                 "extension":   {"type": "STRING", "description": "File extension to search (e.g. .pdf)"},
-                "count":       {"type": "INTEGER", "description": "Number of results for largest"},
+                "count":       {"type": "INTEGER", "description": "Number of results for largest/recent"},
+                "days":        {"type": "INTEGER", "description": "Days for clean_downloads (default 30)"},
             },
             "required": ["action"]
         }
@@ -582,40 +584,7 @@ TOOL_DECLARATIONS = [
             "required": ["query"]
         }
     },
-    {
-        "name": "file_brain",
-        "description": "Intelligent file manager: search, deep_search, read, copy, move, delete (Trash), rename, open, find_duplicates, and clean_downloads.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action": {
-                    "type": "STRING",
-                    "description": "read | copy | move | delete | rename | open | search | deep_search | find_duplicates | clean_downloads"
-                },
-                "path": {
-                    "type": "STRING",
-                    "description": "Source file/folder path (or 'desktop'/'downloads')"
-                },
-                "destination": {
-                    "type": "STRING",
-                    "description": "Destination folder for 'copy' or 'move'"
-                },
-                "new_name": {
-                    "type": "STRING",
-                    "description": "New name for 'rename' action"
-                },
-                "days": {
-                    "type": "INTEGER",
-                    "description": "Threshold days for 'clean_downloads' (default: 30)"
-                },
-                "count": {
-                    "type": "INTEGER",
-                    "description": "Number of files for 'recent' action (default: 5)"
-                }
-            },
-            "required": ["action"]
-        }
-    },
+
     {
         "name": "research_mode",
         "description": "Deep web research: search multiple sites, extract articles, and specialize in UPSC, Tech, or News.",
@@ -700,13 +669,38 @@ class JarvisLive:
         self.predictive_engine = None
         self.proactive_engine = None
 
-        # Profile & Context
-        self.profile_manager = get_manager()
-        self.personal_context = get_personal_context()
-        self.companion_engine = get_companion_engine(self)
+        # Profile & Context (Lazily Loaded)
+        self._profile_manager = None
+        self._personal_context = None
+        self._companion_engine = None
+
+        # Config Caching
+        self._cached_config = None
+        self._config_dirty = True
 
         # Delayed Initialization (Lazy Mode)
         self.ui.root.after(15000, self._background_lazy_init)
+
+    @property
+    def profile_manager(self):
+        if self._profile_manager is None:
+            from memory.profile_manager import get_manager
+            self._profile_manager = get_manager()
+        return self._profile_manager
+
+    @property
+    def personal_context(self):
+        if self._personal_context is None:
+            from intelligence.personal_context import get_personal_context
+            self._personal_context = get_personal_context()
+        return self._personal_context
+
+    @property
+    def companion_engine(self):
+        if self._companion_engine is None:
+            from emotion.companion_engine import get_companion_engine
+            self._companion_engine = get_companion_engine(self)
+        return self._companion_engine
 
     def _background_lazy_init(self):
         """Loads heavy background modules after a delay to ensure fast UI startup."""
@@ -744,6 +738,15 @@ class JarvisLive:
         # Companion Engine Heartbeat (Every 15 mins)
         self.ui.root.after(900000, self._companion_heartbeat)
 
+        # Prewarm Semantic Memory
+        def _prewarm_semantic_memory():
+            try:
+                from memory.semantic_memory import get_semantic_memory
+                get_semantic_memory()._get_model()
+            except Exception as e:
+                print(f"[JARVIS] Prewarm failed: {e}")
+        threading.Thread(target=_prewarm_semantic_memory, daemon=True).start()
+
     def _companion_heartbeat(self):
         """Periodic check for proactive emotional engagement."""
         if self.companion_engine:
@@ -777,6 +780,12 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
+            
+        # Local Fast Routing Hook
+        from core.local_router import route_command
+        if route_command(text, self):
+            return  # Completely skip Gemini AI if handled locally
+            
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},
@@ -824,7 +833,11 @@ class JarvisLive:
         return self.personal_context.get_context_summary()
 
     def _build_config(self) -> "types.LiveConnectConfig":
+        if not self._config_dirty and self._cached_config:
+            return self._cached_config
+
         from datetime import datetime
+        from memory.memory_manager import load_memory, format_memory_for_prompt
 
         memory     = load_memory()
         mem_str    = format_memory_for_prompt(memory)
@@ -887,7 +900,7 @@ class JarvisLive:
         parts.append(sys_prompt)
 
         _genai, _types = _lazy_genai()
-        return _types.LiveConnectConfig(
+        config_obj = _types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
             input_audio_transcription={},
@@ -902,9 +915,16 @@ class JarvisLive:
                 )
             ),
         )
+        self._cached_config = config_obj
+        self._config_dirty = False
+        return config_obj
 
     async def _execute_tool(self, fc) -> "types.FunctionResponse":
         name = fc.name
+        if name in ["file_controller", "file_brain"]:
+            print(f"[JARVIS] ⚠️ Hallucinated tool {name} re-routed to file_manager")
+            name = "file_manager"
+            
         args = dict(fc.args or {})
 
         print(f"[JARVIS] [TOOL] {name}  {args}")
@@ -912,13 +932,14 @@ class JarvisLive:
 
         # Update Session Context
         self.session_context["last_tool"] = name
+        self._config_dirty = True
         if name == "open_app":
             self.session_context["last_app"] = args.get("app_name")
             self.session_context["last_action"] = "open_app"
         elif name == "web_search":
             self.session_context["last_query"] = args.get("query")
             self.session_context["last_action"] = "web_search"
-        elif name == "file_controller":
+        elif name == "file_manager":
             self.session_context["last_file"] = args.get("path")
             self.session_context["last_action"] = args.get("action")
         elif name == "browser_control":
@@ -932,10 +953,11 @@ class JarvisLive:
             self.session_context["last_action"] = args.get("action", "analyze")
 
         # --- PREDICTIVE ENGINE LOGGING ---
-        if name == "open_app":
-            self.usage_tracker.log_event("app", args.get("app_name", "Unknown"))
-        elif name in ["web_search", "browser_control"]:
-             self.usage_tracker.log_event("command", name)
+        if self.usage_tracker:
+            if name == "open_app":
+                self.memory_executor.submit(self.usage_tracker.log_event, "app", args.get("app_name", "Unknown"))
+            elif name in ["web_search", "browser_control"]:
+                 self.memory_executor.submit(self.usage_tracker.log_event, "command", name)
         # --------------------------------
 
         # Fallback suggestions map
@@ -944,7 +966,7 @@ class JarvisLive:
             "open_app": "Sir, I couldn't open the app. Try using 'web_search' to find the app path or use 'cmd_control'.",
             "screen_process": "Sir, vision module failed. Is the screen content visible clearly?",
             "web_search": "Sir, search failed. I already tried fallback engines, but you might want to try 'browser_control' manually.",
-            "file_controller": "Sir, file action failed. Check if the path is correct or use 'cmd_control' for direct disk access."
+            "file_manager": "Sir, file action failed. Check if the path is correct or use 'cmd_control' for direct disk access."
         }
 
         # ── save_memory: sessiz, hızlı, Gemini'ye bildirim yok ───────────────
@@ -953,6 +975,7 @@ class JarvisLive:
             key      = args.get("key", "")
             value    = args.get("value", "")
             if key and value:
+                from memory.memory_manager import update_memory
                 update_memory({category: {key: {"value": value}}})
                 print(f"[Memory] [SAVE] save_memory: {category}/{key} = {value}")
             if not self.ui.muted:
@@ -1010,7 +1033,7 @@ class JarvisLive:
                         "Be concise. Format as a bulleted list."
                     )
                     response = client.models.generate_content(
-                        model="gemini-1.5-flash-latest",
+                        model="gemini-2.0-flash",
                         contents=[
                             _types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
                             prompt
@@ -1091,34 +1114,7 @@ class JarvisLive:
                 self.ui.set_state("LISTENING")
             return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
 
-        if name == "recall_memory":
-            try:
-                query = args.get("query")
-                k = args.get("k", 5)
-                from memory.semantic_memory import search_semantic_memory
-                memories = await loop.run_in_executor(None, lambda: search_semantic_memory(query, k))
-                if not memories:
-                    result = "No similar memories found, sir."
-                else:
-                    formatted = []
-                    for m in memories:
-                        formatted.append(f"[{m['timestamp']}] {m['text']}")
-                    result = "Found similar memories:\n" + "\n".join(formatted)
-            except Exception as e:
-                result = f"Recall failed: {e}"
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
 
-        if name == "file_brain":
-            try:
-                from actions.file_brain import file_brain
-                result = await loop.run_in_executor(None, file_brain, args)
-            except Exception as e:
-                result = f"File Brain failed: {e}"
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
 
         if name == "research_mode":
             try:
@@ -1155,9 +1151,9 @@ class JarvisLive:
                     result = r or "Done."
                     break
 
-                elif name == "file_controller":
-                    from actions.file_controller import file_controller
-                    r = await loop.run_in_executor(None, lambda: file_controller(parameters=args, player=self.ui))
+                elif name == "file_manager":
+                    from actions.file_manager import file_manager
+                    r = await loop.run_in_executor(None, lambda: file_manager(parameters=args, player=self.ui))
                     result = r or "Done."
                     break
 
@@ -1181,12 +1177,10 @@ class JarvisLive:
 
                 elif name == "screen_process":
                     from actions.screen_processor import screen_process
-                    threading.Thread(
-                        target=screen_process,
-                        kwargs={"parameters": args, "response": None,
-                                "player": self.ui, "session_memory": None},
-                        daemon=True
-                    ).start()
+                    r = await loop.run_in_executor(
+                        None,
+                        lambda: screen_process(parameters=args, response=None, player=self.ui, session_memory=None)
+                    )
                     result = "Vision module activated. Stay completely silent — vision module will speak directly."
                     break
 
@@ -1281,12 +1275,30 @@ class JarvisLive:
                 attempts += 1
                 if attempts < max_attempts:
                     print(f"[Self-Healing] [WARN] Attempt {attempts} failed for {name}: {e}. Retrying...")
-                    await asyncio.sleep(1)
+                    
+                    if name == "file_manager" and "path" in args:
+                        clean_path = args["path"].strip().strip("'\"").replace("\\\\", "\\")
+                        print(f"[Self-Healing] Cleaning path: '{args['path']}' -> '{clean_path}'")
+                        args["path"] = clean_path
+                        
+                    await asyncio.sleep(0.2)
                     continue
                 
                 # Final failure
                 suggestion = FALLBACK_SUGGESTIONS.get(name, "Sir, something went wrong. Try another approach?")
-                result = f"Tool '{name}' failed after {max_attempts} attempts: {e}\n[SELF-HEALING SUGGESTION]: {suggestion}"
+                error_str = str(e)
+                if isinstance(e, FileNotFoundError) or "No such file" in error_str:
+                    err_msg = f"File or directory not found: {args.get('path', '')}"
+                elif isinstance(e, PermissionError) or "Access is denied" in error_str:
+                    err_msg = f"Permission denied for path: {args.get('path', '')}"
+                elif isinstance(e, OSError) and ("Invalid argument" in error_str or "syntax" in error_str.lower()):
+                    err_msg = f"Invalid file path syntax: {args.get('path', '')}"
+                elif isinstance(e, ValueError):
+                    err_msg = error_str
+                else:
+                    err_msg = error_str
+                    
+                result = f"Error: {err_msg}\n[SUGGESTION]: {suggestion}"
                 traceback.print_exc()
                 self.speak_error(name, e)
                 break
@@ -1305,6 +1317,8 @@ class JarvisLive:
     async def _send_realtime(self):
         while True:
             msg = await self.out_queue.get()
+            if getattr(self, "tool_call_pending", False):
+                continue  # Stop sending audio inputs while processing function responses to prevent 1008 policy violations
             await self.session.send_realtime_input(media=msg)
 
     async def _listen_audio(self):
@@ -1398,7 +1412,7 @@ class JarvisLive:
                             out_buf = []
 
                             if full_in:
-                                self.memory_executor.submit(_update_memory_async, full_in, full_out)
+                                self.memory_executor.submit(_update_memory_async, self, full_in, full_out)
                                 self.memory_executor.submit(_index_conversation_async, full_in, full_out)
                                 
                                 # Emotional Awareness Support
@@ -1407,14 +1421,18 @@ class JarvisLive:
                                     self.ui.root.after(2000, lambda m=caring_msg: self.notify(m, voice=True))
 
                     if response.tool_call:
-                        fn_responses = []
-                        for fc in response.tool_call.function_calls:
-                            print(f"[JARVIS] 📞 {fc.name}")
-                            fr = await self._execute_tool(fc)
-                            fn_responses.append(fr)
-                        await self.session.send_tool_response(
-                            function_responses=fn_responses
-                        )
+                        self.tool_call_pending = True
+                        try:
+                            fn_responses = []
+                            for fc in response.tool_call.function_calls:
+                                print(f"[JARVIS] 📞 {fc.name}")
+                                fr = await self._execute_tool(fc)
+                                fn_responses.append(fr)
+                            await self.session.send_tool_response(
+                                function_responses=fn_responses
+                            )
+                        finally:
+                            self.tool_call_pending = False
                         # ── Boş turn YOK — bu "Anladım." sorununu yaratıyordu ──
 
         except Exception as e:
