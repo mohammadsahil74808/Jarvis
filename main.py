@@ -9,7 +9,7 @@ from pathlib import Path
 
 from ui import JarvisUI
 from core.config import (
-    get_base_dir, get_config, get_api_key, 
+    get_base_dir, get_config, get_api_key, get_gemini_client,
     BASE_DIR, API_CONFIG_PATH, PROMPT_PATH,
     LIVE_MODEL, CHANNELS, SEND_SAMPLE_RATE,
     RECEIVE_SAMPLE_RATE, CHUNK_SIZE
@@ -679,7 +679,7 @@ class JarvisLive:
         self._config_dirty = True
 
         # Delayed Initialization (Lazy Mode)
-        self.ui.root.after(15000, self._background_lazy_init)
+        self.ui.root.after(5000, self._background_lazy_init)
 
     @property
     def profile_manager(self):
@@ -737,15 +737,6 @@ class JarvisLive:
 
         # Companion Engine Heartbeat (Every 15 mins)
         self.ui.root.after(900000, self._companion_heartbeat)
-
-        # Prewarm Semantic Memory
-        def _prewarm_semantic_memory():
-            try:
-                from memory.semantic_memory import get_semantic_memory
-                get_semantic_memory()._get_model()
-            except Exception as e:
-                print(f"[JARVIS] Prewarm failed: {e}")
-        threading.Thread(target=_prewarm_semantic_memory, daemon=True).start()
 
     def _companion_heartbeat(self):
         """Periodic check for proactive emotional engagement."""
@@ -1026,7 +1017,7 @@ class JarvisLive:
                 try:
                     img_bytes = _capture_screenshot()
                     _genai, _types = _lazy_genai()
-                    client = _genai.Client(api_key=_get_api_key())
+                    client = get_gemini_client()
                     prompt = (
                         "Analyze this screenshot. Describe: 1. The active window. "
                         "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
@@ -1321,34 +1312,51 @@ class JarvisLive:
                 continue  # Stop sending audio inputs while processing function responses to prevent 1008 policy violations
             await self.session.send_realtime_input(media=msg)
 
+    async def _audio_detection_loop(self):
+        """Offloaded clap and wake word detection to prevent callback glitches."""
+        while True:
+            try:
+                indata = await self.detection_queue.get()
+                
+                with self._speaking_lock:
+                    jarvis_speaking = self._is_speaking
+
+                if jarvis_speaking:
+                    continue
+
+                # Clap Detection
+                if self.clap_enabled and self.detector:
+                    if self.detector.is_clap(indata):
+                        print("[JARVIS] 👏 Clap detected!")
+                        if self.ui.muted:
+                            self.ui.root.after(0, self.ui._toggle_mute)
+                        else:
+                            self.ui.write_log("SYS: Clap detected (Already active).")
+
+                # Wake Word Detection
+                if self.wake_word_enabled and self.wake_detector:
+                    if self.wake_detector.check(indata):
+                        print("[JARVIS] 🎙️ Wake word detected!")
+                        if self.ui.muted:
+                            self.ui.root.after(0, self.ui._toggle_mute)
+                        else:
+                            self.ui.write_log("SYS: Wake word detected (Already active).")
+            except Exception as e:
+                print(f"[JARVIS] Detection error: {e}")
+            finally:
+                self.detection_queue.task_done()
+
     async def _listen_audio(self):
         print("[JARVIS] 🎤 Mic started")
         loop = asyncio.get_event_loop()
 
         def callback(indata, frames, time_info, status):
+            # Send to detection queue (offloaded)
+            if (self.clap_enabled or self.wake_word_enabled):
+                loop.call_soon_threadsafe(self.detection_queue.put_nowait, indata.copy())
+
             with self._speaking_lock:
                 jarvis_speaking = self._is_speaking
-
-            # Clap Detection (works even when muted)
-            if self.clap_enabled and self.detector and not jarvis_speaking:
-                if self.detector.is_clap(indata):
-                    print("[JARVIS] 👏 Clap detected!")
-                    if self.ui.muted:
-                        # Activate/Unmute
-                        self.ui.root.after(0, self.ui._toggle_mute)
-                    else:
-                        # Feedback if already active
-                        self.ui.write_log("SYS: Clap detected (Already active).")
-
-            # Wake Word Detection (works even when muted)
-            if self.wake_word_enabled and self.wake_detector and not jarvis_speaking:
-                if self.wake_detector.check(indata):
-                    print("[JARVIS] 🎙️ Wake word detected!")
-                    if self.ui.muted:
-                        # Activate/Unmute
-                        self.ui.root.after(0, self.ui._toggle_mute)
-                    else:
-                        self.ui.write_log("SYS: Wake word detected (Already active).")
 
             if not jarvis_speaking and not self.ui.muted:
                 data = indata.tobytes()
@@ -1457,9 +1465,11 @@ class JarvisLive:
                 chunk = await self.audio_in_queue.get()
                 self.set_speaking(True)
                 await asyncio.to_thread(stream.write, chunk)
-                # Reset speaking state if no more chunks are immediately pending
+                # Debounced speaking state reset to prevent True/False flicker
                 if self.audio_in_queue.empty():
-                    self.set_speaking(False)
+                    await asyncio.sleep(0.15)
+                    if self.audio_in_queue.empty():
+                        self.set_speaking(False)
         except Exception as e:
             print(f"[JARVIS] ❌ Play: {e}")
             raise
@@ -1469,11 +1479,7 @@ class JarvisLive:
             stream.close()
 
     async def run(self):
-        _genai, _types = _lazy_genai()
-        client = _genai.Client(
-            api_key=_get_api_key(),
-            http_options={"api_version": "v1beta"}
-        )
+        client = get_gemini_client()
 
         first_run   = True
         retry_delay = 2 # Initial backoff seconds
@@ -1494,6 +1500,7 @@ class JarvisLive:
                     self._loop          = asyncio.get_running_loop()
                     self.audio_in_queue = asyncio.Queue()
                     self.out_queue      = asyncio.Queue(maxsize=100)
+                    self.detection_queue = asyncio.Queue()
 
                     print("[JARVIS] ✅ Connected.")
                     self.ui.set_state("LISTENING")
@@ -1504,13 +1511,14 @@ class JarvisLive:
 
                     tg.create_task(self._send_realtime())
                     tg.create_task(self._listen_audio())
+                    tg.create_task(self._audio_detection_loop())
                     tg.create_task(self._receive_audio())
                     tg.create_task(self._play_audio())
 
-                    # Startup Briefing Trigger (Only on first run)
+                    # Startup Briefing Trigger (Delayed for setup)
                     if first_run:
                         first_run = False
-                        await asyncio.sleep(2) # Wait for audio setup
+                        await asyncio.sleep(10) # Wait for audio and background systems
                         await session.send_client_content(
                             turns={"parts": [{"text": "System call: Perform 'daily_briefing' for Sahil now."}]},
                             turn_complete=True

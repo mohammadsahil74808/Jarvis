@@ -5,7 +5,7 @@ from pathlib import Path
 from enum import Enum
 
 
-from core.config import get_api_key, BASE_DIR
+from core.config import get_api_key as _get_api_key, get_gemini_client, BASE_DIR
 
 
 class ErrorDecision(Enum):
@@ -69,7 +69,7 @@ def analyze_error(
         }
     """
     if attempt >= max_attempts:
-        print(f"[ErrorHandler] ⚠️ Max attempts reached for step {step.get('step')} — forcing replan")
+        print(f"[ErrorHandler] [WARNING] Max attempts reached for step {step.get('step')} -- forcing replan")
         return {
             "decision":      ErrorDecision.REPLAN,
             "reason":        f"Failed {attempt} times: {error[:100]}",
@@ -78,9 +78,8 @@ def analyze_error(
             "user_message":  "Trying a different approach, sir."
         }
 
-    from google import genai
     from google.genai import types
-    client = genai.Client(api_key=get_api_key())
+    client = get_gemini_client()
 
     prompt = f"""Failed step:
 Tool: {step.get('tool')}
@@ -95,7 +94,7 @@ Attempt number: {attempt}"""
 
     try:
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             config=types.GenerateContentConfig(
                 system_instruction=ERROR_ANALYST_PROMPT
             ),
@@ -123,7 +122,7 @@ Attempt number: {attempt}"""
         return result
 
     except Exception as e:
-        print(f"[ErrorHandler] ⚠️ Analysis failed: {e} — defaulting to replan")
+        print(f"[ErrorHandler] [FAIL] Analysis failed: {e} -- defaulting to replan")
         return {
             "decision":       ErrorDecision.REPLAN,
             "reason":         str(e),
@@ -140,9 +139,8 @@ def generate_fix(step: dict, error: str, fix_suggestion: str) -> dict:
 
     Returns a modified step dict.
     """
-    from google import genai
     from google.genai import types
-    client = genai.Client(api_key=_get_api_key())
+    client = get_gemini_client()
 
     prompt = f"""A task step failed. Generate a replacement step.
 
@@ -159,7 +157,7 @@ Return ONLY the Python code, no explanation."""
 
     try:
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=prompt
         )
         code = response.text.strip()
@@ -180,7 +178,7 @@ Return ONLY the Python code, no explanation."""
         }
 
     except Exception as e:
-        print(f"[ErrorHandler] ⚠️ Fix generation failed: {e}")
+        print(f"[ErrorHandler] [FAIL] Fix generation failed: {e}")
         return {
             "step":        step.get("step"),
             "tool":        "generated_code",

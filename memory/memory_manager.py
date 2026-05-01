@@ -15,7 +15,7 @@ from pathlib import Path
 import sys
 
 
-from core.config import BASE_DIR
+from core.config import BASE_DIR, get_gemini_client
 MEMORY_PATH      = BASE_DIR / "memory" / "long_term.json"
 _lock            = RLock()
 MAX_VALUE_LENGTH = 400
@@ -155,8 +155,7 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str) -> dict:
     Stage 2: Detaylı çıkarım. Her iki tarafı da analiz eder.
     """
     try:
-        from google import genai
-        client = genai.Client(api_key=api_key)
+        client = get_gemini_client()
 
         combined = f"User: {user_text[:500]}\nJarvis: {jarvis_text[:300]}"
 

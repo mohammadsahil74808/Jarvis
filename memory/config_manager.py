@@ -1,6 +1,7 @@
 import json
 import sys
 from pathlib import Path
+from core.config import invalidate_config_cache
 
 
 def get_base_dir() -> Path:
@@ -38,6 +39,7 @@ def save_api_keys(gemini_api_key: str) -> None:
         json.dumps(data, indent=2),
         encoding="utf-8"
     )
+    invalidate_config_cache()
 
 
 def load_api_keys() -> dict:

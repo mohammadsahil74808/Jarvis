@@ -12,11 +12,13 @@ from agent.planner       import create_plan, replan
 from agent.error_handler import analyze_error, generate_fix, ErrorDecision
 
 
-from core.config import get_api_key, BASE_DIR
+from core.config import get_api_key as _get_api_key, get_gemini_client, BASE_DIR
 
 def _run_generated_code(description: str, speak: Callable | None = None) -> str:
     from google import genai
     from google.genai import types
+
+    client = get_gemini_client()
 
     if speak:
         speak("Writing custom code for this task, sir.")
@@ -35,11 +37,11 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
         except Exception:
             pass
 
-    client = genai.Client(api_key=get_api_key())
+    client = get_gemini_client()
 
     try:
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             config=types.GenerateContentConfig(
                 system_instruction=(
                     "You are an expert Python developer. "
@@ -113,15 +115,14 @@ def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "")
                 combined = "\n\n---\n\n".join(all_results)
                 translated = _translate_to_goal_language(combined, goal)
                 params["content"] = translated
-                print(f"[Executor] 💉 Injected + translated content")
+                print(f"[Executor] [OK] Injected + translated content")
 
     return params
 def _detect_language(text: str) -> str:
-    from google import genai
-    client = genai.Client(api_key=_get_api_key())
+    client = get_gemini_client()
     try:
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=(
                 f"What language is this text written in? "
                 f"Reply with ONLY the language name in English (e.g. Turkish, English, French).\n\n"
@@ -137,11 +138,10 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
     if not goal:
         return content
     try:
-        from google import genai
-        client = genai.Client(api_key=_get_api_key())
+        client = get_gemini_client()
 
         target_lang = _detect_language(goal)
-        print(f"[Executor] 🌐 Translating to: {target_lang}")
+        print(f"[Executor] [LANG] Translating to: {target_lang}")
 
         prompt = (
             f"You are a professional translator. "
@@ -154,14 +154,14 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
             f"Text to translate:\n{content[:4000]}"
         )
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=prompt
         )
         translated = response.text.strip()
-        print(f"[Executor] ✅ Translation done ({target_lang})")
+        print(f"[Executor] [OK] Translation done ({target_lang})")
         return translated
     except Exception as e:
-        print(f"[Executor] ⚠️ Translation failed: {e}")
+        print(f"[Executor] [FAIL] Translation failed: {e}")
         return content
 
 def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
@@ -198,8 +198,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
 
     elif tool == "screen_process":
         from actions.screen_processor import screen_process
-        screen_process(parameters=parameters, player=None)
-        return "Screen captured and analyzed."
+        return screen_process(parameters=parameters, player=player)
 
     elif tool == "send_message":
         from actions.send_message import send_message
@@ -248,7 +247,7 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
         return get_daily_briefing(parameters=parameters, player=None) or "Done."
 
     else:
-        print(f"[Executor] ⚠️ Unknown tool '{tool}' — falling back to generated_code")
+        print(f"[Executor] [WARNING] Unknown tool '{tool}' -- falling back to generated_code")
         return _run_generated_code(f"Accomplish this task: {parameters}", speak=speak)
 
 class AgentExecutor:
@@ -261,12 +260,23 @@ class AgentExecutor:
         speak:       Callable | None        = None,
         cancel_flag: threading.Event | None = None,
     ) -> str:
-        print(f"\n[Executor] 🎯 Goal: {goal}")
+        safe_goal = str(goal).encode('ascii', 'ignore').decode('ascii')
+        print(f"\n[Executor] [GOAL] Goal: {safe_goal}")
 
         replan_attempts = 0
         completed_steps = []
         step_results    = {} 
         plan            = create_plan(goal)
+        
+        # Safeguard: Check for missing file_controller when save/write/store is in goal
+        save_keywords = ["save", "write", "store"]
+        if any(kw in goal.lower() for kw in save_keywords):
+            has_save_step = any(s.get("tool") == "file_controller" for s in plan.get("steps", []))
+            if not has_save_step:
+                print("[Executor] [WARNING] Incomplete plan detected (missing save step). Regenerating...")
+                if speak: speak("Incomplete plan detected. Regenerating.")
+                # Force a replan with a very specific instruction
+                plan = create_plan(goal, context="CRITICAL: The user wants to SAVE or WRITE results to a file. You MUST include a SEPARATE file_controller step for this.")
 
         while True:
             steps = plan.get("steps", [])
@@ -292,7 +302,8 @@ class AgentExecutor:
 
                 params = _inject_context(params, tool, step_results, goal=goal)
 
-                print(f"\n[Executor] ▶️ Step {step_num}: [{tool}] {desc}")
+                safe_desc = str(desc).encode('ascii', 'ignore').decode('ascii')
+                print(f"\n[Executor] [STEP] Step {step_num}: [{tool}] {safe_desc}")
 
                 attempt = 1
                 step_ok = False
@@ -304,13 +315,15 @@ class AgentExecutor:
                         result = _call_tool(tool, params, speak)
                         step_results[step_num] = result 
                         completed_steps.append(step)
-                        print(f"[Executor] ✅ Step {step_num} done: {str(result)[:100]}")
+                        safe_res = str(result)[:100].encode('ascii', 'ignore').decode('ascii')
+                        print(f"[Executor] [OK] Step {step_num} done: {safe_res}")
                         step_ok = True
                         break
 
                     except Exception as e:
                         error_msg = str(e)
-                        print(f"[Executor] ❌ Step {step_num} attempt {attempt} failed: {error_msg}")
+                        safe_err = str(error_msg).encode('ascii', 'ignore').decode('ascii')
+                        print(f"[Executor] [FAIL] Step {step_num} attempt {attempt} failed: {safe_err}")
 
                         recovery = analyze_error(step, error_msg, attempt=attempt)
                         decision = recovery["decision"]
@@ -325,7 +338,7 @@ class AgentExecutor:
                             continue
 
                         elif decision == ErrorDecision.SKIP:
-                            print(f"[Executor] ⏭️ Skipping step {step_num}")
+                            print(f"[Executor] [SKIP] Skipping step {step_num}")
                             completed_steps.append(step)
                             step_ok = True
                             break
@@ -351,7 +364,7 @@ class AgentExecutor:
                                     step_ok = True
                                     break
                                 except Exception as fix_err:
-                                    print(f"[Executor] ⚠️ Fix failed: {fix_err}")
+                                    print(f"[Executor] [FAIL] Fix failed: {fix_err}")
 
                             failed_step  = step
                             failed_error = error_msg
@@ -382,8 +395,7 @@ class AgentExecutor:
     def _summarize(self, goal: str, completed_steps: list, speak: Callable | None) -> str:
         fallback = f"All done, sir. Completed {len(completed_steps)} steps for: {goal[:60]}."
         try:
-            from google import genai
-            client = genai.Client(api_key=_get_api_key())
+            client = get_gemini_client()
             steps_str = "\n".join(f"- {s.get('description', '')}" for s in completed_steps)
             prompt    = (
                 f'User goal: "{goal}"\n'
@@ -392,7 +404,7 @@ class AgentExecutor:
                 "Address the user as 'sir'. Be direct and positive."
             )
             response = client.models.generate_content(
-                model="gemini-1.5-flash",
+                model="gemini-2.0-flash",
                 contents=prompt
             )
             summary  = response.text.strip()

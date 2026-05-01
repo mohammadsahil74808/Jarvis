@@ -25,7 +25,7 @@ except ImportError:
     _TRANSCRIPT_OK = False
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
 
 HEADERS = {
     "User-Agent": (
@@ -189,10 +189,9 @@ def _get_transcript(video_id: str) -> str | None:
 
 
 def _summarize_with_gemini(transcript: str, video_url: str) -> str:
-    from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=get_api_key())
+    client = get_gemini_client()
 
     max_chars = 80000
     truncated = transcript[:max_chars] + ("..." if len(transcript) > max_chars else "")

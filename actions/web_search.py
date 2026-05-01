@@ -8,14 +8,12 @@ import sys
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR
+from core.config import get_api_key, BASE_DIR, get_gemini_client
 
 
 
 def _gemini_search(query: str) -> str:
-    from google import genai
-
-    client = genai.Client(api_key=get_api_key(), http_options={"api_version": "v1beta"})
+    client = get_gemini_client()
     
     try:
         response = client.models.generate_content(
@@ -24,9 +22,9 @@ def _gemini_search(query: str) -> str:
             config={"tools": [{"google_search": {}}]}
         )
     except Exception as e:
-        print(f"[WebSearch] ⚠️ Gemini 2.0 quota full, trying 1.5-flash-8b... ({e})")
+        print(f"[WebSearch] [WARNING] Gemini 2.0 quota full, trying 1.5-flash... ({e})")
         response = client.models.generate_content(
-            model="gemini-1.5-flash-8b",
+            model="gemini-1.5-flash",
             contents=query,
             config={"tools": [{"google_search": {}}]}
         )
@@ -59,7 +57,7 @@ def _ddg_search(query: str, max_results: int = 6) -> list:
                     "url":     r.get("href", ""),
                 })
     except Exception as e:
-        print(f"[WebSearch] ⚠️ DDG error: {e}")
+        print(f"[WebSearch] [WARNING] DDG error: {e}")
     return results
 
 def _format_ddg(query: str, results: list) -> str:
@@ -79,7 +77,7 @@ def _compare(items: list, aspect: str) -> str:
     try:
         return _gemini_search(query)
     except Exception as e:
-        print(f"[WebSearch] ⚠️ Gemini compare failed: {e}")
+        print(f"[WebSearch] [WARNING] Gemini compare failed: {e}")
         all_results = {}
         for item in items:
             try:
@@ -116,27 +114,27 @@ def web_search(
     if player:
         player.write_log(f"[Search] {query or ', '.join(items)}")
 
-    print(f"[WebSearch] 🔍 Query: {query!r}  Mode: {mode}")
+    print(f"[WebSearch] [SEARCH] Query: {query!r}  Mode: {mode}")
 
     try:
         if mode == "compare" and items:
-            print(f"[WebSearch] 📊 Comparing: {items}")
+            print(f"[WebSearch] [STATS] Comparing: {items}")
             result = _compare(items, aspect)
-            print("[WebSearch] ✅ Compare done.")
+            print("[WebSearch] [OK] Compare done.")
             return result
 
-        print("[WebSearch] 🌐 Gemini search...")
+        print("[WebSearch] [WEB] Gemini search...")
         try:
             result = _gemini_search(query)
-            print("[WebSearch] ✅ Gemini OK.")
+            print("[WebSearch] [OK] Gemini OK.")
             return result
         except Exception as e:
-            print(f"[WebSearch] ⚠️ Gemini failed ({e}), trying DDG...")
+            print(f"[WebSearch] [WARNING] Gemini failed ({e}), trying DDG...")
             results = _ddg_search(query)
             result  = _format_ddg(query, results)
-            print(f"[WebSearch] ✅ DDG: {len(results)} results.")
+            print(f"[WebSearch] [OK] DDG: {len(results)} results.")
             return result
 
     except Exception as e:
-        print(f"[WebSearch] ❌ Failed: {e}")
+        print(f"[WebSearch] [ERROR] Failed: {e}")
         return f"Search failed, sir: {e}"

@@ -1,4 +1,5 @@
 # Rules for JARVIS Proactive Intelligence System
+import time
 
 class BaseRule:
     def __init__(self, rule_id: str, priority: int = 1):
@@ -109,4 +110,3 @@ def get_all_rules():
         YouTubeDistractionRule()
     ]
 
-import time

@@ -22,6 +22,10 @@ class StateMonitor:
         self.coding_tools = ["code.exe", "pycharm", "sublime_text", "visual studio", "vscode"]
         self.browser_names = ["msedge.exe", "chrome.exe", "firefox.exe", "brave.exe"]
         self._last_input_time = time.time()
+        self._process_cache = []
+        self._process_cache_time = 0
+        self._internet_cache = True
+        self._internet_cache_time = 0
 
     def get_system_state(self):
         """Returns a snapshot of the current system state."""
@@ -39,7 +43,13 @@ class StateMonitor:
     def get_context_state(self):
         """Returns information about currently open apps and context."""
         active_app = self._get_active_window_title()
-        open_processes = [p.name().lower() for p in psutil.process_iter(['name'])]
+        
+        # Cache process list for 30 seconds
+        if time.time() - self._process_cache_time > 30:
+            self._process_cache = [p.name().lower() for p in psutil.process_iter(['name'])]
+            self._process_cache_time = time.time()
+            
+        open_processes = self._process_cache
         
         is_coding = any(tool.lower() in [p for p in open_processes] for tool in self.coding_tools)
         
@@ -64,12 +74,19 @@ class StateMonitor:
         return None
 
     def _check_internet(self):
+        # Cache internet status for 10 seconds
+        if time.time() - self._internet_cache_time < 10:
+            return self._internet_cache
+            
         try:
             # Connect to a reliable host
             socket.create_connection(("8.8.8.8", 53), timeout=2)
-            return True
+            self._internet_cache = True
         except OSError:
-            return False
+            self._internet_cache = False
+        
+        self._internet_cache_time = time.time()
+        return self._internet_cache
 
     def _get_disk_free(self):
         usage = psutil.disk_usage('/')

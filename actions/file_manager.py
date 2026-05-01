@@ -8,43 +8,16 @@ from datetime import datetime, timedelta
 import PyPDF2
 from docx import Document
 
+from core.config import BASE_DIR, get_desktop_path, get_downloads_path, get_documents_path
+
 def _get_desktop() -> Path:
-    """Dynamically detects the Windows Desktop path, handling OneDrive redirection."""
-    # 1. Try winshell (if available)
-    try:
-        import winshell
-        return Path(winshell.desktop())
-    except Exception:
-        pass
-
-    # 2. Use reliable Windows API via ctypes (Standard on Windows)
-    try:
-        import ctypes.wintypes
-        CSIDL_DESKTOP = 0x0000 
-        buf = ctypes.create_unicode_buffer(ctypes.wintypes.MAX_PATH)
-        ctypes.windll.shell32.SHGetSpecialFolderPathW(None, buf, CSIDL_DESKTOP, False)
-        if buf.value:
-            return Path(buf.value)
-    except Exception:
-        pass
-
-    # 3. Fallback to environment variable or Path.home()
-    user_profile = os.environ.get("USERPROFILE")
-    if user_profile:
-        path = Path(user_profile) / "Desktop"
-        if path.exists(): return path
-
-    return Path.home() / "Desktop"
+    return get_desktop_path()
 
 def _get_downloads() -> Path:
-    one_drive = Path.home() / "OneDrive" / "Downloads"
-    if one_drive.exists(): return one_drive
-    return Path.home() / "Downloads"
+    return get_downloads_path()
 
 def _get_documents() -> Path:
-    one_drive = Path.home() / "OneDrive" / "Documents"
-    if one_drive.exists(): return one_drive
-    return Path.home() / "Documents"
+    return get_documents_path()
 
 def _resolve_path(raw: str) -> Path:
     """
@@ -90,10 +63,10 @@ def list_files(path: str = "desktop", show_hidden: bool = False) -> str:
             if not show_hidden and item.name.startswith("."):
                 continue
             if item.is_dir():
-                items.append(f"📁 {item.name}/")
+                items.append(f"[DIR] {item.name}/")
             else:
                 size = _format_size(item.stat().st_size)
-                items.append(f"📄 {item.name} ({size})")
+                items.append(f"[FILE] {item.name} ({size})")
 
         if not items:
             return f"Directory is empty: {target}"
@@ -124,11 +97,14 @@ def create_folder(path: str) -> str:
     except Exception as e:
         return f"Could not create folder: {e}"
 
-def delete_file(path: str, confirm: bool = True) -> str:
+def delete_file(path: str, confirm: bool = False) -> str:
     """
     Deletes a file or folder.
     Moves to Recycle Bin on Windows if possible, otherwise permanent delete.
+    REQUIREMENT: confirm must be True.
     """
+    if not confirm:
+        return "Deletion blocked. Please confirm by setting 'confirm': True in your parameters."
     try:
         target = Path(path).expanduser()
         if not target.exists():
@@ -144,10 +120,10 @@ def delete_file(path: str, confirm: bool = True) -> str:
         # Fallback: permanent delete
         if target.is_dir():
             shutil.rmtree(target)
-            return f"Folder deleted permanently: {target.name}"
+            return f"Folder deleted permanently from: {target.absolute()}"
         else:
             target.unlink()
-            return f"File deleted permanently: {target.name}"
+            return f"File deleted permanently from: {target.absolute()}"
 
     except PermissionError:
         return f"Permission denied: {path}"
@@ -223,7 +199,7 @@ def write_file(path: str, content: str, append: bool = False) -> str:
         with open(target, mode, encoding="utf-8") as f:
             f.write(content)
         action = "Appended to" if append else "Written to"
-        return f"{action}: {target.name}"
+        return f"{action} successfully at: {target.absolute()}"
     except Exception as e:
         return f"Could not write file: {e}"
 
@@ -237,7 +213,7 @@ def find_files(name: str = "", extension: str = "", path: str = "home",
         if not extension and name:
             name_lower = name.lower().strip()
             # Check common directories
-            roots = [_get_desktop(), _get_documents(), _get_downloads(), Path.home()]
+            roots = [get_desktop_path(), get_documents_path(), get_downloads_path(), Path.home()]
             
             # Phase A: Quick check (Immediate children)
             for root in roots:
@@ -578,6 +554,7 @@ def file_manager(parameters: dict, response=None, player=None, session_memory=No
     path    = (parameters or {}).get("path", "desktop")
     name    = (parameters or {}).get("name", "")
     content = (parameters or {}).get("content", "")
+    confirm = (parameters or {}).get("confirm", False)
 
     def _full_path(p: str, n: str) -> str:
         base = _resolve_path(p)
@@ -589,7 +566,7 @@ def file_manager(parameters: dict, response=None, player=None, session_memory=No
         if action == "list": result = list_files(path)
         elif action == "create_file": result = create_file(_full_path(path, name), content=content)
         elif action == "create_folder": result = create_folder(_full_path(path, name))
-        elif action == "delete": result = delete_file(_full_path(path, name))
+        elif action == "delete": result = delete_file(_full_path(path, name), confirm=confirm)
         elif action == "move": result = move_file(_full_path(path, name), parameters.get("destination", ""))
         elif action == "copy": result = copy_file(_full_path(path, name), parameters.get("destination", ""))
         elif action == "rename": result = rename_file(_full_path(path, name), parameters.get("new_name", ""))

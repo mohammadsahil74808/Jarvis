@@ -30,7 +30,7 @@ class SemanticMemory:
 
     def _get_model(self):
         if self._model is None:
-            print(f"[SemanticMemory] 🧠 Loading {MODEL_NAME}...")
+            print(f"[SemanticMemory] Loading {MODEL_NAME}...")
             self._model = SentenceTransformer(MODEL_NAME)
         return self._model
 
@@ -42,35 +42,67 @@ class SemanticMemory:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 text TEXT NOT NULL,
                 metadata TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                faiss_id INTEGER UNIQUE
             )
         """)
+        
+        # Migration check for faiss_id column
+        cursor.execute("PRAGMA table_info(memories)")
+        cols = [c[1] for c in cursor.fetchall()]
+        if "faiss_id" not in cols:
+            print("[SemanticMemory] Migrating database: adding faiss_id column")
+            cursor.execute("ALTER TABLE memories ADD COLUMN faiss_id INTEGER")
+            # For existing rows, assign sequential IDs matching current index order
+            cursor.execute("SELECT id FROM memories ORDER BY id ASC")
+            for i, (rid,) in enumerate(cursor.fetchall()):
+                cursor.execute("UPDATE memories SET faiss_id = ? WHERE id = ?", (i, rid))
+        
         self._db_conn.commit()
 
     def _init_faiss(self):
         if INDEX_PATH.exists():
             try:
                 self._index = faiss.read_index(str(INDEX_PATH))
-                print(f"[SemanticMemory] 📂 FAISS index loaded ({self._index.ntotal} entries)")
+                print(f"[SemanticMemory] FAISS index loaded ({self._index.ntotal} entries)")
                 return
             except Exception as e:
-                print(f"[SemanticMemory] ⚠️ FAISS load error: {e}, recreating...")
+                print(f"[SemanticMemory] FAISS load error: {e}, recreating...")
         
-        self._index = faiss.IndexFlatL2(self._dimension)
+        self._index = faiss.IndexIDMap(faiss.IndexFlatL2(self._dimension))
         # Rebuild index from DB if index was missing/corrupt but DB has data
         self._rebuild_from_db()
 
     def _rebuild_from_db(self):
         cursor = self._db_conn.cursor()
-        cursor.execute("SELECT text FROM memories ORDER BY id ASC")
+        cursor.execute("SELECT id, text FROM memories ORDER BY id ASC")
         rows = cursor.fetchall()
         if not rows:
             return
         
-        print(f"[SemanticMemory] 🔄 Rebuilding index from {len(rows)} database entries...")
-        texts = [row[0] for row in rows]
+        print(f"[SemanticMemory] Rebuilding index from {len(rows)} database entries...")
+        
+        # Use existing faiss_id if available, otherwise generate new ones
+        texts = []
+        ids = []
+        for rid, text in rows:
+            cursor.execute("SELECT faiss_id FROM memories WHERE id = ?", (rid,))
+            fid = cursor.fetchone()[0]
+            if fid is None:
+                cursor.execute("SELECT IFNULL(MAX(faiss_id), -1) FROM memories")
+                fid = cursor.fetchone()[0] + 1
+                cursor.execute("UPDATE memories SET faiss_id = ? WHERE id = ?", (fid, rid))
+            
+            texts.append(text)
+            ids.append(fid)
+            
         embeddings = self._get_model().encode(texts)
-        self._index.add(np.array(embeddings).astype('float32'))
+        self._index.add_with_ids(
+            np.array(embeddings).astype('float32'),
+            np.array(ids).astype('int64')
+        )
+        self._db_conn.commit()
+        
         self._save_index()
 
     def _save_index(self):
@@ -81,22 +113,30 @@ class SemanticMemory:
             return
         
         with self._lock:
-            # 1. Store in SQLite
+            # 1. Calculate new persistent faiss_id
             cursor = self._db_conn.cursor()
+            cursor.execute("SELECT IFNULL(MAX(faiss_id), -1) FROM memories")
+            new_faiss_id = cursor.fetchone()[0] + 1
+            
+            # 2. Store in SQLite
             cursor.execute(
-                "INSERT INTO memories (text, metadata) VALUES (?, ?)",
-                (text, json.dumps(metadata or {}))
+                "INSERT INTO memories (text, metadata, faiss_id) VALUES (?, ?, ?)",
+                (text, json.dumps(metadata or {}), new_faiss_id)
             )
             self._db_conn.commit()
             
-            # 2. Add to FAISS
+            # 3. Add to FAISS with ID
             embedding = self._get_model().encode([text])[0]
-            self._index.add(np.array([embedding]).astype('float32'))
+            self._index.add_with_ids(
+                np.array([embedding]).astype('float32'),
+                np.array([new_faiss_id]).astype('int64')
+            )
+            
             self._unflushed_writes += 1
             if self._unflushed_writes >= 10:
                 self._save_index()
                 self._unflushed_writes = 0
-            print(f"[SemanticMemory] ✅ Added memory: {text[:50]}...")
+            print(f"[SemanticMemory] Added memory (ID {new_faiss_id}): {text[:50]}...")
 
     def search(self, query: str, k: int = 5):
         if not query.strip() or self._index.ntotal == 0:
@@ -113,11 +153,9 @@ class SemanticMemory:
             for idx, dist in zip(indices[0], distances[0]):
                 if idx == -1: continue
                 
-                # Fetch from DB by physical order (rowid equivalent or original ID)
-                # Since we always add to both, index 'idx' corresponds to the idx-th row.
+                # Fetch from DB by faiss_id instead of OFFSET
                 cursor = self._db_conn.cursor()
-                # Use LIMIT offset approach to ensure order matching
-                cursor.execute("SELECT text, metadata, timestamp FROM memories LIMIT 1 OFFSET ?", (int(idx),))
+                cursor.execute("SELECT text, metadata, timestamp FROM memories WHERE faiss_id = ?", (int(idx),))
                 row = cursor.fetchone()
                 if row:
                     results.append({

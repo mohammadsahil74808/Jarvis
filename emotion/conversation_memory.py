@@ -11,6 +11,7 @@ class ConversationMemory:
             self.memory_path = memory_path
         
         self.patterns = self.load_patterns()
+        self._interaction_count = 0
 
     def load_patterns(self):
         if os.path.exists(self.memory_path):
@@ -40,7 +41,12 @@ class ConversationMemory:
             self.patterns["history"] = self.patterns["history"][-100:]
         
         self.update_stats(state)
-        self.save_patterns()
+        
+        # Performance: Only save every 10 interactions or on important change
+        self._interaction_count += 1
+        if self._interaction_count >= 10:
+            self.save_patterns()
+            self._interaction_count = 0
 
     def update_stats(self, state):
         hour = datetime.now().hour

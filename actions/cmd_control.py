@@ -2,10 +2,11 @@ import subprocess
 import sys
 import json
 import re
+import shlex
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client, get_desktop_path
 
 
 
@@ -59,7 +60,7 @@ def _find_hardcoded(task: str) -> str | None:
         file_match = re.search(r'[\"\']?([\S]+\.(?:txt|log|md|csv|json|xml))[\"\']?', task, re.IGNORECASE)
         if file_match:
             filename = file_match.group(1)
-            desktop  = Path.home() / "Desktop"
+            desktop  = get_desktop_path()
             filepath = Path(filename) if Path(filename).is_absolute() else desktop / filename
             return f'notepad "{filepath}"'
         if "notepad" in task_lower:
@@ -76,42 +77,37 @@ def _find_hardcoded(task: str) -> str | None:
     return None
 
 DANGEROUS_PATTERNS = [
-    r'del\s+/[fsq]',      # del /f /s /q
-    r'rd\s+/s',           # rd /s (folder delete)
-    r'rmdir\s+/s',        # rmdir /s
-    r'format\s+[a-z]:',   # format C:
-    r'reg\s+delete',      # registry delete
-    r'net\s+user',        # user account changes
-    r'cipher\s+/w',       # data wipe
-    r'sfc\s+/scannow',    # system file changes (admin)
+    r'\bdel\b', r'\brmdir\b', r'\brd\b', r'\bformat\b', r'\bshutdown\b',
+    r'\brestart-computer\b', r'\bstop-process\b', r'\btaskkill\b',
+    r'\breg\s+delete\b', r'\bnet\s+user\b', r'\bnet\s+localgroup\b',
+    r'\bcd\s+.*&&.*del\b', r'\brm\s+-rf\b', r'\bdiskpart\b'
 ]
+_DANGEROUS_RE = re.compile("|".join(DANGEROUS_PATTERNS), re.IGNORECASE)
+
+SAFE_ALLOWLIST = [
+    r'^dir\b', r'^ipconfig\b', r'^systeminfo\b', r'^tasklist\b',
+    r'^ping\b', r'^netstat\b', r'^ver\b', r'^time\b', r'^date\b',
+    r'^echo\b', r'^type\b', r'^where\b'
+]
+_SAFE_RE = re.compile("|".join(SAFE_ALLOWLIST), re.IGNORECASE)
 
 def is_dangerous(command: str) -> bool:
-    cmd_lower = command.lower()
-    return any(re.search(p, cmd_lower) for p in DANGEROUS_PATTERNS)
-
-BLOCKED_PATTERNS = [
-    r"\brm\s+-rf\b", r"\brmdir\s+/s\b", r"\bdel\s+/[fqs]",
-    r"\bformat\b", r"\bdiskpart\b", r"\bfdisk\b",
-    r"\breg\s+(delete|add)\b", r"\bbcdedit\b",
-    r"\bnet\s+localgroup\b",
-    r"\bshutdown\b", r"\brestart-computer\b",
-    r"\bstop-process\b", r"\bkill\s+-9\b", r"\btaskkill\b",
-    r"\beval\b", r"\b__import__\b",
-]
-_BLOCKED_RE = re.compile("|".join(BLOCKED_PATTERNS), re.IGNORECASE)
-
+    # If it's explicitly allowed, it's not dangerous
+    if _SAFE_RE.search(command.strip()):
+        return False
+    return bool(_DANGEROUS_RE.search(command))
 
 def _is_safe(command: str) -> tuple[bool, str]:
-    match = _BLOCKED_RE.search(command)
-    if match:
-        return False, f"Blocked pattern: '{match.group()}'"
+    # We use a very strict check for the "Blocked" list which always overrides
+    BLOCKED = [r"\beval\b", r"\b__import__\b", r"\bos\.system\b"]
+    for p in BLOCKED:
+        if re.search(p, command, re.IGNORECASE):
+            return False, f"Prohibited pattern: {p}"
     return True, "OK"
 
 def _ask_gemini(task: str) -> str:
     try:
-        from google import genai
-        client = genai.Client(api_key=get_api_key())
+        client = get_gemini_client()
 
         prompt = (
             f"Convert this request to a single Windows CMD command.\n"
@@ -120,7 +116,7 @@ def _ask_gemini(task: str) -> str:
             f"Request: {task}\n\nCommand:"
         )
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             contents=prompt
         )
         command  = response.text.strip().strip("`").strip()
@@ -142,25 +138,37 @@ def _run_silent(command: str, timeout: int = 20) -> str:
             if is_ps:
                 cmd_inner = re.sub(r'^powershell\s+"?', '', command, flags=re.IGNORECASE).rstrip('"')
                 result = subprocess.run(
-                    ["powershell", "-NoProfile", "-Command", cmd_inner],
+                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd_inner],
                     capture_output=True, text=True,
-                    encoding="utf-8", errors="replace", timeout=timeout
+                    encoding="utf-8", errors="replace", timeout=timeout,
+                    shell=False
                 )
             else:
                 result = subprocess.run(
                     ["cmd", "/c", command],
                     capture_output=True, text=True,
                     encoding="cp1252", errors="replace",
-                    timeout=timeout, cwd=str(Path.home())
+                    timeout=timeout, cwd=str(Path.home()),
+                    shell=False
                 )
         else:
-            shell = "/bin/zsh" if platform == "macos" else "/bin/bash"
-            result = subprocess.run(
-                command, shell=True, executable=shell,
-                capture_output=True, text=True,
-                errors="replace", timeout=timeout,
-                cwd=str(Path.home())
-            )
+            # Unix-like: attempt to run without shell first if it's a simple command
+            args = shlex.split(command)
+            try:
+                result = subprocess.run(
+                    args, capture_output=True, text=True,
+                    errors="replace", timeout=timeout,
+                    cwd=str(Path.home()), shell=False
+                )
+            except FileNotFoundError:
+                # Fallback to shell for builtins/complex pipes
+                shell = "/bin/zsh" if platform == "macos" else "/bin/bash"
+                result = subprocess.run(
+                    command, shell=True, executable=shell,
+                    capture_output=True, text=True,
+                    errors="replace", timeout=timeout,
+                    cwd=str(Path.home())
+                )
 
         output = result.stdout.strip()
         error  = result.stderr.strip()
@@ -179,8 +187,9 @@ def _run_visible(command: str) -> None:
         platform = _get_platform()
         if platform == "windows":
             subprocess.Popen(
-                f'cmd /k "{command}"',
-                creationflags=subprocess.CREATE_NEW_CONSOLE
+                ["cmd", "/k", command],
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+                shell=False
             )
         elif platform == "macos":
             subprocess.Popen(["osascript", "-e",
@@ -193,7 +202,7 @@ def _run_visible(command: str) -> None:
                 except FileNotFoundError:
                     continue
     except Exception as e:
-        print(f"[CMD] ⚠️ Terminal open failed: {e}")
+        print(f"[CMD] [WARNING] Terminal open failed: {e}")
 
 
 def cmd_control(
@@ -212,18 +221,23 @@ def cmd_control(
     if not command:
         command = _find_hardcoded(task)
         if command:
-            print(f"[CMD] ⚡ Hardcoded: {command[:80]}")
+            print(f"[CMD] [STATIC] Hardcoded: {command[:80]}")
         else:
-            print(f"[CMD] 🤖 Gemini fallback for: {task}")
+            print(f"[CMD] [AI] Gemini fallback for: {task}")
             command = _ask_gemini(task)
-            print(f"[CMD] ✅ Generated: {command[:80]}")
+            print(f"[CMD] [OK] Generated: {command[:80]}")
             if command == "UNSAFE":
                 return "I cannot generate a safe command for that request, sir."
             if command.startswith("ERROR:"):
                 return f"Could not generate command: {command}"
 
     if is_dangerous(command):
-        return f"⚠️ Yeh command dangerous hai: '{command}'\nConfirm karo pehle (Say 'Yes, execute it')."
+        confirm = (parameters or {}).get("confirm", False)
+        if not confirm:
+            return (
+                f"SECURITY ALERT: The command '{command}' is destructive or sensitive.\n"
+                f"If you are sure, please repeat the request and add 'confirm': True to the parameters."
+            )
 
     safe, reason = _is_safe(command)
     if not safe:
@@ -233,7 +247,9 @@ def cmd_control(
         player.write_log(f"[CMD] {command[:60]}")
 
     if any(x in command.lower() for x in ["notepad", "explorer", "start "]):
-        subprocess.Popen(command, shell=True)
+        # Safely parse and run instead of shell=True
+        args = shlex.split(command)
+        subprocess.Popen(args, shell=False)
         return f"Opened: {command}"
 
     if visible:

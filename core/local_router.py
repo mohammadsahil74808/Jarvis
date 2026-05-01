@@ -1,8 +1,12 @@
 import re
-import os
 import time
 import subprocess
+import webbrowser
+import urllib.parse
 from datetime import datetime
+from ctypes import cast, POINTER
+from comtypes import CLSCTX_ALL
+from pycaw.pycaw import AudioUtilities, IAudioEndpointVolume
 
 class LocalRouter:
     def __init__(self, jarvis_instance=None):
@@ -54,66 +58,72 @@ class LocalRouter:
                         if hasattr(self.jarvis, "ui"):
                             self.jarvis.ui.write_log(log_msg)
                         if hasattr(self.jarvis, "speak"):
-                            # Wrap the response in a strict logic command so the Voice AI acts as a raw TTS engine here without hallucinating.
                             cmd = f"[System Directive: State this exact confirmation phrase natively and quickly to the user without adding 'okay' or 'sure': '{res}']"
                             self.jarvis.speak(cmd)
                     return True
                 except Exception as e:
                     print(f"[LocalRouter] Handler error: {e}")
                     return False
-        
-        # Not handled locally -> fallback to AI flow
         return False
 
+    def _sanitize(self, text: str) -> str:
+        """Removes dangerous shell characters to prevent injection."""
+        return re.sub(r'[;&|`$><!]', '', text).strip()
+
+    def _safe_start(self, target: str):
+        """Safely starts a target (file/app/url) using subprocess."""
+        subprocess.Popen(["cmd", "/c", "start", "", target], shell=False)
+
     def open_chrome(self, *args):
-        os.system("start chrome")
+        self._safe_start("chrome")
         return "Opened Chrome"
 
     def open_edge(self, *args):
-        os.system("start msedge")
+        self._safe_start("msedge")
         return "Opened Edge"
 
     def open_notepad(self, *args):
-        os.system("start notepad")
+        self._safe_start("notepad")
         return "Opened Notepad"
 
     def open_calculator(self, *args):
-        os.system("start calc")
+        self._safe_start("calc")
         return "Opened Calculator"
 
     def open_explorer(self, *args):
-        os.system("start explorer")
+        self._safe_start("explorer")
         return "Opened File Explorer"
 
     def open_cmd(self, *args):
-        os.system("start cmd")
+        self._safe_start("cmd")
         return "Opened Command Prompt"
 
     def shutdown_pc(self, *args):
-        os.system("shutdown /s /t 1")
+        subprocess.Popen(["shutdown", "/s", "/t", "1"], shell=False)
         return "Shutting down PC"
 
     def restart_pc(self, *args):
-        os.system("shutdown /r /t 1")
+        subprocess.Popen(["shutdown", "/r", "/t", "1"], shell=False)
         return "Restarting PC"
 
     def sleep_pc(self, *args):
-        os.system("rundll32.exe powrprof.dll,SetSuspendState 0,1,0")
+        subprocess.Popen(["rundll32.exe", "powrprof.dll,SetSuspendState", "0,1,0"], shell=False)
         return "Sleeping PC"
 
     def lock_pc(self, *args):
-        os.system("rundll32.exe user32.dll,LockWorkStation")
+        subprocess.Popen(["rundll32.exe", "user32.dll,LockWorkStation"], shell=False)
         return "Locking PC"
 
     def open_folder(self, _, folder_name):
         from pathlib import Path
-        folder_name = folder_name.lower().strip()
+        folder_name = self._sanitize(folder_name.lower())
         paths = {
             "desktop": str(Path.home() / "Desktop"),
             "downloads": str(Path.home() / "Downloads"),
             "documents": str(Path.home() / "Documents")
         }
-        os.system(f'start "" "{paths.get(folder_name, str(Path.home()))}"')
+        target = paths.get(folder_name, str(Path.home()))
+        self._safe_start(target)
         return f"Opened {folder_name}"
 
     def organize_desktop(self, *args):
@@ -142,30 +152,45 @@ class LocalRouter:
         subprocess.run(["powershell", "-c", "(new-object -com wscript.shell).SendKeys([char]173)"], creationflags=subprocess.CREATE_NO_WINDOW)
         return "System Mute Toggled"
 
-    def unmute_sys(self, *args):
-        self.mute_sys() 
-        return "System Unmuted"
-
     def set_volume(self, *args):
-        target = args[0] if args else "100"
-        return f"Volume logic triggered ({target}%). Use up/down for hardware mapped fast routing."
+        try:
+            target = float(args[0]) / 100.0 if args else 1.0
+            devices = AudioUtilities.GetSpeakers()
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume.SetMasterVolumeLevelScalar(target, None)
+            return f"Volume set to {int(target * 100)}%"
+        except Exception as e:
+            return f"Could not set volume: {e}"
+
+    def unmute_sys(self, *args):
+        try:
+            devices = AudioUtilities.GetSpeakers()
+            interface = devices.Activate(IAudioEndpointVolume._iid_, CLSCTX_ALL, None)
+            volume = cast(interface, POINTER(IAudioEndpointVolume))
+            volume.SetMute(0, None)
+            return "System Unmuted"
+        except Exception as e:
+            return f"Could not unmute: {e}"
 
     def open_youtube(self, *args):
-        os.system("start https://www.youtube.com")
+        webbrowser.open("https://www.youtube.com")
         return "Opened YouTube"
 
     def open_google(self, *args):
-        os.system("start https://www.google.com")
+        webbrowser.open("https://www.google.com")
         return "Opened Google"
 
     def search_google(self, *args):
-        query = args[0] if args else ""
-        os.system(f'start https://www.google.com/search?q="{query}"')
+        query = self._sanitize(args[0]) if args else ""
+        encoded_query = urllib.parse.quote(query)
+        webbrowser.open(f"https://www.google.com/search?q={encoded_query}")
         return f"Google par {query} search kar diya hai, sir."
 
     def search_youtube(self, *args):
-        query = args[0] if args else ""
-        os.system(f'start https://www.youtube.com/results?search_query="{query}"')
+        query = self._sanitize(args[0]) if args else ""
+        encoded_query = urllib.parse.quote(query)
+        webbrowser.open(f"https://www.youtube.com/results?search_query={encoded_query}")
         return f"YouTube par {query} open kar diya hai, sir."
 
 _global_router = None

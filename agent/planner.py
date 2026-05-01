@@ -4,7 +4,8 @@ import sys
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR
+from core.config import get_api_key as _get_api_key, get_gemini_client, BASE_DIR
+from google.genai import types
 
 
 PLANNER_PROMPT = """You are the planning module of MARK XXV, a personal AI assistant.
@@ -13,9 +14,8 @@ Your job: break any user goal into a sequence of steps using ONLY the tools list
 ABSOLUTE RULES:
 - NEVER use generated_code or write Python scripts. It does not exist.
 - NEVER reference previous step results in parameters. Every step is independent.
-- Use web_search for ANY information retrieval, research, or current data.
-- Use file_controller to save content to disk.
-- Use cmd_control to open files or run system commands.
+- RULE: If the user request contains multiple actions (e.g., 'research AND save', 'find AND open', 'calculate AND list'), you MUST create separate steps for EACH action. Combining them into one step is NOT allowed.
+- RULE: DO NOT include "and save to file" logic inside a web_search query. web_search is ONLY for searching. saving is a SEPARATE step using file_controller.
 - Max 5 steps. Use the minimum steps needed.
 
 AVAILABLE TOOLS AND THEIR PARAMETERS:
@@ -116,6 +116,12 @@ dev_agent
   language: string (optional)
 EXAMPLES:
 
+Goal: "Research AI tools and save to file"
+Steps:
+
+web_search | query: "current top AI tools 2024 2025"
+file_controller | action: write, path: desktop, name: ai_tools.txt, content: "Researching..."
+
 Goal: "research mechanical engineering and save it to a notepad file"
 Steps:
 
@@ -179,8 +185,7 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation, no code blocks:
 
 
 def create_plan(goal: str, context: str = "") -> dict:
-    from google import genai
-    client = genai.Client(api_key=get_api_key())
+    client = get_gemini_client()
 
     user_input = f"Goal: {goal}"
     if context:
@@ -188,7 +193,7 @@ def create_plan(goal: str, context: str = "") -> dict:
 
     try:
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             config=types.GenerateContentConfig(
                 system_instruction=PLANNER_PROMPT
             ),
@@ -199,32 +204,77 @@ def create_plan(goal: str, context: str = "") -> dict:
 
         plan = json.loads(text)
 
+        # Validation: Enforce multi-step for multi-intent requests
+        action_verbs = ["save", "write", "create", "delete", "move", "copy", "find", "open", "calculate", "send"]
+        has_multiple_actions = any(v in goal.lower() for v in action_verbs) and ("and" in goal.lower() or "then" in goal.lower())
+        
+        if len(plan.get("steps", [])) == 1 and has_multiple_actions:
+            print(f"[Planner] [WARNING] Multi-action goal detected with only 1 step. Forcing regeneration...")
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                config=types.GenerateContentConfig(
+                    system_instruction=PLANNER_PROMPT + "\n\nCRITICAL: The user wants multiple distinct actions. You MUST provide at least 2 steps. Do NOT combine searching and saving."
+                ),
+                contents=user_input
+            )
+            text = response.text.strip()
+            text = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
+            plan = json.loads(text)
+
         if "steps" not in plan or not isinstance(plan["steps"], list):
             raise ValueError("Invalid plan structure")
 
         for step in plan["steps"]:
             if step.get("tool") in ("generated_code",):
-                print(f"[Planner] ⚠️ generated_code detected in step {step.get('step')} — replacing with web_search")
+                print(f"[Planner] [WARNING] generated_code detected in step {step.get('step')} -- replacing with web_search")
                 desc = step.get("description", goal)
                 step["tool"] = "web_search"
                 step["parameters"] = {"query": desc[:200]}
 
-        print(f"[Planner] ✅ Plan: {len(plan['steps'])} steps")
+        print(f"[Planner] [OK] Plan: {len(plan['steps'])} steps")
         for s in plan["steps"]:
             print(f"  Step {s['step']}: [{s['tool']}] {s['description']}")
 
         return plan
 
     except json.JSONDecodeError as e:
-        print(f"[Planner] ⚠️ JSON parse failed: {e}")
+        print(f"[Planner] [WARNING] JSON parse failed: {e}")
         return _fallback_plan(goal)
     except Exception as e:
-        print(f"[Planner] ⚠️ Planning failed: {e}")
+        print(f"[Planner] [FAIL] Planning failed: {e}")
         return _fallback_plan(goal)
 
 
 def _fallback_plan(goal: str) -> dict:
-    print("[Planner] 🔄 Fallback plan")
+    print("[Planner] [RETRY] Fallback plan")
+    
+    # Smart fallback for common "research and save" tasks
+    action_verbs = ["save", "write", "create", "delete", "move", "copy", "find", "open"]
+    has_multiple = any(v in goal.lower() for v in action_verbs) and ("and" in goal.lower() or "then" in goal.lower())
+    
+    if has_multiple and "save" in goal.lower():
+        steps = [
+            {
+                "step": 1, "tool": "web_search", "description": f"Research: {goal}",
+                "parameters": {"query": goal}, "critical": True
+            },
+            {
+                "step": 2, "tool": "file_controller", "description": "Save research results",
+                "parameters": {"action": "write", "path": "desktop", "name": "research_results.txt"}, "critical": True
+            }
+        ]
+        
+        if "open" in goal.lower():
+            steps.append({
+                "step": 3, "tool": "cmd_control", "description": "Open the saved file",
+                "parameters": {"task": "open research_results.txt on desktop"}, "critical": False
+            })
+            
+        return {
+            "goal": goal,
+            "steps": steps
+        }
+        
     return {
         "goal": goal,
         "steps": [
@@ -240,8 +290,7 @@ def _fallback_plan(goal: str) -> dict:
 
 
 def replan(goal: str, completed_steps: list, failed_step: dict, error: str) -> dict:
-    from google import genai
-    client = genai.Client(api_key=_get_api_key())
+    client = get_gemini_client()
 
     completed_summary = "\n".join(
         f"  - Step {s['step']} ({s['tool']}): DONE" for s in completed_steps
@@ -259,7 +308,7 @@ Create a REVISED plan for the remaining work only. Do not repeat completed steps
 
     try:
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash",
             config=types.GenerateContentConfig(
                 system_instruction=PLANNER_PROMPT
             ),
@@ -274,8 +323,8 @@ Create a REVISED plan for the remaining work only. Do not repeat completed steps
                 step["tool"] = "web_search"
                 step["parameters"] = {"query": step.get("description", goal)[:200]}
 
-        print(f"[Planner] 🔄 Revised plan: {len(plan['steps'])} steps")
+        print(f"[Planner] [RETRY] Revised plan: {len(plan['steps'])} steps")
         return plan
     except Exception as e:
-        print(f"[Planner] ⚠️ Replan failed: {e}")
+        print(f"[Planner] [FAIL] Replan failed: {e}")
         return _fallback_plan(goal)

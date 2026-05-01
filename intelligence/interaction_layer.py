@@ -188,7 +188,6 @@ class InteractionLayer:
             self.history["formality"].pop(0)
             
         # Check Confidence
-        updated = False
         from collections import Counter
         
         verb_count = Counter(self.history["verbosity"])

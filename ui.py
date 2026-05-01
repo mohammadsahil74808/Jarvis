@@ -145,7 +145,12 @@ class StatsPanel(tk.Toplevel):
         self.canvas.create_text(cx, ty+35, text=date, fill=C_PRI, font=("Courier", 10), tags="dynamic")
         
         self.canvas.create_text(cx, ty+65, text="STATUS: READY", fill="#00ff88", font=("Courier", 9, "bold"), tags="dynamic")
-        self.canvas.create_text(cx, ty+82, text="WELCOME BACK, SAHIL", fill=C_MID, font=("Courier", 8), tags="dynamic")
+        user_name = "USER"
+        try:
+            if self.ui.jarvis:
+                user_name = self.ui.jarvis.profile_manager.get_profile().get("name", "USER").upper()
+        except: pass
+        self.canvas.create_text(cx, ty+82, text=f"WELCOME BACK, {user_name}", fill=C_MID, font=("Courier", 8), tags="dynamic")
 
         # 3. ── Live JARVIS Status ──────────────────
         status = self.ui._jarvis_state
@@ -180,7 +185,7 @@ class StatsPanel(tk.Toplevel):
             x_pos = 65 + (i * 16)
             self.canvas.create_rectangle(x_pos, vy-h, x_pos+10, vy, fill=C_PRI if status != "MUTED" else "#330000", outline="", tags="dynamic")
 
-        self.after(50, self._animate)
+        self.after(200, self._animate)
 
     def _draw_bar(self, y, label, val, col):
         self.canvas.create_text(30, y, text=label, fill="#ffffff", font=("Courier", 8), anchor="w", tags="dynamic")
