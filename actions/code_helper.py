@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
 DESKTOP            = Path.home() / "Desktop"
 MAX_BUILD_ATTEMPTS = 3
 GEMINI_MODEL       = "gemini-2.0-flash"
@@ -47,8 +47,7 @@ def _generate_content_with_fallback(prompt: str) -> str:
 
     # 2. Try Gemini 2.0
     try:
-        from google import genai
-        client = genai.Client(api_key=get_api_key())
+        client = get_gemini_client()
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt
@@ -59,8 +58,7 @@ def _generate_content_with_fallback(prompt: str) -> str:
 
     # 3. Try Gemini 1.5 Flash 8B (Highest Limits Free Tier)
     try:
-        from google import genai
-        client = genai.Client(api_key=get_api_key())
+        client = get_gemini_client()
         response = client.models.generate_content(
             model="gemini-1.5-flash-8b",
             contents=prompt
@@ -471,10 +469,8 @@ def _screen_debug_action(description, file_path, player, speak=None) -> str:
             print(f"[Code] ⚠️ Could not read file: {err}")
 
     try:
-        from google import genai
         from google.genai import types
-
-        client = genai.Client(api_key=get_api_key())
+        client = get_gemini_client()
 
         image_bytes  = screenshot_path.read_bytes()
         image_base64 = _image_to_base64(screenshot_path)

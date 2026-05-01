@@ -41,7 +41,7 @@ except ImportError:
     _PYPERCLIP = False
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
 
 
 def _load_user_profile() -> dict:
@@ -329,10 +329,9 @@ def _analyze_screen_for_element(description: str) -> tuple[int, int] | None:
     of a described element on screen. Returns (x, y) or None.
     """
     try:
-        from google import genai
         import io
 
-        client = genai.Client(api_key=get_api_key())
+        client = get_gemini_client()
 
         _ensure_pyautogui()
         w, h  = pyautogui.size()

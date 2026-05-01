@@ -1,60 +1,6 @@
 {
   "history": [
     {
-      "time": "2026-04-25 20:23",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-04-25 20:23",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-04-25 20:24",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-04-25 20:24",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-04-25 20:25",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-04-25 20:25",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
       "time": "2026-04-25 20:25",
       "state": {
         "fatigue": false,
@@ -899,15 +845,70 @@
         "low_energy": false,
         "late_night": false
       }
+    },
+    {
+      "time": "2026-04-30 20:20",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-01 15:01",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-01 15:02",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-01 15:02",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-01 15:02",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-01 15:03",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
     }
   ],
   "productive_hours": {
     "13": 2,
     "19": 12,
-    "20": 97,
+    "20": 98,
     "18": 36,
     "23": 5,
-    "17": 8
+    "17": 8,
+    "15": 5
   },
   "low_points": {
     "15": 2

@@ -25,7 +25,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR
+from core.config import get_api_key, BASE_DIR, get_gemini_client
 
 
 def _parse_date(raw: str) -> str:
@@ -59,8 +59,7 @@ def _parse_date(raw: str) -> str:
             return val.strftime("%Y-%m-%d")
 
     try:
-        from google import genai
-        client = genai.Client(api_key=_get_api_key())
+        client = get_gemini_client()
         today_str = today.strftime("%Y-%m-%d")
         response = client.models.generate_content(
             model="gemini-1.5-flash",
@@ -171,10 +170,9 @@ def _parse_flights_with_gemini(
     Sends raw page text to Gemini and extracts structured flight data.
     Returns list of flight dicts.
     """
-    from google import genai
     from google.genai import types
 
-    client = genai.Client(api_key=_get_api_key())
+    client = get_gemini_client()
 
     truncated = raw_text[:12000]
 

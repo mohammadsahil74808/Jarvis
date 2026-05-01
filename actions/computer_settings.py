@@ -30,7 +30,7 @@ except ImportError:
 
 _OS = platform.system() 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
 
 import json
 
@@ -527,8 +527,7 @@ def _detect_action(description: str) -> dict:
     Herhangi bir dilde çalışır.
     Döner: {"action": str, "value": optional}
     """
-    from google import genai
-    client = genai.Client(api_key=get_api_key())
+    client = get_gemini_client()
 
     available = ", ".join(sorted(ACTION_MAP.keys())) + ", volume_set, type_text, write_on_screen, reload_n, press_key"
 

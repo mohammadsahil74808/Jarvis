@@ -7,7 +7,7 @@ import webbrowser
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
 PROJECTS_DIR     = BASE_DIR / "workspaces" / "dev_projects"
 MAX_FIX_ATTEMPTS = 5
 MODEL_PLANNER    = "gemini-2.0-flash"
@@ -45,8 +45,7 @@ def _generate_content_with_fallback(prompt: str) -> str:
             print(f"[DevAgent] ⚠️ Groq fallback failed: {e}")
 
     try:
-        from google import genai
-        client = genai.Client(api_key=get_api_key())
+        client = get_gemini_client()
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt
@@ -56,8 +55,7 @@ def _generate_content_with_fallback(prompt: str) -> str:
         print(f"[DevAgent] ⚠️ Gemini 2.0 Flash failed: {e}")
 
     try:
-        from google import genai
-        client = genai.Client(api_key=get_api_key())
+        client = get_gemini_client()
         response = client.models.generate_content(
             model="gemini-1.5-flash-8b",
             contents=prompt

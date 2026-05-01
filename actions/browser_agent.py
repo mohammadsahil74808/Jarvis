@@ -260,19 +260,20 @@ def browser_agent(parameters: dict, **kwargs) -> str:
     headless = parameters.get("headless", None)
     
     try:
+        res = "Unknown action."
         if action == "go_to":
-            return _agent.run(_agent.go_to(parameters.get("url"), headless=headless))
+            res = _agent.run(_agent.go_to(parameters.get("url"), headless=headless))
         elif action == "search":
-            return _agent.run(_agent.search_google(parameters.get("query"), headless=headless))
+            res = _agent.run(_agent.search_google(parameters.get("query"), headless=headless))
         elif action == "click":
-            return _agent.run(_agent.click_element(
+            res = _agent.run(_agent.click_element(
                 selector=parameters.get("selector"),
                 text=parameters.get("text"),
                 description=parameters.get("description"),
                 headless=headless
             ))
         elif action == "type":
-            return _agent.run(_agent.type_text(
+            res = _agent.run(_agent.type_text(
                 text=parameters.get("text"),
                 selector=parameters.get("selector"),
                 description=parameters.get("description"),
@@ -280,29 +281,37 @@ def browser_agent(parameters: dict, **kwargs) -> str:
                 headless=headless
             ))
         elif action == "scroll":
-            return _agent.run(_agent.scroll(
+            res = _agent.run(_agent.scroll(
                 direction=parameters.get("direction", "down"),
                 amount=parameters.get("amount", 800),
                 headless=headless
             ))
         elif action == "extract":
-            return _agent.run(_agent.extract_text(
+            res = _agent.run(_agent.extract_text(
                 selector=parameters.get("selector", "body"),
                 headless=headless
             ))
         elif action == "fill_form":
-            return _agent.run(_agent.fill_form(
+            res = _agent.run(_agent.fill_form(
                 data=parameters.get("data", {}),
                 headless=headless
             ))
         elif action == "login_helper":
-            return _agent.run(_agent.login_helper(
+            res = _agent.run(_agent.login_helper(
                 url=parameters.get("url"),
                 timeout=parameters.get("timeout", 180)
             ))
         elif action == "close":
-            return _agent.run(_agent.close())
+            res = _agent.run(_agent.close())
         else:
-            return f"Unknown action: {action}"
+            res = f"Unknown action: {action}"
+        
+        # Performance optimization: Close browser after each tool call
+        if action != "close":
+            try:
+                _agent.run(_agent.close())
+            except:
+                pass
+        return res
     except Exception as e:
         return f"BrowserAgent Error: {str(e)}"

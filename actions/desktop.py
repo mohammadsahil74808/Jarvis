@@ -18,7 +18,7 @@ from pathlib import Path
 from datetime import datetime
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH
+from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
 
 
 
@@ -50,8 +50,7 @@ def _ask_gemini_for_desktop_action(task: str) -> str:
     Asks Gemini to generate safe Python/pyautogui code
     to accomplish a desktop-related task.
     """
-    from google import genai
-    client = genai.Client(api_key=get_api_key())
+    client = get_gemini_client()
     model_name = "gemini-1.5-flash"
 
     desktop = str(_get_desktop())
@@ -94,53 +93,11 @@ Python code:"""
         return f"ERROR: {e}"
 
 
-def _execute_generated_code(code: str) -> str:
-    """Safely executes Gemini-generated desktop automation code."""
-    safe, reason = _is_safe_code(code)
-    if not safe:
-        return f"⛔ Blocked for safety: {reason}"
-
-    allowed_globals = {
-        "pyautogui": pyautogui,
-        "Path": Path,
-        "shutil": shutil,
-        "ctypes": ctypes,
-        "time": __import__("time"),
-        "os": type("os", (), {
-            "path": os.path,
-            "listdir": os.listdir,
-            "getcwd": os.getcwd,
-            "environ": os.environ,
-        })(),
-        "__builtins__": {
-            "print": print,
-            "len": len,
-            "str": str,
-            "int": int,
-            "float": float,
-            "bool": bool,
-            "list": list,
-            "dict": dict,
-            "range": range,
-            "enumerate": enumerate,
-            "sorted": sorted,
-            "isinstance": isinstance,
-            "hasattr": hasattr,
-            "getattr": getattr,
-            "max": max,
-            "min": min,
-            "sum": sum,
-        }
-    }
-
-    output_lines = []
-    allowed_globals["print"] = lambda *args: output_lines.append(" ".join(str(a) for a in args))
-
-    try:
-        exec(code, allowed_globals)
-        return "\n".join(output_lines) if output_lines else "Task completed successfully."
-    except Exception as e:
-        return f"Execution error: {e}\n\nCode attempted:\n{code[:200]}"
+def _execute_safe_task(task: str) -> str:
+    """Uses file_manager to perform desktop tasks instead of exec()."""
+    from actions.file_manager import file_manager
+    # Redirect to file_manager with 'desktop' as default path
+    return file_manager({"action": "find", "query": task, "path": "desktop"})
 
 def set_wallpaper(image_path: str) -> str:
     """Sets desktop wallpaper from a local image path."""
@@ -377,28 +334,17 @@ def desktop_control(
             actual_task = task or parameters.get("description", "")
             if not actual_task:
                 return "Please describe what you want to do on the desktop, sir."
-
-            print(f"[Desktop] 🤖 Asking Gemini: {actual_task}")
-            if player:
-                player.write_log("[Desktop] Generating action...")
-
-            code = _ask_gemini_for_desktop_action(actual_task)
-
-            if code == "UNSAFE":
-                result = "I cannot perform that desktop action safely, sir."
-            elif code.startswith("ERROR:"):
-                result = f"Could not generate action: {code}"
-            else:
-                print(f"[Desktop] ✅ Generated code:\n{code[:200]}")
-                result = _execute_generated_code(code)
+            
+            # Security: No longer using exec() for AI-generated code.
+            # Fallback to safe file search or command control.
+            return _execute_safe_task(actual_task)
 
         else:
             full_task = task or action
             if full_task:
-                code   = _ask_gemini_for_desktop_action(full_task)
-                result = _execute_generated_code(code) if code not in ("UNSAFE",) else "Cannot do that safely."
+                return _execute_safe_task(full_task)
             else:
-                result = "No action or task specified."
+                return "No action or task specified."
 
     except Exception as e:
         result = f"Desktop control error: {e}"

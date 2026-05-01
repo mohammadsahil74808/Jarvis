@@ -1,0 +1,33 @@
+# JARVIS Vision & Camera System Analysis Report
+
+This report summarizes the codebase related to camera and vision capabilities within the JARVIS project.
+
+## 1. Core Camera Module
+### File: actions/screen_processor.py
+This is the primary module for live camera interaction and multimodal analysis.
+
+#### Key Functions & Logic:
+- _get_camera_index(): Reads the camera_index from config or auto-scans working webcams.
+- _capture_camera(): Uses OpenCV to grab a frame from the webcam with a 10-frame warm-up.
+- screen_process(): High-level tool dispatcher for "camera" or "screen" analysis.
+- _LiveSession (Gemini Integration): Connects to Gemini 2.0 Flash for real-time visual understanding.
+
+## 2. Screen Vision Module
+### File: actions/screen_vision.py
+Focused on internal screen analysis (Screenshots, OCR, UI Detection).
+
+#### Key Functions:
+- capture_screen(): High-speed screenshot capture via MSS.
+- ocr_screen(): Text extraction using Tesseract OCR.
+- detect_ui_elements(): Button detection using OpenCV contours.
+
+## 3. Technology Stack
+- OpenCV (cv2): Capture and image processing.
+- MSS: Screen capture.
+- Tesseract: OCR (Text reading).
+- Gemini Live: Multimodal AI Brain.
+
+## 4. Summary Table
+- Real-world Vision: screen_processor.py (Look at this)
+- Screen Reading: screen_vision.py (Read my screen)
+- UI Interaction: screen_vision.py (Where is the button?)
