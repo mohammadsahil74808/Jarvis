@@ -913,7 +913,7 @@ class JarvisLive:
     async def _execute_tool(self, fc) -> "types.FunctionResponse":
         name = fc.name
         if name in ["file_controller", "file_brain"]:
-            print(f"[JARVIS] ⚠️ Hallucinated tool {name} re-routed to file_manager")
+            print(f"[JARVIS] Hallucinated tool {name} re-routed to file_manager")
             name = "file_manager"
             
         args = dict(fc.args or {})
@@ -1297,7 +1297,7 @@ class JarvisLive:
         if not self.ui.muted:
             self.ui.set_state("LISTENING")
 
-        print(f"[JARVIS] 📤 {name} → {str(result)[:80]}")
+        print(f"[JARVIS] Tool Result: {name} -> {str(result)[:80]}")
 
         # ── Result: tek cümle söyle, dur ──────────────────────────────────────
         return _lazy_genai()[1].FunctionResponse(
@@ -1327,7 +1327,7 @@ class JarvisLive:
                 # Clap Detection
                 if self.clap_enabled and self.detector:
                     if self.detector.is_clap(indata):
-                        print("[JARVIS] 👏 Clap detected!")
+                        print("[JARVIS] Clap detected!")
                         if self.ui.muted:
                             self.ui.root.after(0, self.ui._toggle_mute)
                         else:
@@ -1336,7 +1336,7 @@ class JarvisLive:
                 # Wake Word Detection
                 if self.wake_word_enabled and self.wake_detector:
                     if self.wake_detector.check(indata):
-                        print("[JARVIS] 🎙️ Wake word detected!")
+                        print("[JARVIS] Wake word detected!")
                         if self.ui.muted:
                             self.ui.root.after(0, self.ui._toggle_mute)
                         else:
@@ -1347,7 +1347,7 @@ class JarvisLive:
                 self.detection_queue.task_done()
 
     async def _listen_audio(self):
-        print("[JARVIS] 🎤 Mic started")
+        print("[JARVIS] Mic started")
         loop = asyncio.get_event_loop()
 
         def callback(indata, frames, time_info, status):
@@ -1374,15 +1374,15 @@ class JarvisLive:
                     blocksize=CHUNK_SIZE,
                     callback=callback,
                 ):
-                    print("[JARVIS] 🎤 Mic stream open")
+                    print("[JARVIS] Mic stream open")
                     while True:
                         await asyncio.sleep(0.5)
             except Exception as e:
-                print(f"[JARVIS] ❌ Mic Error: {e}. Retrying in 5s...")
+                print(f"[JARVIS] Mic Error: {e}. Retrying in 5s...")
                 await asyncio.sleep(5)
 
     async def _receive_audio(self):
-        print("[JARVIS] 👂 Recv started")
+        print("[JARVIS] Recv started")
         out_buf, in_buf = [], []
 
         try:
@@ -1433,7 +1433,7 @@ class JarvisLive:
                         try:
                             fn_responses = []
                             for fc in response.tool_call.function_calls:
-                                print(f"[JARVIS] 📞 {fc.name}")
+                                print(f"[JARVIS] Tool call: {fc.name}")
                                 fr = await self._execute_tool(fc)
                                 fn_responses.append(fr)
                             await self.session.send_tool_response(
@@ -1444,12 +1444,12 @@ class JarvisLive:
                         # ── Boş turn YOK — bu "Anladım." sorununu yaratıyordu ──
 
         except Exception as e:
-            print(f"[JARVIS] ❌ Recv: {e}")
+            print(f"[JARVIS] Recv error: {e}")
             traceback.print_exc()
             raise
 
     async def _play_audio(self):
-        print("[JARVIS] 🔊 Play started")
+        print("[JARVIS] Play started")
         loop = asyncio.get_event_loop()
 
         # Sürekli açık output stream — PyAudio'daki stream.write() davranışıyla aynı
@@ -1471,7 +1471,7 @@ class JarvisLive:
                     if self.audio_in_queue.empty():
                         self.set_speaking(False)
         except Exception as e:
-            print(f"[JARVIS] ❌ Play: {e}")
+            print(f"[JARVIS] Play error: {e}")
             raise
         finally:
             self.set_speaking(False)
@@ -1482,13 +1482,33 @@ class JarvisLive:
         client = get_gemini_client()
 
         first_run   = True
+        local_greet = True
         retry_delay = 2 # Initial backoff seconds
 
         while True:
             try:
-                print(f"[JARVIS] 🔌 Connecting (Retry delay: {retry_delay}s)...")
+                # Immediate local startup lines
+                if local_greet:
+                    local_greet = False
+                    from core.utils import speak_local
+                    import random
+                    greetings = [
+                        "Systems online, sir. Initialising mainframe connection.",
+                        "All systems nominal. Welcome back, sir.",
+                        "Good to see you again, sir. Booting core protocols.",
+                        "Powering up, sir. Stand by for neural link.",
+                        "JARVIS reporting for duty. Connection sequence initiated."
+                    ]
+                    greet = random.choice(greetings)
+                    self.ui.write_log("SYS: Booting J.A.R.V.I.S. Core...")
+                    self.ui.write_log("SYS: Local systems initialised.")
+                    speak_local(greet)
+                    self.ui.write_log("SYS: Wake word system active.")
+                
+                print(f"[JARVIS] Connecting (Retry delay: {retry_delay}s)...")
                 self.ui.set_state("THINKING")
-                self.ui.write_log("SYS: Connecting to Gemini...")
+                if not first_run:
+                    self.ui.write_log("SYS: Reconnecting to Gemini...")
                 
                 config = self._build_config()
 
@@ -1502,7 +1522,7 @@ class JarvisLive:
                     self.out_queue      = asyncio.Queue(maxsize=100)
                     self.detection_queue = asyncio.Queue()
 
-                    print("[JARVIS] ✅ Connected.")
+                    print("[JARVIS] Connected.")
                     self.ui.set_state("LISTENING")
                     self.ui.write_log("SYS: JARVIS online. Ready to help.")
                     
@@ -1518,7 +1538,7 @@ class JarvisLive:
                     # Startup Briefing Trigger (Delayed for setup)
                     if first_run:
                         first_run = False
-                        await asyncio.sleep(10) # Wait for audio and background systems
+                        await asyncio.sleep(4) # Wait for audio and background systems
                         await session.send_client_content(
                             turns={"parts": [{"text": "System call: Perform 'daily_briefing' for Sahil now."}]},
                             turn_complete=True
@@ -1529,7 +1549,7 @@ class JarvisLive:
                         await asyncio.sleep(1)
 
             except Exception as e:
-                print(f"[JARVIS] ⚠️ Connection error: {e}")
+                print(f"[JARVIS] Connection error: {e}")
                 self.ui.write_log(f"SYS: Connection lost ({e}). Reconnecting in {retry_delay}s...")
                 self.ui.set_state("INITIALISING")
                 self.session = None
@@ -1546,6 +1566,7 @@ def main():
 
     def runner():
         ui.wait_for_api_key()
+        
         jarvis = JarvisLive(ui)
         try:
             asyncio.run(jarvis.run())

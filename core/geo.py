@@ -7,8 +7,8 @@ def get_current_location() -> str:
     Falls back to "Delhi" if detection fails.
     """
     try:
-        # Using ip-api.com (Free, no key required for low volume)
-        res = requests.get("http://ip-api.com/json/", timeout=5)
+        # Using ipinfo.io (Free, HTTPS supported, no key needed)
+        res = requests.get("https://ipinfo.io/json", timeout=5)
         if res.status_code == 200:
             data = res.json()
             city = data.get("city")

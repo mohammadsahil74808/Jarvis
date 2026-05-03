@@ -1,6 +1,6 @@
 import os, json, time, math, random, threading, psutil, subprocess, shutil
 try:
-    from ctypes import windll
+    from ctypes import windll, c_int, byref
     windll.shcore.SetProcessDpiAwareness(1)
 except Exception:
     pass
@@ -32,6 +32,16 @@ C_RED    = "#ff3333"
 C_MUTED  = "#ff3366"
 
 
+def apply_rounded_corners(window, w, h, r=40):
+    """Apply a rounded region to the window using Win32 GDI"""
+    try:
+        from ctypes import windll
+        window.update_idletasks()
+        hwnd = window.winfo_id()
+        # x1, y1, x2, y2, w_ellipse, h_ellipse
+        region = windll.gdi32.CreateRoundRectRgn(0, 0, w, h, r, r)
+        windll.user32.SetWindowRgn(hwnd, region, True)
+    except: pass
 
 class ConsolePanel(tk.Toplevel):
     """Futuristic Live Typing Console Panel"""
@@ -46,8 +56,9 @@ class ConsolePanel(tk.Toplevel):
         self.transient(parent_ui.root) # Attach to parent stacking order
         self.attributes("-alpha", 0.9)
         self.configure(bg=C_BG)
+        apply_rounded_corners(self, parent_ui.CW, parent_ui.CH)
 
-        self.canvas = tk.Canvas(self, bg=C_BG, highlightthickness=1, highlightbackground=C_MID)
+        self.canvas = tk.Canvas(self, bg=C_BG, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
 
         self.text_area = tk.Text(
@@ -105,18 +116,21 @@ class StatsPanel(tk.Toplevel):
         super().__init__(parent_ui.root)
         self.ui = parent_ui
         self.title("J.A.R.V.I.S | HUD MODULE")
-        # Vertically Centered relative to Main Window (Right Side)
-        SY = parent_ui.root.winfo_y() + (parent_ui.H - parent_ui.SH) // 2
-        self.geometry(f"{parent_ui.SW}x{parent_ui.SH}+{parent_ui.root.winfo_x() + parent_ui.W + 15}+{SY}")
+        # Positioning is now handled by JarvisUI, using SH1 as fallback
+        self.geometry(f"{parent_ui.SW}x{parent_ui.SH1}")
         self.overrideredirect(True)
         self.transient(parent_ui.root) 
-        self.attributes("-alpha", 0.95)
+        self.attributes("-alpha", 1.0)
         self.configure(bg=C_BG)
+        # Reduced height for split layout
+        self.geometry(f"{parent_ui.SW}x{parent_ui.SH1}")
+        apply_rounded_corners(self, parent_ui.SW, parent_ui.SH1)
 
-        self.canvas = tk.Canvas(self, bg=C_BG, highlightthickness=1, highlightbackground=C_MID)
+        self.canvas = tk.Canvas(self, bg=C_BG, highlightthickness=0)
         self.canvas.pack(fill="both", expand=True)
         
         self.tick = 0
+        self.start_time = time.time()
         self._animate()
 
     def _animate(self):
@@ -163,22 +177,45 @@ class StatsPanel(tk.Toplevel):
         SY_RECT = 320
         self.canvas.create_rectangle(60, SY_RECT, 320, SY_RECT+35, outline=color, width=2, tags="dynamic")
         self.canvas.create_text(190, SY_RECT+17, text=status, fill=color, font=("Courier", 12, "bold"), tags="dynamic")
+        
+        # 4. ── System Vitals Moved ─────────────────
+        # This section is now handled by VitalsPanel for better spacing.
+        
+        self.after(200, self._animate)
 
-        # 4. ── Core Performance (Bars) ──────────────
-        sy = 400
-        stats = self.ui.stats
-        self._draw_bar(sy, "CPU LOAD", stats.get('cpu', 0), "#ff3333" if stats.get('cpu',0)>80 else C_PRI)
-        self._draw_bar(sy+65, "RAM USAGE", stats.get('ram', 0), "#ff3333" if stats.get('ram',0)>80 else "#00ff88")
-        self.canvas.create_text(30, sy+120, text=f"NET CONNECTIVITY: {stats.get('net', '0 KB/s')}", fill="#ffffff", font=("Courier", 9), anchor="w", tags="dynamic")
+class VitalsPanel(tk.Toplevel):
+    def __init__(self, parent_ui):
+        super().__init__(parent_ui.root)
+        self.ui = parent_ui
+        self.geometry(f"{parent_ui.SW}x{parent_ui.SH2}+{parent_ui.SX}+{parent_ui.root.winfo_y() + parent_ui.SH1 + 15}")
+        self.overrideredirect(True)
+        self.transient(parent_ui.root)
+        self.attributes("-alpha", 1.0)
+        self.configure(bg=C_BG)
+        apply_rounded_corners(self, parent_ui.SW, parent_ui.SH2)
+        self.canvas = tk.Canvas(self, bg=C_BG, highlightthickness=0)
+        self.canvas.pack(fill="both", expand=True)
+        self.tick = 0
+        self.start_time = time.time()
+        self._animate()
 
-        # 5. ── Mini Activity Feed ──────────────────
-        fy = 580
+    def _animate(self):
+        self.tick += 1
+        self.canvas.delete("dynamic")
+        status = self.ui._jarvis_state
+        
+        # 1. System Vitals (Partial Render)
+        if self.tick % 12 == 1:
+            self._draw_vitals()
+            
+        # 2. Live System Log
+        fy = 280 # Shifted down further for maximum spacing
         self.canvas.create_text(30, fy-25, text="LIVE SYSTEM LOG", fill=C_PRI, font=("Courier", 9, "bold"), anchor="w", tags="dynamic")
         for i, act in enumerate(list(self.ui.activity_feed)):
             self.canvas.create_text(30, fy + (i*18), text=act, fill="#aaaaaa", font=("Courier", 9), anchor="w", tags="dynamic")
 
-        # 6. ── Voice Visualizer ────────────────────
-        vy = 750
+        # 3. Voice Visualizer
+        vy = 405 # Shifted to bottom
         N_BARS = 18
         for i in range(N_BARS):
             h = random.randint(10, 40) if status == "SPEAKING" else (random.randint(4, 12) if status == "LISTENING" else 5)
@@ -186,7 +223,6 @@ class StatsPanel(tk.Toplevel):
             self.canvas.create_rectangle(x_pos, vy-h, x_pos+10, vy, fill=C_PRI if status != "MUTED" else "#330000", outline="", tags="dynamic")
 
         self.after(200, self._animate)
-
     def _draw_bar(self, y, label, val, col):
         self.canvas.create_text(30, y, text=label, fill="#ffffff", font=("Courier", 8), anchor="w", tags="dynamic")
         # Wider bars for 380px panel
@@ -196,6 +232,50 @@ class StatsPanel(tk.Toplevel):
         if w > 0:
             self.canvas.create_rectangle(30, y+10, 30+w, y+24, fill=col, outline="", tags="dynamic")
         self.canvas.create_text(360, y+17, text=f"{val:.0f}%", fill=col, font=("Courier", 8, "bold"), anchor="e", tags="dynamic")
+
+    def _draw_vitals(self):
+        """Premium Vitals Dashboard with partial rendering"""
+        self.canvas.delete("vitals")
+        stats = self.ui.stats
+        user_name = "USER"
+        try:
+            if self.ui.jarvis: user_name = self.ui.jarvis.profile_manager.get_profile().get("name", "USER").upper()
+        except: pass
+        
+        uptime = int(time.time() - self.start_time)
+        ut_str = f"{uptime//3600:02d}:{(uptime%3600)//60:02d}:{uptime%60:02d}"
+        cpu = stats.get('cpu', 0)
+        temp = 36 + (cpu // 20) + random.uniform(-0.3, 0.3)
+        
+        vy = 20
+        self.canvas.create_text(30, vy, text="SYSTEM VITALS //", fill=C_ACC2, font=("Courier", 10, "bold"), anchor="w", tags="vitals")
+        
+        # Column 1
+        self.canvas.create_text(30, vy+35, text="OPR:", fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
+        self.canvas.create_text(75, vy+35, text=user_name, fill="#ffffff", font=("Courier", 8, "bold"), anchor="w", tags="vitals")
+        self.canvas.create_text(30, vy+55, text="LOC:", fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
+        self.canvas.create_text(75, vy+55, text="DELHI, IN", fill="#ffffff", font=("Courier", 8, "bold"), anchor="w", tags="vitals")
+        
+        # Column 2
+        self.canvas.create_text(190, vy+35, text="UPTIME:", fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
+        self.canvas.create_text(270, vy+35, text=ut_str, fill="#ffffff", font=("Courier", 8, "bold"), anchor="w", tags="vitals")
+        self.canvas.create_text(190, vy+55, text="TEMP:", fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
+        self.canvas.create_text(270, vy+55, text=f"{temp:.1f}°C", fill="#ffffff", font=("Courier", 8, "bold"), anchor="w", tags="vitals")
+        
+        # Performance Indicators
+        by = vy + 90
+        v_items = [
+            ("CPU CORE LOAD", cpu, C_PRI if cpu < 80 else "#ff3333"),
+            ("RAM USAGE LOAD", stats.get('ram', 0), C_GREEN if stats.get('ram', 0) < 80 else "#ff3333"),
+            (f"NETWORK ACTIVITY [{stats.get('net', '0 KB/s')}]", 35 if "MB" in stats.get('net','') else (12 if "KB" in stats.get('net','') else 4), C_ACC2)
+        ]
+        
+        for i, (lab, val, col) in enumerate(v_items):
+            y_pos = by + (i * 48)
+            self.canvas.create_text(30, y_pos, text=lab, fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
+            self.canvas.create_rectangle(30, y_pos+12, 350, y_pos+20, outline=C_DIM, width=1, tags="vitals")
+            w = int(320 * (min(100, val)/100.0))
+            if w > 0: self.canvas.create_rectangle(30, y_pos+12, 30+w, y_pos+20, fill=col, outline="", tags="vitals")
 
 class WebIntelManager:
     """Managed Edge Browser in App Mode (Left Bottom)"""
@@ -282,8 +362,8 @@ class JarvisUI:
         # Panel Sizes (ULTRA-LARGE Scaling)
         self.W, self.H   = 950, 800  # Massive Main
         self.CW, self.CH = 320, 500  # Wide Console
-        self.SW, self.SH = 380, 800  # Detailed Stats
-        W, H, CW, CH, SW, SH = self.W, self.H, self.CW, self.CH, self.SW, self.SH
+        self.SW, self.SH1, self.SH2 = 380, 400, 420  # Increased SH2 for breathing room
+        W, H, CW, CH, SW, SH1, SH2 = self.W, self.H, self.CW, self.CH, self.SW, self.SH1, self.SH2
         
         # Margins & Spacing
         MARGIN = 30
@@ -359,8 +439,12 @@ class JarvisUI:
         self.console_panel = ConsolePanel(self)
         
         self.stats_panel   = StatsPanel(self)
-        # Stats panel ko upar shift kiya (centered relative to screen)
-        self.stats_panel.geometry(f"{SW}x{SH}+{SX}+{(sh - SH) // 2 - 60}")
+        self.vitals_panel  = VitalsPanel(self)
+        
+        # Position Split Panels
+        base_y = (sh - 800) // 2 - 60
+        self.stats_panel.geometry(f"{SW}x{SH1}+{SX}+{base_y}")
+        self.vitals_panel.geometry(f"{SW}x{SH2}+{SX}+{base_y + SH1 + 15}")
         
         # New Real Browser Panel
         self.web_panel = WebIntelManager(self)
@@ -438,12 +522,15 @@ class JarvisUI:
             if state == 'iconic':
                 self.console_panel.withdraw()
                 self.stats_panel.withdraw()
+                self.vitals_panel.withdraw()
             else:
                 self.console_panel.deiconify()
                 self.stats_panel.deiconify()
+                self.vitals_panel.deiconify()
                 # Use lift to bring them up with the parent
                 self.console_panel.lift()
                 self.stats_panel.lift()
+                self.vitals_panel.lift()
                 if hasattr(self, "web_panel") and self.web_panel.proc is not None:
                     # browser_panel replaced by web_panel (WebIntelManager), which doesn't have .lift()
                     pass

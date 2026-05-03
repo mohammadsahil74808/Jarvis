@@ -81,3 +81,14 @@ def open_browser(url: str) -> bool:
         print(f"[Utils] ⚠️ Failed to launch Edge specifically: {e}. Falling back to default.")
         webbrowser.open(url)
         return True
+
+def speak_local(text: str):
+    """
+    Spoken text using Windows PowerShell TTS (Built-in).
+    """
+    import subprocess
+    cmd = f'powershell -Command "Add-Type -AssemblyName System.Speech; $speak = New-Object System.Speech.Synthesis.SpeechSynthesizer; $speak.Speak(\'{text}\')"'
+    try:
+        subprocess.Popen(cmd, shell=True)
+    except Exception as e:
+        print(f"[Local TTS] Error: {e}")

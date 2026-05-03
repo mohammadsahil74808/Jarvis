@@ -23,3 +23,7 @@ memory/*.json
 memory/*.db
 memory/*.faiss
 config/browser_signal.json
+
+# Privacy Protection
+documents/
+desktop/

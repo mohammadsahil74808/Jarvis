@@ -154,7 +154,7 @@ def _search_flights_browser(
 
     print(f"[FlightFinder] 🌐 Opening: {url}")
     browser_control({"action": "go_to", "url": url})
-    time.sleep(5)  
+    time.sleep(3)  
 
     result = browser_control({"action": "get_text"})
     return result or "", url

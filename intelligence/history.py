@@ -8,6 +8,7 @@ class HistoryManager:
         self.history_file = history_file
         self.history_file.parent.mkdir(parents=True, exist_ok=True)
         self.data = self._load()
+        self.unflushed_count = 0
 
     def _load(self):
         if self.history_file.exists():
@@ -49,7 +50,10 @@ class HistoryManager:
         if len(self.data["logs"]) > 500:
             self.data["logs"] = self.data["logs"][-500:]
             
-        self._save()
+        self.unflushed_count += 1
+        if self.unflushed_count >= 5:
+            self._save()
+            self.unflushed_count = 0
 
     def get_cooldown(self, rule_id: str):
         """Returns the time since the last suggestion for this rule."""

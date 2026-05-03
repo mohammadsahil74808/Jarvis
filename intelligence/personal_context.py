@@ -1,4 +1,5 @@
 from memory.profile_manager import get_manager
+from intelligence.interaction_layer import get_interaction_layer
 
 class PersonalContext:
     def __init__(self):
@@ -9,7 +10,6 @@ class PersonalContext:
         profile = self.manager.get_profile()
         p = profile["personal_info"]
         
-        from intelligence.interaction_layer import get_interaction_layer
         interaction = get_interaction_layer().get_prompt_injection()
         
         context = (
