@@ -17,6 +17,15 @@ from core.config import (
 # Heavy memory imports deferred to runtime
 from core.utils import retry, async_retry
 
+try:
+    from ui.web_search_widget    import WebSearchWidget
+    from ui.deep_research_widget import DeepResearchWidget
+    from ui.file_search_widget   import FileSearchWidget
+    _WIDGETS_OK = True
+except ImportError:
+    _WIDGETS_OK = False
+
+
 # Heavy imports — lazy loaded at point of use
 def _lazy_sd():
     import sounddevice as sd
@@ -112,506 +121,7 @@ def _index_conversation_async(user_text: str, jarvis_text: str) -> None:
         print(f"[Memory] ⚠️ Indexing failed: {e}")
 
 
-# ── Tool declarations ─────────────────────────────────────────────────────────
-TOOL_DECLARATIONS = [
-    {
-        "name": "open_app",
-        "description": (
-            "Opens any application on the Windows computer. "
-            "Use this whenever the user asks to open, launch, or start any app, "
-            "website, or program. Always call this tool — never just say you opened it."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "app_name": {
-                    "type": "STRING",
-                    "description": "Exact name of the application (e.g. 'WhatsApp', 'Microsoft Edge', 'Spotify')"
-                },
-                "action": {
-                    "type": "STRING",
-                    "description": "open (default) | close"
-                }
-            },
-            "required": ["app_name"]
-        }
-    },
-    {
-        "name": "capture_screen_context",
-        "description": "Capture a screenshot and analyze the current state of the screen (active window, buttons, etc.).",
-        "parameters": {"type": "OBJECT", "properties": {}}
-    },
-    {
-        "name": "web_search",
-        "description": "Searches the web for any information.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "query":  {"type": "STRING", "description": "Search query"},
-                "mode":   {"type": "STRING", "description": "search (default) or compare"},
-                "items":  {"type": "ARRAY", "items": {"type": "STRING"}, "description": "Items to compare"},
-                "aspect": {"type": "STRING", "description": "price | specs | reviews"}
-            },
-            "required": ["query"]
-        }
-    },
-    {
-        "name": "weather_report",
-        "description": "Gets real-time weather information for a city.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "city": {"type": "STRING", "description": "City name"}
-            },
-            "required": ["city"]
-        }
-    },
-    {
-        "name": "send_message",
-        "description": "Sends a text message via WhatsApp, Telegram, or other messaging platform.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "receiver":     {"type": "STRING", "description": "Recipient contact name"},
-                "message_text": {"type": "STRING", "description": "The message to send"},
-                "platform":     {"type": "STRING", "description": "Platform: WhatsApp, Telegram, etc."}
-            },
-            "required": ["receiver", "message_text", "platform"]
-        }
-    },
-    {
-        "name": "reminder",
-        "description": "Sets, lists, or deletes timed reminders using Windows Task Scheduler and local storage.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action":  {"type": "STRING", "description": "set (default) | list | delete"},
-                "date":    {"type": "STRING", "description": "Date in YYYY-MM-DD format (for 'set')"},
-                "time":    {"type": "STRING", "description": "Time in HH:MM format (24h) (for 'set')"},
-                "message": {"type": "STRING", "description": "Reminder message text (for 'set' or search key for 'delete')"}
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "youtube_video",
-        "description": (
-            "Controls YouTube. Use for: playing videos, summarizing a video's content, "
-            "getting video info, or showing trending videos."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action": {"type": "STRING", "description": "play | summarize | get_info | trending (default: play)"},
-                "query":  {"type": "STRING", "description": "Search query for play action"},
-                "save":   {"type": "BOOLEAN", "description": "Save summary to Notepad (summarize only)"},
-                "region": {"type": "STRING", "description": "Country code for trending e.g. TR, US"},
-                "url":    {"type": "STRING", "description": "Video URL for get_info action"},
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "screen_process",
-        "description": (
-            "Captures and analyzes the screen or webcam image. "
-            "MUST be called when user asks what is on screen, what you see, "
-            "analyze my screen, look at camera, etc. "
-            "You have NO visual ability without this tool. "
-            "After calling this tool, stay SILENT — the vision module speaks directly."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "angle": {"type": "STRING", "description": "'screen' to capture display, 'camera' for webcam. Default: 'screen'"},
-                "text":  {"type": "STRING", "description": "The question or instruction about the captured image"}
-            },
-            "required": ["text"]
-        }
-    },
-    {
-        "name": "computer_settings",
-        "description": (
-            "SYSTEM SETTINGS CONTROL: Use ONLY for Volume, Brightness, Mute, Dark Mode, WiFi, and Window State (maximize/minimize/close). "
-            "Example: 'set volume to 50', 'mute', 'brighten screen'. "
-            "Do NOT use for mouse movement or visual pixel tasks."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action":      {"type": "STRING", "description": "The action to perform"},
-                "description": {"type": "STRING", "description": "Natural language description of what to do"},
-                "value":       {"type": "STRING", "description": "Optional value: volume level, text to type, etc."}
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "generate_image",
-        "description": (
-            "Generates an AI image based on a prompt. "
-            "Use for: 'make an image', 'generate wallpaper', 'create photo', etc. "
-            "Automatically saves and opens the image for the user."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "prompt_text": {"type": "STRING", "description": "Descriptive prompt for the image"}
-            },
-            "required": ["prompt_text"]
-        }
-    },
-    {
-        "name": "browser_control",
-        "description": (
-            "Controls the web browser. Use for: opening websites, searching the web, "
-            "clicking elements, filling forms, scrolling, any web-based task."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action":      {"type": "STRING", "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | press | close"},
-                "url":         {"type": "STRING", "description": "URL for go_to action"},
-                "query":       {"type": "STRING", "description": "Search query for search action"},
-                "selector":    {"type": "STRING", "description": "CSS selector for click/type"},
-                "text":        {"type": "STRING", "description": "Text to click or type"},
-                "description": {"type": "STRING", "description": "Element description for smart_click/smart_type"},
-                "direction":   {"type": "STRING", "description": "up or down for scroll"},
-                "key":         {"type": "STRING", "description": "Key name for press action"},
-                "incognito":   {"type": "BOOLEAN", "description": "Open in private/incognito mode"},
-            },
-            "required": ["action"]
-        }
-    },
-    {
-        "name": "file_manager",
-        "description": "Unified intelligent file manager. Manages files and folders: list, create, delete, move, copy, rename, read (txt/pdf/docx), write, find, search, deep_search, disk usage, organize, find_duplicates, clean_downloads, recent, info, open.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action":      {"type": "STRING", "description": "list | create_file | create_folder | delete | move | copy | rename | read | write | find | search | deep_search | largest | disk_usage | organize_desktop | info | find_duplicates | clean_downloads | recent | open"},
-                "path":        {"type": "STRING", "description": "File/folder path or shortcut: desktop, downloads, documents, home"},
-                "destination": {"type": "STRING", "description": "Destination path for move/copy"},
-                "new_name":    {"type": "STRING", "description": "New name for rename"},
-                "content":     {"type": "STRING", "description": "Content for create_file/write"},
-                "name":        {"type": "STRING", "description": "File name to search for"},
-                "query":       {"type": "STRING", "description": "Query for search/deep_search"},
-                "extension":   {"type": "STRING", "description": "File extension to search (e.g. .pdf)"},
-                "count":       {"type": "INTEGER", "description": "Number of results for largest/recent"},
-                "days":        {"type": "INTEGER", "description": "Days for clean_downloads (default 30)"},
-            },
-            "required": ["action"]
-        }
-    },
-    {
-        "name": "cmd_control",
-        "description": (
-            "Runs CMD/terminal commands via natural language: disk space, processes, "
-            "system info, network, find files, or anything in the command line."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "task":    {"type": "STRING", "description": "Natural language description of what to do"},
-                "visible": {"type": "BOOLEAN", "description": "Open visible CMD window. Default: true"},
-                "command": {"type": "STRING", "description": "Optional: exact command if already known"},
-            },
-            "required": ["task"]
-        }
-    },
-    {
-        "name": "desktop_control",
-        "description": "Controls the desktop: wallpaper, organize, clean, list, stats.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action": {"type": "STRING", "description": "wallpaper | wallpaper_url | organize | clean | list | stats | task"},
-                "path":   {"type": "STRING", "description": "Image path for wallpaper"},
-                "url":    {"type": "STRING", "description": "Image URL for wallpaper_url"},
-                "mode":   {"type": "STRING", "description": "by_type or by_date for organize"},
-                "task":   {"type": "STRING", "description": "Natural language desktop task"},
-            },
-            "required": ["action"]
-        }
-    },
-    {
-        "name": "code_helper",
-        "description": "Writes, edits, explains, runs, or builds code files.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action":      {"type": "STRING", "description": "write | edit | explain | run | build | auto (default: auto)"},
-                "description": {"type": "STRING", "description": "What the code should do or what change to make"},
-                "language":    {"type": "STRING", "description": "Programming language (default: python)"},
-                "output_path": {"type": "STRING", "description": "Where to save the file"},
-                "file_path":   {"type": "STRING", "description": "Path to existing file for edit/explain/run/build"},
-                "code":        {"type": "STRING", "description": "Raw code string for explain"},
-                "args":        {"type": "STRING", "description": "CLI arguments for run/build"},
-                "timeout":     {"type": "INTEGER", "description": "Execution timeout in seconds (default: 30)"},
-            },
-            "required": ["action"]
-        }
-    },
-    {
-        "name": "dev_agent",
-        "description": "Builds complete multi-file projects from scratch: plans, writes files, installs deps, opens VSCode, runs and fixes errors.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "description":  {"type": "STRING", "description": "What the project should do"},
-                "language":     {"type": "STRING", "description": "Programming language (default: python)"},
-                "project_name": {"type": "STRING", "description": "Optional project folder name"},
-                "timeout":      {"type": "INTEGER", "description": "Run timeout in seconds (default: 30)"},
-            },
-            "required": ["description"]
-        }
-    },
-    {
-        "name": "agent_task",
-        "description": (
-            "Executes complex multi-step tasks requiring multiple different tools. "
-            "Examples: 'research X and save to file', 'find and organize files'. "
-            "DO NOT use for single commands. NEVER use for Steam/Epic — use game_updater."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "goal":     {"type": "STRING", "description": "Complete description of what to accomplish"},
-                "priority": {"type": "STRING", "description": "low | normal | high (default: normal)"}
-            },
-            "required": ["goal"]
-        }
-    },
-    {
-        "name": "computer_control",
-        "description": (
-            "LOW-LEVEL PIXEL CONTROL: Use for mouse clicks (x,y), typing text at a specific cursor, scrolls, and finding objects on screen. "
-            "Example: 'click at 500,500', 'type hello', 'scroll down'. "
-            "Never use for Volume or System Settings."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action":      {"type": "STRING", "description": "type | smart_type | click | double_click | right_click | hotkey | press | scroll | move | copy | paste | screenshot | wait | clear_field | focus_window | screen_find | screen_click | random_data | user_data"},
-                "text":        {"type": "STRING", "description": "Text to type or paste"},
-                "x":           {"type": "INTEGER", "description": "X coordinate"},
-                "y":           {"type": "INTEGER", "description": "Y coordinate"},
-                "keys":        {"type": "STRING", "description": "Key combination e.g. 'ctrl+c'"},
-                "key":         {"type": "STRING", "description": "Single key e.g. 'enter'"},
-                "direction":   {"type": "STRING", "description": "up | down | left | right"},
-                "amount":      {"type": "INTEGER", "description": "Scroll amount (default: 3)"},
-                "seconds":     {"type": "NUMBER",  "description": "Seconds to wait"},
-                "title":       {"type": "STRING",  "description": "Window title for focus_window"},
-                "description": {"type": "STRING",  "description": "Element description for screen_find/screen_click"},
-                "type":        {"type": "STRING",  "description": "Data type for random_data"},
-                "field":       {"type": "STRING",  "description": "Field for user_data: name|email|city"},
-                "clear_first": {"type": "BOOLEAN", "description": "Clear field before typing (default: true)"},
-                "path":        {"type": "STRING",  "description": "Save path for screenshot"},
-            },
-            "required": ["action"]
-        }
-    },
-    {
-        "name": "game_updater",
-        "description": (
-            "THE ONLY tool for ANY Steam or Epic Games request. "
-            "Use for: installing, downloading, updating games, listing installed games, "
-            "checking download status, scheduling updates. "
-            "ALWAYS call directly for any Steam/Epic/game request. "
-            "NEVER use agent_task, browser_control, or web_search for Steam/Epic."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action":    {"type": "STRING",  "description": "update | install | list | download_status | schedule | cancel_schedule | schedule_status (default: update)"},
-                "platform":  {"type": "STRING",  "description": "steam | epic | both (default: both)"},
-                "game_name": {"type": "STRING",  "description": "Game name (partial match supported)"},
-                "app_id":    {"type": "STRING",  "description": "Steam AppID for install (optional)"},
-                "hour":      {"type": "INTEGER", "description": "Hour for scheduled update 0-23 (default: 3)"},
-                "minute":    {"type": "INTEGER", "description": "Minute for scheduled update 0-59 (default: 0)"},
-                "shutdown_when_done": {"type": "BOOLEAN", "description": "Shut down PC when download finishes"},
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "flight_finder",
-        "description": "Searches Google Flights and speaks the best options.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "origin":      {"type": "STRING",  "description": "Departure city or airport code"},
-                "destination": {"type": "STRING",  "description": "Arrival city or airport code"},
-                "date":        {"type": "STRING",  "description": "Departure date (any format)"},
-                "return_date": {"type": "STRING",  "description": "Return date for round trips"},
-                "passengers":  {"type": "INTEGER", "description": "Number of passengers (default: 1)"},
-                "cabin":       {"type": "STRING",  "description": "economy | premium | business | first"},
-                "save":        {"type": "BOOLEAN", "description": "Save results to Notepad"},
-            },
-            "required": ["origin", "destination", "date"]
-        }
-    },
-    {
-        "name": "save_memory",
-        "description": (
-            "Save an important personal fact about the user to long-term memory. "
-            "Call this silently whenever the user reveals something worth remembering: "
-            "name, age, city, job, preferences, hobbies, relationships, projects, or future plans. "
-            "Do NOT call for: weather, reminders, searches, or one-time commands. "
-            "Do NOT announce that you are saving — just call it silently. "
-            "Values must be in English regardless of the conversation language."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "category": {
-                    "type": "STRING",
-                    "description": (
-                        "identity — name, age, birthday, city, job, language, nationality | "
-                        "preferences — favorite food/color/music/film/game/sport, hobbies | "
-                        "projects — active projects, goals, things being built | "
-                        "patterns — recurring habits, routines, schedule, behavior patterns | "
-                        "relationships — friends, family, partner, colleagues | "
-                        "wishes — future plans, things to buy, travel dreams | "
-                        "notes — anything else worth remembering"
-                    )
-                },
-                "key":   {"type": "STRING", "description": "Short snake_case key (e.g. name, favorite_food, sister_name)"},
-                "value": {"type": "STRING", "description": "Concise value in English (e.g. Fatih, pizza, older sister)"},
-            },
-            "required": ["category", "key", "value"]
-        }
-    },
-    {
-        "name": "news_report",
-        "description": "Fetches the latest real-time news headlines. Support categories like world, india, tech, sports, etc.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "category": {
-                    "type": "STRING",
-                    "description": "News category: world, india, technology, sports, science, health, entertainment, business"
-                }
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "daily_briefing",
-        "description": "Gathers time, weather, news, and reminders for a complete daily summary.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {},
-            "required": []
-        }
-    },
-    {
-        "name": "workflow_chain",
-        "description": "Triggers a pre-defined sequence of actions for specific modes: study, coding, relax, presentation.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "mode": {"type": "STRING", "description": "Mode to activate: study | coding | relax | presentation"}
-            },
-            "required": ["mode"]
-        }
-    },
-    {
-        "name": "browser_agent",
-        "description": (
-            "Advanced web automation agent. Use this for complex web tasks, "
-            "logins, form filling, and intelligent data extraction. "
-            "Supports headless and visible modes."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action": {
-                    "type": "STRING", 
-                    "description": "go_to | search | click | type | scroll | extract | fill_form | login_helper | close"
-                },
-                "url": {"type": "STRING", "description": "Target URL"},
-                "query": {"type": "STRING", "description": "Search query"},
-                "selector": {"type": "STRING", "description": "CSS selector"},
-                "text": {"type": "STRING", "description": "Text to type or click"},
-                "description": {"type": "STRING", "description": "Intelligent description of the element (e.g. 'login button')"},
-                "press_enter": {"type": "BOOLEAN", "description": "Press Enter after typing (default: false)"},
-                "direction": {"type": "STRING", "description": "Scroll direction: up | down"},
-                "amount": {"type": "INTEGER", "description": "Scroll amount in pixels"},
-                "headless": {"type": "BOOLEAN", "description": "Run in background (default: false for login, true for extraction)"},
-                "data": {"type": "OBJECT", "description": "Data for fill_form action (description: value mappings)"},
-                "timeout": {"type": "INTEGER", "description": "Timeout for login_helper in seconds"}
-            },
-            "required": ["action"]
-        }
-    },
-    {
-        "name": "screen_vision",
-        "description": (
-            "Analyzes the screen to extract text (OCR) and detect UI elements. "
-            "Use this to read error messages, detect buttons, or extract structured screen data."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action": {
-                    "type": "STRING",
-                    "description": "analyze (OCR + Detect) | ocr (Text only) | detect (Buttons only)"
-                },
-                "region": {
-                    "type": "OBJECT",
-                    "description": "Optional: {'top', 'left', 'width', 'height'} of the area to analyze"
-                }
-            },
-            "required": []
-        }
-    },
-    {
-        "name": "recall_memory",
-        "description": "Searches past conversations and memories semantically to find relevant context or user preferences.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "query": {
-                    "type": "STRING",
-                    "description": "The search query (e.g. 'favourite sports' or 'previous chat about coding')"
-                },
-                "k": {
-                    "type": "INTEGER",
-                    "description": "Number of relevant memories to retrieve (default: 5)"
-                }
-            },
-            "required": ["query"]
-        }
-    },
-
-    {
-        "name": "research_mode",
-        "description": "Deep web research: search multiple sites, extract articles, and specialize in UPSC, Tech, or News.",
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "action": {
-                    "type": "STRING",
-                    "description": "research | summarize | compare"
-                },
-                "query": {
-                    "type": "STRING",
-                    "description": "Research topic or question"
-                },
-                "research_mode": {
-                    "type": "STRING",
-                    "description": "upsc | tech | news | general"
-                },
-                "max_sites": {
-                    "type": "INTEGER",
-                    "description": "Number of sources to research (default: 3)"
-                }
-            },
-            "required": ["action", "query"]
-        }
-    },
-]
+from agent.tool_definitions import TOOL_DECLARATIONS
 
 
 class JarvisLive:
@@ -624,7 +134,16 @@ class JarvisLive:
         self._loop          = None
         self._is_speaking   = False
         self._speaking_lock = threading.Lock()
+        from agent.tool_executor import ToolExecutor
+        from core.audio_engine import AudioEngine
+        self.tool_executor  = ToolExecutor(self)
+        self.audio_engine   = AudioEngine(self)
         self.ui.on_text_command = self._on_text_command
+
+        # App Activity Watcher
+        from core.app_watcher import AppWatcher
+        self.app_watcher = AppWatcher(callback=self._on_app_activity)
+        self.app_watcher.start()
 
         # Clap Activation
         config = _get_config()
@@ -654,6 +173,8 @@ class JarvisLive:
             "last_action": None,
             "last_tool":   None
         }
+        self._preloaded_memory = ""
+        self.system_vitals = {"cpu": 0, "ram": 0, "battery": None}
 
         # Multi-Step Planning
         self.active_plan = None
@@ -735,6 +256,36 @@ class JarvisLive:
         
         threading.Thread(target=_load_proactive_sys, daemon=True).start()
 
+        # Preload Memory
+        def _preload_memory_job():
+            try:
+                from memory.memory_manager import load_memory, format_memory_for_prompt
+                self._preloaded_memory = format_memory_for_prompt(load_memory())
+                print("[JARVIS] Memory preloaded.")
+            except Exception as e:
+                print(f"[JARVIS] Memory preload failed: {e}")
+        threading.Thread(target=_preload_memory_job, daemon=True).start()
+
+        # System Vitals Monitor
+        def _monitor_vitals():
+            import psutil
+            import time
+            while True:
+                try:
+                    self.system_vitals["cpu"] = psutil.cpu_percent()
+                    self.system_vitals["ram"] = psutil.virtual_memory().percent
+                    bat = psutil.sensors_battery()
+                    if bat:
+                        self.system_vitals["battery"] = {
+                            "percent": bat.percent,
+                            "plugged": bat.power_plugged
+                        }
+                    self._config_dirty = True
+                except Exception:
+                    pass
+                time.sleep(30)
+        threading.Thread(target=_monitor_vitals, daemon=True).start()
+
         # Companion Engine Heartbeat (Every 15 mins)
         self.ui.root.after(900000, self._companion_heartbeat)
 
@@ -747,8 +298,27 @@ class JarvisLive:
         
         self.ui.root.after(900000, self._companion_heartbeat)
 
+    def _on_app_activity(self, opened, closed):
+        """Passive watcher callback - updates context only."""
+        if opened:
+            self.session_context["last_app"] = opened[0]
+            self.session_context["last_action"] = "opened"
+            self._config_dirty = True
+        if closed:
+            # Optionally track closed state, but we mainly care about active context
+            self._config_dirty = True
+
     def notify(self, text: str, voice: bool = True):
-        """Proactive notification hook."""
+        """Proactive notification hook or internal context injector."""
+        # Block proactive notifications if model is busy to prevent 1008
+        if getattr(self, "tool_call_pending", False) or self._is_speaking:
+            return
+
+        if text.startswith("["):
+            # Internal directive (e.g. emotional state) - send to LLM without UI/Voice prefix
+            self.speak(text)
+            return
+
         self.ui.show_suggestion(text)
         if voice and not self._is_speaking and not self.ui.muted:
             self.speak(f"Sir, {text}")
@@ -806,6 +376,10 @@ class JarvisLive:
     def speak(self, text: str):
         if not self._loop or not self.session:
             return
+        # Skip if model is already busy
+        if getattr(self, "tool_call_pending", False) or self._is_speaking:
+            return
+            
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},
@@ -828,10 +402,13 @@ class JarvisLive:
             return self._cached_config
 
         from datetime import datetime
-        from memory.memory_manager import load_memory, format_memory_for_prompt
 
-        memory     = load_memory()
-        mem_str    = format_memory_for_prompt(memory)
+        if self._preloaded_memory:
+            mem_str = self._preloaded_memory
+        else:
+            from memory.memory_manager import load_memory, format_memory_for_prompt
+            memory     = load_memory()
+            mem_str    = format_memory_for_prompt(memory)
         sys_prompt = _load_system_prompt()
 
         now      = datetime.now()
@@ -888,6 +465,16 @@ class JarvisLive:
         emotional_ctx = self.companion_engine.get_emotional_context()
         parts.append(f"{emotional_ctx}\n")
 
+        # System Vitals Context
+        v_cpu = self.system_vitals.get("cpu", 0)
+        v_ram = self.system_vitals.get("ram", 0)
+        v_bat = self.system_vitals.get("battery")
+        vitals_str = f"[SYSTEM STATUS: CPU {v_cpu}%, RAM {v_ram}%"
+        if v_bat:
+            vitals_str += f", Battery {v_bat['percent']}% ({'Plugged' if v_bat['plugged'] else 'On Battery'})"
+        vitals_str += "]\n"
+        parts.append(vitals_str)
+
         parts.append(sys_prompt)
 
         _genai, _types = _lazy_genai()
@@ -901,7 +488,7 @@ class JarvisLive:
             speech_config=_types.SpeechConfig(
                 voice_config=_types.VoiceConfig(
                     prebuilt_voice_config=_types.PrebuiltVoiceConfig(
-                        voice_name="Charon"
+                        voice_name="Charon"
                     )
                 )
             ),
@@ -910,476 +497,7 @@ class JarvisLive:
         self._config_dirty = False
         return config_obj
 
-    async def _execute_tool(self, fc) -> "types.FunctionResponse":
-        name = fc.name
-        if name in ["file_controller", "file_brain"]:
-            print(f"[JARVIS] Hallucinated tool {name} re-routed to file_manager")
-            name = "file_manager"
-            
-        args = dict(fc.args or {})
 
-        print(f"[JARVIS] [TOOL] {name}  {args}")
-        self.ui.set_state("THINKING")
-
-        # Update Session Context
-        self.session_context["last_tool"] = name
-        self._config_dirty = True
-        if name == "open_app":
-            self.session_context["last_app"] = args.get("app_name")
-            self.session_context["last_action"] = "open_app"
-        elif name == "web_search":
-            self.session_context["last_query"] = args.get("query")
-            self.session_context["last_action"] = "web_search"
-        elif name == "file_manager":
-            self.session_context["last_file"] = args.get("path")
-            self.session_context["last_action"] = args.get("action")
-        elif name == "browser_control":
-            self.session_context["last_query"] = args.get("query") or args.get("url")
-            self.session_context["last_action"] = args.get("action")
-        elif name == "browser_agent":
-            self.session_context["last_query"] = args.get("query") or args.get("url")
-            self.session_context["last_action"] = args.get("action")
-
-        elif name == "screen_vision":
-            self.session_context["last_action"] = args.get("action", "analyze")
-
-        # --- PREDICTIVE ENGINE LOGGING ---
-        if self.usage_tracker:
-            if name == "open_app":
-                self.memory_executor.submit(self.usage_tracker.log_event, "app", args.get("app_name", "Unknown"))
-            elif name in ["web_search", "browser_control"]:
-                 self.memory_executor.submit(self.usage_tracker.log_event, "command", name)
-        # --------------------------------
-
-        # Fallback suggestions map
-        FALLBACK_SUGGESTIONS = {
-            "browser_control": "Sir, browser action failed. Maybe try 'computer_control' or 'cmd_control' as a fallback?",
-            "open_app": "Sir, I couldn't open the app. Try using 'web_search' to find the app path or use 'cmd_control'.",
-            "screen_process": "Sir, vision module failed. Is the screen content visible clearly?",
-            "web_search": "Sir, search failed. I already tried fallback engines, but you might want to try 'browser_control' manually.",
-            "file_manager": "Sir, file action failed. Check if the path is correct or use 'cmd_control' for direct disk access."
-        }
-
-        # ── save_memory: sessiz, hızlı, Gemini'ye bildirim yok ───────────────
-        if name == "save_memory":
-            category = args.get("category", "notes")
-            key      = args.get("key", "")
-            value    = args.get("value", "")
-            if key and value:
-                from memory.memory_manager import update_memory
-                update_memory({category: {key: {"value": value}}})
-                print(f"[Memory] [SAVE] save_memory: {category}/{key} = {value}")
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(
-                id=fc.id, name=name,
-                response={"result": "ok", "silent": True}
-            )
-
-        # ── manage_plan ──────────────────────────────────────────────────────
-        if name == "manage_plan":
-            action = args.get("action", "create")
-            if action == "create":
-                steps = args.get("steps", [])
-                self.active_plan = [{"step": s, "done": False} for s in steps]
-                self.ui.write_log(f"SYS: New Project Plan Initialised ({len(steps)} steps)")
-                for i, s in enumerate(steps, 1):
-                    self.ui.write_log(f"PLAN: {i}. {s}")
-                result = "Plan created successfully. Sir, now start with the first step."
-            elif action == "update":
-                index = args.get("index", 1) - 1
-                if self.active_plan and 0 <= index < len(self.active_plan):
-                    self.active_plan[index]["done"] = True
-                    step_text = self.active_plan[index]["step"]
-                    self.ui.write_log(f"PLAN: [DONE] {step_text}")
-                    result = f"Step {index+1} marked as done."
-                else:
-                    result = "Invalid step index or no active plan."
-            elif action == "clear":
-                self.active_plan = None
-                self.ui.write_log("SYS: Plan cleared.")
-                result = "Plan cleared."
-            
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(
-                id=fc.id, name=name,
-                response={"result": result}
-            )
-
-        # ── capture_screen_context ───────────────────────────────────────────
-        if name == "capture_screen_context":
-            self.ui.set_state("THINKING")
-            loop = asyncio.get_running_loop()
-            
-            def _blocking_capture():
-                from actions.screen_processor import _capture_screenshot
-                try:
-                    img_bytes = _capture_screenshot()
-                    _genai, _types = _lazy_genai()
-                    client = get_gemini_client()
-                    prompt = (
-                        "Analyze this screenshot. Describe: 1. The active window. "
-                        "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
-                        "Be concise. Format as a bulleted list."
-                    )
-                    response = client.models.generate_content(
-                        model="gemini-2.0-flash",
-                        contents=[
-                            _types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
-                            prompt
-                        ]
-                    )
-                    return response.text.strip()
-                except Exception as e:
-                    return f"Screen capture failed: {e}"
-
-            try:
-                self.screen_context = await loop.run_in_executor(None, _blocking_capture)
-                self.ui.write_log("SYS: Screen state analyzed and updated.")
-                result = f"Screen context updated: {self.screen_context}"
-            except Exception as e:
-                result = f"Process failed: {e}"
-            
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(
-                id=fc.id, name=name,
-                response={"result": result}
-            )
-
-        loop   = asyncio.get_running_loop()
-        
-        if name == "browser_agent":
-            try:
-                from actions.browser_agent import browser_agent
-                result = await loop.run_in_executor(None, browser_agent, args)
-            except Exception as e:
-                result = f"Browser Agent failed: {e}"
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(
-                id=fc.id, name=name,
-                response={"result": result}
-            )
-
-        if name == "generate_image":
-            try:
-                from actions.image_generator import generate_image
-                result = await loop.run_in_executor(None, generate_image, args, self)
-            except Exception as e:
-                result = f"Image Generation failed: {e}"
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(
-                id=fc.id, name=name,
-                response={"result": result}
-            )
-
-        if name == "screen_vision":
-            try:
-                from actions.screen_vision import screen_vision
-                result = await loop.run_in_executor(None, screen_vision, args)
-            except Exception as e:
-                result = f"Screen Vision failed: {e}"
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
-
-        if name == "recall_memory":
-            try:
-                query = args.get("query")
-                k = args.get("k", 5)
-                from memory.semantic_memory import search_semantic_memory
-                memories = await loop.run_in_executor(None, lambda: search_semantic_memory(query, k))
-                if not memories:
-                    result = "No similar memories found, sir."
-                else:
-                    formatted = []
-                    for m in memories:
-                        formatted.append(f"[{m['timestamp']}] {m['text']}")
-                    result = "Found similar memories:\n" + "\n".join(formatted)
-            except Exception as e:
-                result = f"Recall failed: {e}"
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
-
-
-
-        if name == "research_mode":
-            try:
-                from actions.research_mode import research_mode
-                result = await loop.run_in_executor(None, research_mode, args)
-            except Exception as e:
-                result = f"Research Mode failed: {e}"
-            if not self.ui.muted:
-                self.ui.set_state("LISTENING")
-            return _lazy_genai()[1].FunctionResponse(id=fc.id, name=name, response={"result": result})
-
-        result = "Done."
-
-        # Self-healing retry loop
-        attempts = 0
-        max_attempts = 2
-        while attempts < max_attempts:
-            try:
-                if name == "open_app":
-                    from actions.open_app import open_app
-                    r = await loop.run_in_executor(None, lambda: open_app(parameters=args, response=None, player=self.ui))
-                    result = r or f"Opened {args.get('app_name')}."
-                    break # Success
-
-                elif name == "weather_report":
-                    from actions.weather_report import weather_action
-                    r = await loop.run_in_executor(None, lambda: weather_action(parameters=args, player=self.ui))
-                    result = r or "Weather delivered."
-                    break
-
-                elif name == "browser_control":
-                    from actions.browser_control import browser_control
-                    r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "file_manager":
-                    from actions.file_manager import file_manager
-                    r = await loop.run_in_executor(None, lambda: file_manager(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "send_message":
-                    from actions.send_message import send_message
-                    r = await loop.run_in_executor(None, lambda: send_message(parameters=args, response=None, player=self.ui, session_memory=None))
-                    result = r or f"Message sent to {args.get('receiver')}."
-                    break
-
-                elif name == "reminder":
-                    from actions.reminder import reminder
-                    r = await loop.run_in_executor(None, lambda: reminder(parameters=args, response=None, player=self.ui))
-                    result = r or "Reminder set."
-                    break
-
-                elif name == "youtube_video":
-                    from actions.youtube_video import youtube_video
-                    r = await loop.run_in_executor(None, lambda: youtube_video(parameters=args, response=None, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "screen_process":
-                    from actions.screen_processor import screen_process
-                    r = await loop.run_in_executor(
-                        None,
-                        lambda: screen_process(parameters=args, response=None, player=self.ui, session_memory=None)
-                    )
-                    result = "Vision module activated. Stay completely silent — vision module will speak directly."
-                    break
-
-                elif name == "computer_settings":
-                    from actions.computer_settings import computer_settings
-                    r = await loop.run_in_executor(None, lambda: computer_settings(parameters=args, response=None, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "cmd_control":
-                    from actions.cmd_control import cmd_control
-                    r = await loop.run_in_executor(None, lambda: cmd_control(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "desktop_control":
-                    from actions.desktop import desktop_control
-                    r = await loop.run_in_executor(None, lambda: desktop_control(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "code_helper":
-                    from actions.code_helper import code_helper
-                    r = await loop.run_in_executor(None, lambda: code_helper(parameters=args, player=self.ui, speak=self.speak))
-                    result = r or "Done."
-                    break
-
-                elif name == "dev_agent":
-                    from actions.dev_agent import dev_agent
-                    r = await loop.run_in_executor(None, lambda: dev_agent(parameters=args, player=self.ui, speak=self.speak))
-                    result = r or "Done."
-                    break
-
-                elif name == "agent_task":
-                    from agent.task_queue import get_queue, TaskPriority
-                    priority_map = {"low": TaskPriority.LOW, "normal": TaskPriority.NORMAL, "high": TaskPriority.HIGH}
-                    priority = priority_map.get(args.get("priority", "normal").lower(), TaskPriority.NORMAL)
-                    task_id  = get_queue().submit(goal=args.get("goal", ""), priority=priority, speak=self.speak)
-                    result   = f"Task started (ID: {task_id})."
-                    break
-
-                elif name == "web_search":
-                    from actions.web_search import web_search as web_search_action
-                    query = args.get("query")
-                    if query:
-                        self.ui.root.after(0, lambda: self.ui.open_browser_panel(query))
-                    r = await loop.run_in_executor(None, lambda: web_search_action(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "computer_control":
-                    from actions.computer_control import computer_control
-                    r = await loop.run_in_executor(None, lambda: computer_control(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "game_updater":
-                    from actions.game_updater import game_updater
-                    r = await loop.run_in_executor(None, lambda: game_updater(parameters=args, player=self.ui, speak=self.speak))
-                    result = r or "Done."
-                    break
-
-                elif name == "flight_finder":
-                    from actions.flight_finder import flight_finder
-                    r = await loop.run_in_executor(None, lambda: flight_finder(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "news_report":
-                    from actions.news import news_report
-                    r = await loop.run_in_executor(None, lambda: news_report(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "daily_briefing":
-                    from actions.daily_briefing import get_daily_briefing
-                    r = await loop.run_in_executor(None, lambda: get_daily_briefing(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                elif name == "workflow_chain":
-                    from actions.workflow_chains import workflow_chains
-                    r = await loop.run_in_executor(None, lambda: workflow_chains(parameters=args, player=self.ui))
-                    result = r or "Done."
-                    break
-
-                else:
-                    result = f"Unknown tool: {name}"
-                    break
-
-            except Exception as e:
-                attempts += 1
-                if attempts < max_attempts:
-                    print(f"[Self-Healing] [WARN] Attempt {attempts} failed for {name}: {e}. Retrying...")
-                    
-                    if name == "file_manager" and "path" in args:
-                        clean_path = args["path"].strip().strip("'\"").replace("\\\\", "\\")
-                        print(f"[Self-Healing] Cleaning path: '{args['path']}' -> '{clean_path}'")
-                        args["path"] = clean_path
-                        
-                    await asyncio.sleep(0.2)
-                    continue
-                
-                # Final failure
-                suggestion = FALLBACK_SUGGESTIONS.get(name, "Sir, something went wrong. Try another approach?")
-                error_str = str(e)
-                if isinstance(e, FileNotFoundError) or "No such file" in error_str:
-                    err_msg = f"File or directory not found: {args.get('path', '')}"
-                elif isinstance(e, PermissionError) or "Access is denied" in error_str:
-                    err_msg = f"Permission denied for path: {args.get('path', '')}"
-                elif isinstance(e, OSError) and ("Invalid argument" in error_str or "syntax" in error_str.lower()):
-                    err_msg = f"Invalid file path syntax: {args.get('path', '')}"
-                elif isinstance(e, ValueError):
-                    err_msg = error_str
-                else:
-                    err_msg = error_str
-                    
-                result = f"Error: {err_msg}\n[SUGGESTION]: {suggestion}"
-                traceback.print_exc()
-                self.speak_error(name, e)
-                break
-
-        if not self.ui.muted:
-            self.ui.set_state("LISTENING")
-
-        print(f"[JARVIS] Tool Result: {name} -> {str(result)[:80]}")
-
-        # ── Result: tek cümle söyle, dur ──────────────────────────────────────
-        return _lazy_genai()[1].FunctionResponse(
-            id=fc.id, name=name,
-            response={"result": result}
-        )
-
-    async def _send_realtime(self):
-        while True:
-            msg = await self.out_queue.get()
-            if getattr(self, "tool_call_pending", False):
-                continue  # Stop sending audio inputs while processing function responses to prevent 1008 policy violations
-            await self.session.send_realtime_input(media=msg)
-
-    async def _audio_detection_loop(self):
-        """Offloaded clap and wake word detection to prevent callback glitches."""
-        while True:
-            try:
-                indata = await self.detection_queue.get()
-                
-                with self._speaking_lock:
-                    jarvis_speaking = self._is_speaking
-
-                if jarvis_speaking:
-                    continue
-
-                # Clap Detection
-                if self.clap_enabled and self.detector:
-                    if self.detector.is_clap(indata):
-                        print("[JARVIS] Clap detected!")
-                        if self.ui.muted:
-                            self.ui.root.after(0, self.ui._toggle_mute)
-                        else:
-                            self.ui.write_log("SYS: Clap detected (Already active).")
-
-                # Wake Word Detection
-                if self.wake_word_enabled and self.wake_detector:
-                    if self.wake_detector.check(indata):
-                        print("[JARVIS] Wake word detected!")
-                        if self.ui.muted:
-                            self.ui.root.after(0, self.ui._toggle_mute)
-                        else:
-                            self.ui.write_log("SYS: Wake word detected (Already active).")
-            except Exception as e:
-                print(f"[JARVIS] Detection error: {e}")
-            finally:
-                self.detection_queue.task_done()
-
-    async def _listen_audio(self):
-        print("[JARVIS] Mic started")
-        loop = asyncio.get_event_loop()
-
-        def callback(indata, frames, time_info, status):
-            # Send to detection queue (offloaded)
-            if (self.clap_enabled or self.wake_word_enabled):
-                loop.call_soon_threadsafe(self.detection_queue.put_nowait, indata.copy())
-
-            with self._speaking_lock:
-                jarvis_speaking = self._is_speaking
-
-            if not jarvis_speaking and not self.ui.muted:
-                data = indata.tobytes()
-                loop.call_soon_threadsafe(
-                    self.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
-
-        while True:
-            try:
-                with _lazy_sd().InputStream(
-                    samplerate=SEND_SAMPLE_RATE,
-                    channels=CHANNELS,
-                    dtype="int16",
-                    blocksize=CHUNK_SIZE,
-                    callback=callback,
-                ):
-                    print("[JARVIS] Mic stream open")
-                    while True:
-                        await asyncio.sleep(0.5)
-            except Exception as e:
-                print(f"[JARVIS] Mic Error: {e}. Retrying in 5s...")
-                await asyncio.sleep(5)
 
     async def _receive_audio(self):
         print("[JARVIS] Recv started")
@@ -1434,11 +552,12 @@ class JarvisLive:
                             fn_responses = []
                             for fc in response.tool_call.function_calls:
                                 print(f"[JARVIS] Tool call: {fc.name}")
-                                fr = await self._execute_tool(fc)
+                                fr = await self.tool_executor.execute(fc)
                                 fn_responses.append(fr)
                             await self.session.send_tool_response(
                                 function_responses=fn_responses
                             )
+                            await asyncio.sleep(0.5)
                         finally:
                             self.tool_call_pending = False
                         # ── Boş turn YOK — bu "Anladım." sorununu yaratıyordu ──
@@ -1448,35 +567,6 @@ class JarvisLive:
             traceback.print_exc()
             raise
 
-    async def _play_audio(self):
-        print("[JARVIS] Play started")
-        loop = asyncio.get_event_loop()
-
-        # Sürekli açık output stream — PyAudio'daki stream.write() davranışıyla aynı
-        stream = _lazy_sd().RawOutputStream(
-            samplerate=RECEIVE_SAMPLE_RATE,
-            channels=CHANNELS,
-            dtype="int16",
-            blocksize=CHUNK_SIZE,
-        )
-        stream.start()
-        try:
-            while True:
-                chunk = await self.audio_in_queue.get()
-                self.set_speaking(True)
-                await asyncio.to_thread(stream.write, chunk)
-                # Debounced speaking state reset to prevent True/False flicker
-                if self.audio_in_queue.empty():
-                    await asyncio.sleep(0.15)
-                    if self.audio_in_queue.empty():
-                        self.set_speaking(False)
-        except Exception as e:
-            print(f"[JARVIS] Play error: {e}")
-            raise
-        finally:
-            self.set_speaking(False)
-            stream.stop()
-            stream.close()
 
     async def run(self):
         client = get_gemini_client()
@@ -1529,11 +619,11 @@ class JarvisLive:
                     # Connection established, reset backoff
                     retry_delay = 2
 
-                    tg.create_task(self._send_realtime())
-                    tg.create_task(self._listen_audio())
-                    tg.create_task(self._audio_detection_loop())
+                    tg.create_task(self.audio_engine.send_realtime_loop())
+                    tg.create_task(self.audio_engine.listen_loop())
+                    tg.create_task(self.audio_engine.detection_loop())
                     tg.create_task(self._receive_audio())
-                    tg.create_task(self._play_audio())
+                    tg.create_task(self.audio_engine.play_loop())
 
                     # Startup Briefing Trigger (Delayed for setup)
                     if first_run:

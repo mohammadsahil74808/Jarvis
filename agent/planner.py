@@ -4,8 +4,8 @@ import sys
 from pathlib import Path
 
 
-from core.config import get_api_key as _get_api_key, get_gemini_client, BASE_DIR
-from google.genai import types
+from core.config import get_api_key as _get_api_key, BASE_DIR
+from core.ai_router import get_ai_router
 
 
 PLANNER_PROMPT = """You are the planning module of MARK XXV, a personal AI assistant.
@@ -185,21 +185,18 @@ OUTPUT — return ONLY valid JSON, no markdown, no explanation, no code blocks:
 
 
 def create_plan(goal: str, context: str = "") -> dict:
-    client = get_gemini_client()
+    router = get_ai_router()
 
     user_input = f"Goal: {goal}"
     if context:
         user_input += f"\n\nContext: {context}"
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            config=types.GenerateContentConfig(
-                system_instruction=PLANNER_PROMPT
-            ),
-            contents=user_input
+        text = router.generate(
+            prompt=user_input,
+            system_instruction=PLANNER_PROMPT
         )
-        text     = response.text.strip()
+        text     = text.strip()
         text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
 
         plan = json.loads(text)
@@ -210,14 +207,11 @@ def create_plan(goal: str, context: str = "") -> dict:
         
         if len(plan.get("steps", [])) == 1 and has_multiple_actions:
             print(f"[Planner] [WARNING] Multi-action goal detected with only 1 step. Forcing regeneration...")
-            response = client.models.generate_content(
-                model="gemini-2.0-flash",
-                config=types.GenerateContentConfig(
-                    system_instruction=PLANNER_PROMPT + "\n\nCRITICAL: The user wants multiple distinct actions. You MUST provide at least 2 steps. Do NOT combine searching and saving."
-                ),
-                contents=user_input
+            text = router.generate(
+                prompt=user_input,
+                system_instruction=PLANNER_PROMPT + "\n\nCRITICAL: The user wants multiple distinct actions. You MUST provide at least 2 steps. Do NOT combine searching and saving."
             )
-            text = response.text.strip()
+            text = text.strip()
             text = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
             plan = json.loads(text)
 
@@ -307,14 +301,12 @@ Error: {error}
 Create a REVISED plan for the remaining work only. Do not repeat completed steps."""
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            config=types.GenerateContentConfig(
-                system_instruction=PLANNER_PROMPT
-            ),
-            contents=prompt
+        router = get_ai_router()
+        text = router.generate(
+            prompt=prompt,
+            system_instruction=PLANNER_PROMPT
         )
-        text     = response.text.strip()
+        text     = text.strip()
         text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
         plan     = json.loads(text)
 

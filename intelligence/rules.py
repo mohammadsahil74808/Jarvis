@@ -1,5 +1,6 @@
 # Rules for JARVIS Proactive Intelligence System
 import time
+from datetime import datetime
 
 class BaseRule:
     def __init__(self, rule_id: str, priority: int = 1):
@@ -100,6 +101,57 @@ class YouTubeDistractionRule(BaseRule):
                 }
         return None
 
+class CollegeCommuteRule(BaseRule):
+    def __init__(self):
+        super().__init__("college_commute", priority=8)
+
+    def evaluate(self, sys, ctx, history):
+        now = datetime.now()
+        # Monday-Saturday (0-5)
+        if now.weekday() < 6 and now.hour == 7 and 0 <= now.minute <= 30:
+            if history.get_cooldown(self.rule_id) > 43200: # 12 hours
+                # Simple weather placeholder, in a real system we'd call a weather tool
+                return {
+                    "text": "Sahil, aaj college jaana hai. Weather clear hai aur travel time lagbhag 35 mins rahega.",
+                    "action": None
+                }
+        return None
+
+class ProjectDeadlineRule(BaseRule):
+    def __init__(self):
+        super().__init__("project_deadline", priority=10)
+
+    def evaluate(self, sys, ctx, history):
+        # Efficiency: Use preloaded memory from context instead of disk I/O
+        mem_str = ctx.get("preloaded_memory", "").lower()
+        if not mem_str:
+            return None
+
+        if any(kw in mem_str for kw in ["deadline", "submit", "submission"]):
+            if history.get_cooldown(self.rule_id) > 86400: # Once a day
+                return {
+                    "text": "Sahil, aapka ek project deadline pass aa raha hai. Submission ka dhyan rakhiyega.",
+                    "action": None
+                }
+        return None
+
+class GuitarPracticeRule(BaseRule):
+    def __init__(self):
+        super().__init__("guitar_practice", priority=5)
+
+    def evaluate(self, sys, ctx, history):
+        now = datetime.now()
+        # Evening: 6 PM to 10 PM
+        if 18 <= now.hour <= 22:
+            # Check history for 'guitar' keyword in last 3 days
+            if history.get_cooldown(self.rule_id) > 259200: # 3 days
+                 # Check if user mentioned guitar recently (simple mock for now)
+                 return {
+                    "text": "Kaafi din se guitar nahi bajaya Sahil. Shaam ka waqt hai, thodi practice kar lo?",
+                    "action": None
+                }
+        return None
+
 def get_all_rules():
     return [
         HighUsageRule(),
@@ -107,6 +159,9 @@ def get_all_rules():
         BreakReminderRule(),
         CodingWorkflowRule(),
         InternetRule(),
-        YouTubeDistractionRule()
+        YouTubeDistractionRule(),
+        CollegeCommuteRule(),
+        ProjectDeadlineRule(),
+        GuitarPracticeRule()
     ]
 

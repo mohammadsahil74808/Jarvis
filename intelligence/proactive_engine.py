@@ -90,6 +90,9 @@ class ProactiveEngine:
         # 2. Get States
         sys_state = self.monitor.get_system_state()
         ctx_state = self.monitor.get_context_state()
+        
+        # Performance: Inject preloaded memory to avoid disk I/O in rules
+        ctx_state["preloaded_memory"] = getattr(self.jarvis, "_preloaded_memory", "")
 
         # 3. Collect Candidates
         candidates = []

@@ -61,16 +61,24 @@ class SemanticMemory:
         self._db_conn.commit()
 
     def _init_faiss(self):
+        # Check database count to ensure sync
+        cursor = self._db_conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM memories")
+        db_count = cursor.fetchone()[0]
+
         if INDEX_PATH.exists():
             try:
                 self._index = faiss.read_index(str(INDEX_PATH))
-                print(f"[SemanticMemory] FAISS index loaded ({self._index.ntotal} entries)")
-                return
+                if self._index.ntotal == db_count:
+                    print(f"[SemanticMemory] FAISS index loaded and synced ({self._index.ntotal} entries)")
+                    return
+                else:
+                    print(f"[SemanticMemory] FAISS index out of sync ({self._index.ntotal} index vs {db_count} db), rebuilding...")
             except Exception as e:
                 print(f"[SemanticMemory] FAISS load error: {e}, recreating...")
         
         self._index = faiss.IndexIDMap(faiss.IndexFlatL2(self._dimension))
-        # Rebuild index from DB if index was missing/corrupt but DB has data
+        # Rebuild index from DB if index was missing/corrupt or out of sync
         self._rebuild_from_db()
 
     def _rebuild_from_db(self):

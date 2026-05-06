@@ -39,6 +39,15 @@ class LocalRouter:
             (r"^open google$", self.open_google),
             (r"^search google for (.+)$", self.search_google),
             (r"^search youtube for (.+)$", self.search_youtube),
+
+            (r"^(play |open )?spotify$", self.open_spotify),
+            (r"^open vs\s?code$", self.open_vscode),
+            (r"^what('?s| is) my (ip|ip address)$", self.get_ip),
+            (r"^(show |open )?task manager$", self.open_taskmanager),
+            (r"^(empty|clear) recycle bin$", self.empty_recycle),
+            (r"^screenshot$", self.take_screenshot_fast),
+            (r"^(wifi|wi-fi) (on|off)$", self.toggle_wifi),
+            (r"^(close yourself|shut down jarvis|exit jarvis)$", self.close_jarvis),
         ]
 
     def route(self, command: str) -> bool:
@@ -192,6 +201,61 @@ class LocalRouter:
         encoded_query = urllib.parse.quote(query)
         webbrowser.open(f"https://www.youtube.com/results?search_query={encoded_query}")
         return f"YouTube par {query} open kar diya hai, sir."
+
+    def open_spotify(self, *args):
+        self._safe_start("spotify:")
+        return "Spotify open kar diya hai."
+
+    def open_vscode(self, *args):
+        self._safe_start("code")
+        return "VS Code open ho raha hai, sir."
+
+    def get_ip(self, *args):
+        import socket
+        try:
+            hostname = socket.gethostname()
+            local_ip = socket.gethostbyname(hostname)
+            return f"Sir, aapka local IP address {local_ip} hai."
+        except Exception:
+            return "Sir, IP address nahi mil pa raha hai."
+
+    def open_taskmanager(self, *args):
+        subprocess.Popen(["taskmgr"], shell=False)
+        return "Task Manager open kar diya hai."
+
+    def empty_recycle(self, *args):
+        subprocess.run(["powershell", "-Command", "Clear-RecycleBin -Confirm:$false"], 
+                       creationflags=subprocess.CREATE_NO_WINDOW)
+        return "Recycle Bin khali kar diya hai, sir."
+
+    def take_screenshot_fast(self, *args):
+        try:
+            import pyautogui
+            from datetime import datetime
+            path = f"screenshot_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+            pyautogui.screenshot().save(path)
+            return f"Screenshot capture ho gaya hai: {path}"
+        except Exception as e:
+            return f"Screenshot failed: {e}"
+
+    def toggle_wifi(self, *args):
+        # _, state
+        state = args[1].lower() if len(args) > 1 else ""
+        status = "ENABLED" if state == "on" else "DISABLED"
+        try:
+            # Note: This might require admin privileges on some systems
+            subprocess.run(["netsh", "interface", "set", "interface", "name=Wi-Fi", f"admin={status}"], 
+                           creationflags=subprocess.CREATE_NO_WINDOW)
+            return f"Wi-Fi {state} kar diya hai, sir."
+        except Exception as e:
+            return f"Wi-Fi toggle failed: {e}"
+
+    def close_jarvis(self, *args):
+        if self.jarvis and hasattr(self.jarvis, "ui"):
+            self.jarvis.ui.write_log("SYS: Shutting down JARVIS. Goodbye, sir.")
+            # Trigger UI destruction in main thread
+            self.jarvis.ui.root.after(1000, self.jarvis.ui.root.destroy)
+        return "Goodbye, sir. Shutting down."
 
 _global_router = None
 def route_command(command: str, jarvis_instance=None) -> bool:

@@ -75,6 +75,10 @@ def get_huggingface_api_key() -> str:
     """Helper to retrieve the Hugging Face API key."""
     return get_config().get("huggingface_api_key", "")
 
+def get_openrouter_api_key() -> str:
+    """Helper to retrieve the OpenRouter API key."""
+    return get_config().get("openrouter_api_key", "")
+
 def get_desktop_path() -> Path:
     """Returns a reliable path to the user's Desktop, handling OneDrive redirection."""
     # 1. Try winshell (Best for Windows)
