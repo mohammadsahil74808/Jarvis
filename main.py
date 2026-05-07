@@ -14,6 +14,7 @@ from core.config import (
     LIVE_MODEL, CHANNELS, SEND_SAMPLE_RATE,
     RECEIVE_SAMPLE_RATE, CHUNK_SIZE
 )
+from google.genai import types
 # Heavy memory imports deferred to runtime
 from core.utils import retry, async_retry
 
@@ -37,7 +38,6 @@ def _lazy_proactive():
 
 def _lazy_genai():
     from google import genai
-    from google.genai import types
     return genai, types
 
 
@@ -397,7 +397,7 @@ class JarvisLive:
         """Helper to get consolidated user profile context."""
         return self.personal_context.get_context_summary()
 
-    def _build_config(self) -> "types.LiveConnectConfig":
+    def _build_config(self) -> types.LiveConnectConfig:
         if not self._config_dirty and self._cached_config:
             return self._cached_config
 
