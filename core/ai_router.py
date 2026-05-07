@@ -30,6 +30,10 @@ class AIRouter:
         """
         Attempts to generate a response using models in priority order.
         """
+        # Refresh API keys dynamically
+        self.openrouter_key = get_config().get("openrouter_api_key", "")
+        self.gemini_key     = get_api_key()
+
         for model_info in self.models:
             provider = model_info["provider"]
             model_id = model_info["id"]
@@ -73,7 +77,7 @@ class AIRouter:
 
         for i in range(retries):
             try:
-                response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=30)
+                response = requests.post(url, headers=headers, json=payload, timeout=30)
                 
                 if response.status_code == 200:
                     data = response.json()

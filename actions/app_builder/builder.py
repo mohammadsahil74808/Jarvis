@@ -17,8 +17,12 @@ _engine: Optional[FlutterEngine] = None
 
 def _get_engine(log_cb: Callable = None, widget = None) -> FlutterEngine:
     global _engine
-    if _engine is None or log_cb is not None or widget is not None:
-        _engine = FlutterEngine(log_callback=log_cb, widget=widget)
+    if _engine is not None:
+        try:
+            _engine.stop_dev_server()
+        except Exception:
+            pass
+    _engine = FlutterEngine(log_callback=log_cb, widget=widget)
     return _engine
 
 
@@ -60,7 +64,7 @@ def build_mobile_app(
     log(f"Plan: {plan.app_name} | {plan.app_type} | {plan.get_arch()['name']}")
 
     # Step 2: Clarification check
-    intent    = brain.analyze_intent(user_prompt)
+    intent    = getattr(brain, '_last_intent', {})
     questions = brain.get_clarification_questions(intent)
     if questions and intent.get("confidence", 100) < 70 and not clarification_answers:
         q_text = "\n".join(f"{i+1}. {q}" for i, q in enumerate(questions))

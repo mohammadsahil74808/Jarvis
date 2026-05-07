@@ -136,7 +136,7 @@ class JarvisLive:
         self._speaking_lock = threading.Lock()
         from agent.tool_executor import ToolExecutor
         from core.audio_engine import AudioEngine
-        self.tool_executor  = ToolExecutor(self)
+        self.tool_executor  = ToolExecutor(self, widgets_ok=_WIDGETS_OK)
         self.audio_engine   = AudioEngine(self)
         self.ui.on_text_command = self._on_text_command
 
@@ -488,7 +488,7 @@ class JarvisLive:
             speech_config=_types.SpeechConfig(
                 voice_config=_types.VoiceConfig(
                     prebuilt_voice_config=_types.PrebuiltVoiceConfig(
-                        voice_name="Charon"
+                        voice_name="Charon"
                     )
                 )
             ),

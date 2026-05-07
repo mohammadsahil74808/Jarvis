@@ -158,6 +158,7 @@ class WebsiteBrain:
 
     def __init__(self):
         self.router = get_ai_router()
+        self._last_intent = {}
 
     def _call(self, prompt: str, json_mode: bool = True) -> str:
         text = self.router.generate(prompt)
@@ -208,7 +209,9 @@ Rules:
 
         raw = self._call(prompt)
         try:
-            return json.loads(raw)
+            intent = json.loads(raw)
+            self._last_intent = intent
+            return intent
         except json.JSONDecodeError:
             # Emergency fallback
             return {
@@ -233,6 +236,8 @@ Rules:
                 "missing_info":    [],
                 "confidence":      60,
             }
+            self._last_intent = intent
+            return intent
 
     # ─────────────────────────────────────────────────────────
     def generate_clarification_questions(self, intent: dict) -> list[str]:

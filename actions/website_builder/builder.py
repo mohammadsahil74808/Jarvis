@@ -20,8 +20,12 @@ _engine: Optional[WebsiteEngine] = None
 
 def _get_engine(log_cb: Callable = None, widget = None) -> WebsiteEngine:
     global _engine
-    if _engine is None or log_cb is not None or widget is not None:
-        _engine = WebsiteEngine(log_callback=log_cb, widget=widget)
+    if _engine is not None:
+        try:
+            _engine.stop_dev_server()
+        except Exception:
+            pass
+    _engine = WebsiteEngine(log_callback=log_cb, widget=widget)
     return _engine
 
 
@@ -70,7 +74,7 @@ def build_website(
     log(f"Sections: {', '.join(plan.sections)}")
 
     # ── Step 2: Check if clarification needed ─────────────────
-    intent     = brain.analyze_intent(user_prompt)
+    intent     = getattr(brain, '_last_intent', {})
     questions  = brain.generate_clarification_questions(intent)
     confidence = intent.get("confidence", 100)
 

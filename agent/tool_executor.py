@@ -17,8 +17,9 @@ def _get_genai():
     return _genai_cache
 
 class ToolExecutor:
-    def __init__(self, jarvis):
+    def __init__(self, jarvis, widgets_ok=False):
         self.jarvis = jarvis
+        self._widgets_ok = widgets_ok
         
         # Fallback suggestions map
         self.FALLBACK_SUGGESTIONS = {
@@ -266,14 +267,13 @@ class ToolExecutor:
         return types.FunctionResponse(id=fc.id, name=fc.name, response={"result": result})
 
     async def _handle_research_mode(self, fc, args, loop):
-        from main import _WIDGETS_OK  # Note: Circular import might be an issue, we'll fix later if needed
         try:
             from ui.deep_research_widget import DeepResearchWidget
         except ImportError:
-            _WIDGETS_OK = False
+            self._widgets_ok = False
             
         _rw = None
-        if _WIDGETS_OK:
+        if self._widgets_ok:
             try:
                 _rw = DeepResearchWidget.launch(
                     self.jarvis.ui.root, args.get("query", ""))
@@ -308,12 +308,11 @@ class ToolExecutor:
         return types.FunctionResponse(id=fc.id, name=fc.name, response={"result": result})
 
     async def _execute_standard_tool(self, fc, name, args, loop):
-        from main import _WIDGETS_OK
         try:
             from ui.file_search_widget import FileSearchWidget
             from ui.web_search_widget import WebSearchWidget
         except ImportError:
-            _WIDGETS_OK = False
+            self._widgets_ok = False
 
         result = "Done."
         attempts = 0
@@ -342,7 +341,7 @@ class ToolExecutor:
                     from actions.file_manager import file_manager
                     _fmw = None
                     _fm_act = args.get("action", "")
-                    if _WIDGETS_OK and _fm_act in ("find", "search", "deep_search"):
+                    if self._widgets_ok and _fm_act in ("find", "search", "deep_search"):
                         _fm_q = args.get("query") or args.get("name") or ""
                         try:
                             _fmw = FileSearchWidget.launch(
@@ -430,7 +429,7 @@ class ToolExecutor:
                     tmpl_name   = args.get("use_template", "")
 
                     _wbw = None
-                    if _WIDGETS_OK:
+                    if self._widgets_ok:
                         from ui.build_widget import BuildWidget
                         _wbw = BuildWidget.launch(self.jarvis.ui.root, "WEBSITE", prompt or tmpl_name or "New Site")
 
@@ -483,7 +482,7 @@ class ToolExecutor:
                     do_apk    = args.get("build_apk", False)
 
                     _abw = None
-                    if _WIDGETS_OK:
+                    if self._widgets_ok:
                         from ui.build_widget import BuildWidget
                         _abw = BuildWidget.launch(self.jarvis.ui.root, "MOBILE APP", prompt or tmpl_name or "New App")
 
@@ -527,7 +526,7 @@ class ToolExecutor:
                     from actions.web_search import web_search as web_search_action
                     query = args.get("query", "")
                     _wsw = None
-                    if _WIDGETS_OK and query:
+                    if self._widgets_ok and query:
                         try:
                             _wsw = WebSearchWidget.launch(self.jarvis.ui.root, query)
                         except Exception as _e:

@@ -41,9 +41,21 @@ class CodeGenerator:
         stack  = plan.get_stack()
         deps   = stack.get("deps", [])
         dev    = stack.get("dev_deps", [])
+        PINNED_VERSIONS = {
+            'next': '^14.2.0',
+            'react': '^18.3.0',
+            'react-dom': '^18.3.0',
+            'tailwindcss': '^3.4.0',
+            'framer-motion': '^11.0.0',
+            'lucide-react': '^0.400.0',
+            'three': '^0.165.0',
+            '@react-three/fiber': '^8.16.0',
+            '@react-three/drei': '^9.105.0',
+            'vite': '^5.3.0'
+        }
 
-        deps_obj   = {d: "latest" for d in deps}
-        dev_obj    = {d: "latest" for d in dev}
+        deps_obj   = {d: PINNED_VERSIONS.get(d, "latest") for d in deps}
+        dev_obj    = {d: PINNED_VERSIONS.get(d, "latest") for d in dev}
 
         framework  = stack["framework"]
         name_slug  = re.sub(r"[^a-z0-9-]", "-", plan.site_name.lower())

@@ -31,9 +31,9 @@ def _run(cmd: list[str], cwd: Path, timeout: int = 300,
          env: dict = None) -> tuple[int, str, str]:
     merged = {**os.environ, **(env or {})}
     try:
-        r = subprocess.run(" ".join(cmd) if isinstance(cmd, list) else cmd,
+        r = subprocess.run(cmd,
                            cwd=str(cwd), capture_output=True,
-                           text=True, timeout=timeout, env=merged, shell=True)
+                           text=True, timeout=timeout, env=merged, shell=False)
         return r.returncode, r.stdout, r.stderr
     except subprocess.TimeoutExpired:
         return -1, "", "Timeout"
@@ -119,7 +119,7 @@ class FlutterEngine:
 
         # Open in VS Code immediately so user can see it
         try:
-            subprocess.run(["code", str(proj_dir)], shell=True)
+            subprocess.run(["code", str(proj_dir)], shell=False)
             self.log("Opening VS Code for real-time visualization...", "OK")
         except Exception:
             pass
@@ -413,13 +413,13 @@ Return ONLY the complete fixed Dart file. No markdown. No explanations."""
         # Launch in background (non-blocking)
         env = {**os.environ}
         try:
-            cmd = f"{self._flutter_path} run --device-id={target} --debug"
+            cmd_list = [self._flutter_path, "run", f"--device-id={target}", "--debug"]
             self._run_proc = subprocess.Popen(
-                cmd, cwd=str(proj_dir),
+                cmd_list, cwd=str(proj_dir),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
-                shell=True
+                shell=False
             )
             return (
                 f"App launching on: {device_name}\n"
@@ -430,6 +430,20 @@ Return ONLY the complete fixed Dart file. No markdown. No explanations."""
             )
         except Exception as e:
             return f"Launch failed: {e}\n\n{self._manual_run_instructions(proj_dir, plan)}"
+
+    def stop_dev_server(self):
+        """Stop the running app process."""
+        if hasattr(self, "_run_proc") and self._run_proc:
+            try:
+                if os.name == "nt":
+                    import subprocess
+                    subprocess.run(["taskkill", "/F", "/T", "/PID", str(self._run_proc.pid)], capture_output=True)
+                else:
+                    os.killpg(os.getpgid(self._run_proc.pid), 15)
+                self._run_proc = None
+                self.log("App process stopped")
+            except Exception as e:
+                self.log(f"Stop app error: {e}", "WARN")
 
     def _manual_run_instructions(self, proj_dir: Path,
                                   plan: AppPlan) -> str:

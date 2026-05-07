@@ -76,12 +76,20 @@ def research_mode(parameters: dict, **kwargs) -> str:
     if not valid_articles:
         return f"I found the links, but I couldn't access their content, sir. Try searching manually for: {urls[0]}"
 
+    MAX_RESPONSE = 2500
+
     if action == "research":
         report = [f"### Research Report: {query} ({mode.upper()})\n"]
         for i, a in enumerate(valid_articles, 1):
             report.append(f"**[{i}] {a['title']}**\nURL: {a['url']}\n{a['text'][:1000]}...\n")
-        return "\n".join(report)
+        full_report = "\n".join(report)
+        if len(full_report) > MAX_RESPONSE:
+            return full_report[:MAX_RESPONSE] + "\n\n[TRUNCATED FOR LIVE SESSION STABILITY]"
+        return full_report
 
     # For summarize/compare, we return larger snippets for the AI to process
-    return f"Gathered Research Data ({len(valid_articles)} sources):\n\n" + \
+    full_data = f"Gathered Research Data ({len(valid_articles)} sources):\n\n" + \
            "\n\n".join([f"SOURCE: {a['title']}\nTEXT: {a['text'][:3000]}" for a in valid_articles])
+    if len(full_data) > MAX_RESPONSE:
+        return full_data[:MAX_RESPONSE] + "\n\n[TRUNCATED FOR LIVE SESSION STABILITY]"
+    return full_data

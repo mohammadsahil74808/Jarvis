@@ -37,8 +37,8 @@ def _run(cmd: list[str], cwd: Path, timeout: int = 300,
     merged_env = {**os.environ, **(env or {})}
     try:
         result = subprocess.run(
-            " ".join(cmd), cwd=str(cwd), capture_output=True,
-            text=True, timeout=timeout, env=merged_env, shell=True
+            cmd, cwd=str(cwd), capture_output=True,
+            text=True, timeout=timeout, env=merged_env, shell=False
         )
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
@@ -89,7 +89,7 @@ class WebsiteEngine:
         
         # Open in VS Code immediately so user can see it
         try:
-            subprocess.run(["code", str(proj_dir)], shell=True)
+            subprocess.run(["code", str(proj_dir)], shell=False)
             self.log("Opening VS Code for real-time visualization...", "OK")
         except Exception:
             pass
@@ -355,7 +355,7 @@ Return ONLY the complete fixed file content. No markdown fences. No explanations
             stderr=subprocess.PIPE,
             env=env,
             text=True,
-            shell=True
+            shell=False
         )
 
         # Wait for server to be ready

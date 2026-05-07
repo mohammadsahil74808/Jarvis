@@ -1,4 +1,5 @@
 import subprocess
+import shlex
 import sys
 import json
 import re
@@ -331,7 +332,7 @@ def _run_project(run_command: str, project_dir: Path, timeout: int = 30) -> str:
             return f"Could not preview web project: {e}"
 
     try:
-        parts = run_command.split()
+        parts = shlex.split(run_command)
         if parts[0].lower() == "python":
             parts[0] = sys.executable
 
