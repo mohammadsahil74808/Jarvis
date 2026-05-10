@@ -181,19 +181,23 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "generate_image",
-        "description": (
-            "Generates an AI image based on a prompt. "
-            "Use for: 'make an image', 'generate wallpaper', 'create photo', etc. "
-            "Automatically saves and opens the image for the user."
-        ),
+        "description": "Generate an AI image for free using Pollinations or FLUX. No paid API needed. Use when user wants to create, generate, or make an image or picture.",
         "parameters": {
-            "type": "OBJECT",
+            "type": "object",
             "properties": {
-                "prompt_text": {"type": "STRING", "description": "Descriptive prompt for the image"}
+                "prompt": {
+                    "type": "string",
+                    "description": "Detailed description of the image to generate"
+                },
+                "save_path": {
+                    "type": "string",
+                    "description": "Where to save the image (optional — saves to Desktop by default)"
+                }
             },
-            "required": ["prompt_text"]
+            "required": ["prompt"]
         }
     },
+
     {
         "name": "browser_control",
         "description": (
@@ -554,4 +558,51 @@ TOOL_DECLARATIONS = [
             "required": ["confirm"]
         }
     },
+    {
+        "name": "image_cluster",
+        "description": "Organize photos by face or visual similarity.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "mode": {"type": "string", "enum": ["face", "similarity"]},
+                "source_folder": {"type": "string"},
+                "output_folder": {"type": "string"},
+                "dry_run": {"type": "boolean"}
+            },
+            "required": ["mode", "source_folder"]
+        }
+    },
+    {
+        "name": "cursor_agent",
+        "description": "Cursor/Windsurf-style AI coding agent. Reads code files, makes changes using AI, runs and auto-tests. Fixes errors in a loop until working. Use when user wants to edit, fix, or add features to code.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "task": {
+                    "type": "string",
+                    "description": "What change to make — e.g. add dark mode, fix bugs, add error handling"
+                },
+                "files": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "List of file paths to edit"
+                },
+                "project_dir": {
+                    "type": "string",
+                    "description": "Project folder — agent finds all files automatically"
+                },
+                "run_after": {
+                    "type": "boolean",
+                    "description": "Run and auto-test after editing"
+                },
+                "main_file": {
+                    "type": "string",
+                    "description": "File to run for testing"
+                }
+            },
+            "required": ["task"]
+        }
+    }
 ]
+
+

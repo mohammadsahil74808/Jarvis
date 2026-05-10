@@ -586,6 +586,11 @@ class JarvisUI:
             self.set_state("LISTENING")
             self.write_log("SYS: Microphone active.")
 
+    def set_mute(self, is_muted: bool):
+        """Explicitly set the mute state."""
+        if self.muted != is_muted:
+            self._toggle_mute()
+
     def _build_input_bar(self, lw: int, y: int):
         x0    = (self.W - lw) // 2
         BTN_W = 70

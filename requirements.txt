@@ -30,3 +30,16 @@ python-docx
 newspaper3k
 together
 python-dotenv
+pynput
+webrtcvad
+openai-whisper
+torch
+torchaudio
+torchvision
+deepface
+scikit-learn
+tensorflow
+imutils
+flask
+flask-socketio
+

@@ -71,8 +71,6 @@ class ToolExecutor:
         if name == "browser_agent":
             return await self._handle_browser_agent(fc, args, loop)
             
-        if name == "generate_image":
-            return await self._handle_generate_image(fc, args, loop)
             
         if name == "screen_vision":
             return await self._handle_screen_vision(fc, args, loop)
@@ -576,9 +574,44 @@ class ToolExecutor:
                     result = r or "Done."
                     break
 
+                elif name == "image_cluster":
+                    from actions.image_cluster import image_cluster
+                    result = await loop.run_in_executor(
+                        None, lambda: image_cluster(parameters=args, player=self.jarvis.ui))
+                    break
+
+                elif name == "cursor_agent":
+                    from actions.cursor_agent import cursor_agent
+                    result = await loop.run_in_executor(
+                        None, lambda: cursor_agent(parameters=args, player=self.jarvis.ui))
+                    break
+
+                elif name == "generate_image":
+                    from core.ai_router import get_ai_router
+                    router = get_ai_router()
+                    image_prompt = args.get("prompt", args.get("prompt_text", ""))
+                    save_path    = args.get("save_path", "")
+                    path = await loop.run_in_executor(
+                        None, lambda: router.generate_image(
+                            prompt=image_prompt,
+                            save_path=save_path or None
+                        ))
+                    if path and ("/" in path or "\\" in path):
+                        import os
+                        try:
+                            os.startfile(path)
+                        except Exception as e:
+                            print(f"[JARVIS] Image open failed: {e}")
+                        result = f"Image banaya aur khol diya: {path}"
+                    else:
+                        result = path or "Image generation failed."
+                    break
+
+
                 else:
                     result = f"Unknown tool: {name}"
                     break
+
 
             except Exception as e:
                 attempts += 1

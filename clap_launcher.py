@@ -6,6 +6,8 @@ import numpy as np
 import sounddevice as sd
 import psutil
 import threading
+import socket
+from pynput import keyboard
 from pathlib import Path
 
 # --- Configuration ---
@@ -25,6 +27,16 @@ class ClapLauncher:
         self.assistant_is_running_cached = False
         self.clap_detected = threading.Event()
         
+        # --- Shift Trigger Config ---
+        self.last_shift_time = 0
+        self.last_trigger_time = 0
+        self.shift_cooldown = 2.0  # Seconds between successful activations
+        self.shift_pressed = False
+        
+        # Start Shift Listener
+        self.kb_listener = keyboard.Listener(on_press=self._on_press, on_release=self._on_release)
+        self.kb_listener.start()
+
         # Start a background thread to check process status
         self.monitor_thread = threading.Thread(target=self._monitor_process, daemon=True)
         self.monitor_thread.start()
@@ -45,6 +57,51 @@ class ClapLauncher:
             except (psutil.NoSuchProcess, psutil.AccessDenied, psutil.ZombieProcess):
                 continue
         return False
+
+    def _on_press(self, key):
+        """Keyboard press handler for Shift detection."""
+        if key == keyboard.Key.shift:
+            if not self.shift_pressed:
+                self.shift_pressed = True
+                now = time.time()
+                
+                # Check for 2.0s trigger cooldown
+                if now - self.last_trigger_time < self.shift_cooldown:
+                    return
+
+                # Check for double tap window (400ms)
+                if now - self.last_shift_time < 0.4:
+                    print(f"[Launcher] ⌨️ Double Shift detected!")
+                    self.last_trigger_time = now
+                    self.last_shift_time = 0 # Avoid triple shift
+                    self.activate_assistant()
+                else:
+                    self.last_shift_time = now
+
+    def _on_release(self, key):
+        """Keyboard release handler."""
+        if key == keyboard.Key.shift:
+            self.shift_pressed = False
+
+    def activate_assistant(self):
+        """Main entry point for any trigger (Clap or Key)."""
+        # Refresh process check immediately
+        is_running = self.is_assistant_running()
+        
+        if not is_running:
+            self.launch_assistant()
+        else:
+            print("[Launcher] 🔔 JARVIS is already running. Signaling Wake...")
+            self.send_wake_signal()
+
+    def send_wake_signal(self):
+        """Sends UDP packet to main.py to wake it up."""
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.sendto(b"WAKE", ("127.0.0.1", 9999))
+            sock.close()
+        except Exception as e:
+            print(f"[Launcher] ❌ Signal Error: {e}")
 
     def launch_assistant(self):
         """Launches main.py in a separate process."""
@@ -76,7 +133,8 @@ class ClapLauncher:
                     if not self.assistant_is_running_cached:
                         self.launch_assistant()
                     else:
-                        print("[Launcher] ℹ️ JARVIS is already running. Skipping launch.")
+                        print("[Launcher] ℹ️ JARVIS is already running. Signaling Wake via Clap...")
+                        self.send_wake_signal()
 
     def run(self):
         print(f"[Launcher] 👂 System Monitoring Active. Waiting for clap...")

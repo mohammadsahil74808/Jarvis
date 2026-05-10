@@ -4,6 +4,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 import json
 import sys
+import socket
 import traceback
 from pathlib import Path
 
@@ -148,10 +149,21 @@ class JarvisLive:
         # Clap Activation
         config = _get_config()
         self.clap_enabled = config.get("clap_activation", False)
+        
+        from core.whisper_fallback import WhisperFallback
+        self.whisper_fb = WhisperFallback(model_size="base.en")
+        threading.Thread(target=self.whisper_fb.warm_up, daemon=True).start()
+
         if self.clap_enabled:
             try:
-                from core.clap_detector import ClapDetector
-                self.detector = ClapDetector()
+                try:
+                    from core.clap_detector_ml import MLClapDetector
+                    self.detector = MLClapDetector()
+                except Exception as e:
+                    print(f"[JARVIS] ML clap fallback: {e}")
+                    from core.clap_detector import ClapDetector
+                    self.detector = ClapDetector()
+
             except Exception as e:
                 print(f"[JARVIS] ClapDetector failed: {e}")
                 self.detector = None
@@ -201,6 +213,46 @@ class JarvisLive:
 
         # Delayed Initialization (Lazy Mode)
         self.ui.root.after(5000, self._background_lazy_init)
+
+        # Start UDP Wake Listener
+        self._start_udp_listener()
+
+    def _start_udp_listener(self):
+        """Listens for 'WAKE' signals from clap_launcher.py"""
+        def _listen():
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            try:
+                sock.bind(("127.0.0.1", 9999))
+                print("[JARVIS] UDP Wake Listener active on port 9999")
+                while True:
+                    data, addr = sock.recvfrom(1024)
+                    if data.decode("utf-8") == "WAKE":
+                        print("[JARVIS] 🔔 Wake signal received!")
+                        self.ui.root.after(0, self._handle_wake)
+            except Exception as e:
+                print(f"[JARVIS] UDP Listener error: {e}")
+            finally:
+                sock.close()
+        
+        threading.Thread(target=_listen, daemon=True).start()
+
+    def _handle_wake(self):
+        """Logic to execute when double shift is pressed"""
+        try:
+            # 1. Restore and Focus Window
+            self.ui.root.deiconify()
+            self.ui.root.lift()
+            self.ui.root.focus_force()
+            
+            # 2. Ensure Un-muted
+            self.ui.set_mute(False)
+            
+            # 3. Local Confirmation
+            from core.utils import speak_local
+            speak_local("At your service, sir.")
+            self.ui.write_log("SYS: Global activation triggered.")
+        except Exception as e:
+            print(f"[JARVIS] Wake handle error: {e}")
 
     @property
     def profile_manager(self):
