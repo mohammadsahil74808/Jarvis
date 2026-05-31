@@ -20,7 +20,7 @@ win10toast
 send2trash
 youtube-transcript-api
 pywinauto
-vosk
+openwakeword
 yt-dlp
 pytesseract
 faiss-cpu
@@ -33,6 +33,7 @@ python-dotenv
 pynput
 webrtcvad
 openai-whisper
+faster-whisper
 torch
 torchaudio
 torchvision

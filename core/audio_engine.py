@@ -64,11 +64,19 @@ class AudioEngine:
             return  # Gemini is online — don't intercept
 
         # Gemini offline → transcribe locally
-        if hasattr(self.jarvis, "whisper_fb") and self.jarvis.whisper_fb.is_ready:
-            text = self.jarvis.whisper_fb.transcribe(audio_numpy)
-            if text and text.strip():
-                print(f"[AudioEngine] Whisper: '{text}'")
-                self.jarvis._on_text_command(text)
+        model = getattr(self.jarvis, "whisper_fb", None)
+        if model is not None:
+            try:
+                import numpy as np
+                # Convert int16 [-32768, 32767] → float32 [-1.0, 1.0] for faster-whisper
+                audio_f32 = audio_numpy.astype(np.float32) / 32768.0
+                segments, _ = model.transcribe(audio_f32, beam_size=1, vad_filter=True)
+                text = "".join(s.text for s in segments).strip()
+                if text:
+                    print(f"[AudioEngine] Faster-Whisper: '{text}'")
+                    self.jarvis._on_text_command(text)
+            except Exception as e:
+                print(f"[AudioEngine] Faster-Whisper error: {e}")
 
     # ─────────────────────────────────────────────────────────
     async def send_realtime_loop(self):

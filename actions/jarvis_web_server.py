@@ -283,15 +283,17 @@ def start_web_server(jarvis_instance, port: int = 5001) -> None:
         try:
             audio_bytes = base64.b64decode(data)
 
-            # Route through Whisper fallback transcription
-            if (_jarvis_ref is not None
-                    and hasattr(_jarvis_ref, "whisper_fb")
-                    and _jarvis_ref.whisper_fb.is_ready):
+            # Route through Faster-Whisper transcription
+            model = getattr(_jarvis_ref, "whisper_fb", None)
+            if _jarvis_ref is not None and model is not None:
                 import numpy as np
                 # base64 WAV → skip 44-byte WAV header → int16 numpy
                 raw_pcm = audio_bytes[44:]
-                audio   = np.frombuffer(raw_pcm, dtype=np.int16)
-                text    = _jarvis_ref.whisper_fb.transcribe(audio)
+                audio_int16 = np.frombuffer(raw_pcm, dtype=np.int16)
+                # Convert to float32 for faster-whisper
+                audio_f32 = audio_int16.astype(np.float32) / 32768.0
+                segments, _ = model.transcribe(audio_f32, beam_size=1, vad_filter=True)
+                text = "".join(s.text for s in segments).strip()
 
                 if text and text.strip():
                     emit("transcription", text)

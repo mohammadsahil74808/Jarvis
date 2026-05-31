@@ -141,8 +141,8 @@ class JarvisLive:
         # ── Clap Activation ────────────────────────────────────────────
         self.clap_enabled = config.get("clap_activation", False)
 
-        # ── FIX 1: Whisper NOT loaded at startup — only when Gemini drops ──
-        self.whisper_fb = None   # Lazy-init in audio_engine._on_vad_speech_end()
+        # ── Whisper Offline Fallback (faster-whisper) ──────────────────
+        self.whisper_fb = None
 
         if self.clap_enabled:
             try:
@@ -262,6 +262,18 @@ class JarvisLive:
     def _background_lazy_init(self):
         config = _get_config()
 
+        def _load_whisper():
+            try:
+                print("[JARVIS] Loading Faster-Whisper base.en model in background...")
+                from faster_whisper import WhisperModel
+                # Load on CPU with int8 quantization for high speed and low memory usage
+                model = WhisperModel("base.en", device="cpu", compute_type="int8")
+                self.whisper_fb = model
+                print("[JARVIS] ✓ Faster-Whisper base.en model loaded and ready.")
+            except Exception as e:
+                print(f"[JARVIS] ⚠️ Faster-Whisper load failed: {e}")
+        threading.Thread(target=_load_whisper, daemon=True).start()
+
         def _load_predictive():
             try:
                 from core.usage_tracker import UsageTracker
@@ -349,11 +361,10 @@ class JarvisLive:
         self.ui.write_log(text)
 
     def _load_wake_detector(self):
-        model_path = str(BASE_DIR / "models" / "vosk-model")
         try:
             from core.wake_detector import WakeWordDetector
-            self.wake_detector = WakeWordDetector(model_path)
-            self.ui.write_log("SYS: Wake word system ready hai.")
+            self.wake_detector = WakeWordDetector()
+            self.ui.write_log("SYS: openWakeWord system ready hai.")
         except Exception as e:
             print(f"[JARVIS] ⚠️ WakeWord: {e}")
             self.wake_word_enabled = False
