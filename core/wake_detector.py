@@ -45,13 +45,16 @@ class WakeWordDetector:
 
         self.buffer.extend(flat)
 
+        # Safety constraint: keep buffer under 4,800 samples (300ms) to prevent build-up lag
+        if len(self.buffer) > 4800:
+            self.buffer = self.buffer[-4800:]
+
         detected = False
-        # Process in chunks of 1280 samples (80ms at 16kHz)
+        # Process in overlapping sliding windows of 1280 samples (80ms) with step of 320 samples (20ms)
+        step_size = 320
         while len(self.buffer) >= 1280:
             chunk = np.array(self.buffer[:1280], dtype=np.int16)
-            # Advance the list buffer
-            self.buffer = self.buffer[1280:]
-
+            
             # Get predictions
             prediction = self.oww.predict(chunk)
             score = prediction.get(self.keyword, 0.0)
@@ -61,5 +64,8 @@ class WakeWordDetector:
                 detected = True
                 self.buffer = []  # Reset buffer to avoid multi-trigger feedback
                 break
+
+            # Slide window forward
+            self.buffer = self.buffer[step_size:]
 
         return detected

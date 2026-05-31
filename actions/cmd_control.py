@@ -103,6 +103,45 @@ def _is_safe(command: str) -> tuple[bool, str]:
     for p in BLOCKED:
         if re.search(p, command, re.IGNORECASE):
             return False, f"Prohibited pattern: {p}"
+
+    # Check if command matches predefined list
+    normalized = command.strip().lower()
+    is_predefined = False
+    for keywords, cmd, _ in WIN_COMMAND_MAP:
+        if cmd.strip().lower() == normalized:
+            is_predefined = True
+            break
+
+    if not is_predefined:
+        # Strict quote-aware scanner to block command chaining operators outside quotes
+        in_dquote = False
+        in_squote = False
+        i = 0
+        while i < len(command):
+            char = command[i]
+            if char == '"' and not in_squote:
+                in_dquote = not in_dquote
+            elif char == "'" and not in_dquote:
+                in_squote = not in_squote
+            elif not in_dquote and not in_squote:
+                if char == ';':
+                    return False, "Prohibited chaining operator outside quotes: ';'"
+                elif char == '&':
+                    operator = "&"
+                    if i + 1 < len(command) and command[i+1] == '&':
+                        operator = "&&"
+                    return False, f"Prohibited chaining operator outside quotes: '{operator}'"
+                elif char == '|':
+                    operator = "|"
+                    if i + 1 < len(command) and command[i+1] == '|':
+                        operator = "||"
+                    return False, f"Prohibited chaining operator outside quotes: '{operator}'"
+                elif char == '>':
+                    return False, "Prohibited redirect operator outside quotes: '>'"
+                elif char == '<':
+                    return False, "Prohibited redirect operator outside quotes: '<'"
+            i += 1
+
     return True, "OK"
 
 def _ask_gemini(task: str) -> str:
@@ -248,7 +287,10 @@ def cmd_control(
 
     if any(x in command.lower() for x in ["notepad", "explorer", "start "]):
         # Safely parse and run instead of shell=True
-        args = shlex.split(command)
+        if sys.platform == "win32":
+            args = shlex.split(command, posix=False)
+        else:
+            args = shlex.split(command)
         subprocess.Popen(args, shell=False)
         return f"Opened: {command}"
 

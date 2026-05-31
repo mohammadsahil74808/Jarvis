@@ -16,7 +16,6 @@ from core.config import (
     LIVE_MODEL, CHANNELS, SEND_SAMPLE_RATE,
     RECEIVE_SAMPLE_RATE, CHUNK_SIZE
 )
-from google.genai import types
 from core.utils import retry, async_retry
 
 try:
@@ -39,6 +38,7 @@ def _lazy_proactive():
 
 def _lazy_genai():
     from google import genai
+    from google.genai import types
     return genai, types
 
 def _get_api_key() -> str:
@@ -268,8 +268,14 @@ class JarvisLive:
                 from faster_whisper import WhisperModel
                 # Load on CPU with int8 quantization for high speed and low memory usage
                 model = WhisperModel("base.en", device="cpu", compute_type="int8")
+                
+                # Perform a lightweight warm-up inference (100ms of zeros) to pre-fill model execution cache
+                import numpy as np
+                dummy_audio = np.zeros(1600, dtype=np.float32)
+                list(model.transcribe(dummy_audio, beam_size=1)[0])
+                
                 self.whisper_fb = model
-                print("[JARVIS] ✓ Faster-Whisper base.en model loaded and ready.")
+                print("[JARVIS] ✓ Faster-Whisper base.en model loaded, warmed up, and ready.")
             except Exception as e:
                 print(f"[JARVIS] ⚠️ Faster-Whisper load failed: {e}")
         threading.Thread(target=_load_whisper, daemon=True).start()

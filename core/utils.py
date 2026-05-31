@@ -55,33 +55,38 @@ def open_browser(url: str) -> bool:
         webbrowser.open(url)
         return True
 
-# ── SAPI COM — created once, reused instantly ──────────────────
-_sapi_voice = None
+# ── SAPI COM — created once and cached per-thread for maximum speed & safety ──
+import threading
+_thread_local = threading.local()
 
 def speak_local(text: str) -> None:
     """
     INSTANT local TTS via SAPI COM object.
-    OLD: spawned PowerShell process = 1.5-3s delay per call
-    NEW: reuses COM object = ~30ms, no new process ever
+    Uses thread-local storage to cache win32com SpVoice instances,
+    preventing duplicate COM initialization and ensuring thread-safe operations.
     """
-    global _sapi_voice
     if not text or not text.strip():
         return
 
-    # Try SAPI COM (fastest — no process spawn)
-    if _sapi_voice is None:
+    # Try thread-local SAPI COM (fastest — no process spawn)
+    speaker = getattr(_thread_local, "speaker", None)
+    if speaker is None:
         try:
             import win32com.client
-            _sapi_voice = win32com.client.Dispatch("SAPI.SpVoice")
+            import pythoncom
+            pythoncom.CoInitialize()
+            speaker = win32com.client.Dispatch("SAPI.SpVoice")
+            _thread_local.speaker = speaker
         except Exception:
-            _sapi_voice = False
+            _thread_local.speaker = False
+            speaker = False
 
-    if _sapi_voice and _sapi_voice is not False:
+    if speaker and speaker is not False:
         try:
-            _sapi_voice.Speak(text, 1)  # 1 = SVSFlagsAsync (non-blocking)
+            speaker.Speak(text, 1)  # 1 = SVSFlagsAsync (non-blocking)
             return
         except Exception:
-            _sapi_voice = None  # Reset and fall through
+            _thread_local.speaker = None  # Reset and fall through
 
     # Fallback: lighter PowerShell (no Add-Type overhead)
     try:

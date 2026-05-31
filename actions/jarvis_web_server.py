@@ -107,7 +107,24 @@ _HTML = """<!DOCTYPE html>
   <script src="https://cdn.jsdelivr.net/npm/@ricky0123/vad-web@0.0.7/dist/bundle.min.js"></script>
 
   <script>
-    const socket = io();
+    const urlParams = new URLSearchParams(window.location.search);
+    let token = urlParams.get('token');
+    if (!token) {
+      token = localStorage.getItem('jarvis_token');
+    }
+    if (!token) {
+      token = prompt("Enter J.A.R.V.I.S. Remote Access Token:");
+      if (token) {
+        localStorage.setItem('jarvis_token', token);
+      }
+    }
+
+    const socket = io({
+      auth: {
+        token: token
+      }
+    });
+
     let myvad    = null;
     let isActive = false;
     const log    = document.getElementById('log');
@@ -129,6 +146,13 @@ _HTML = """<!DOCTYPE html>
       msg.textContent = 'Connected ✓';
       btn.disabled = false;
       addLog('Connected to JARVIS.', 'log-sys');
+    });
+
+    socket.on('connect_error', (err) => {
+      addLog('Connection failed: Unauthorized. Clearing token cache...', 'log-err');
+      localStorage.removeItem('jarvis_token');
+      dot.className = 'status-dot';
+      msg.textContent = 'Auth Failed — refresh page';
     });
 
     socket.on('disconnect', () => {
@@ -276,6 +300,32 @@ def start_web_server(jarvis_instance, port: int = 5001) -> None:
     @app.route("/")
     def index():
         return render_template_string(_HTML)
+
+    @socketio.on("connect")
+    def handle_connect(auth=None):
+        """Validate client connection credentials."""
+        try:
+            # Load keys from configuration file
+            import json
+            from pathlib import Path
+            key_path = Path("config/api_keys.json")
+            expected_token = "jarvis_secure_token"
+            if key_path.exists():
+                try:
+                    with open(key_path, "r", encoding="utf-8") as f:
+                        keys = json.load(f)
+                        expected_token = keys.get("web_server_token", expected_token)
+                except Exception:
+                    pass
+
+            client_token = (auth or {}).get("token")
+            if client_token != expected_token:
+                print(f"[WebServer] [WARNING] Blocked unauthorized connection attempt from client.")
+                return False
+            print("[WebServer] ✓ Authenticated client connection accepted successfully.")
+        except Exception as e:
+            print(f"[WebServer] Connection auth error: {e}")
+            return False
 
     @socketio.on("voice_input")
     def handle_voice(data):
