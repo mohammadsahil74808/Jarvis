@@ -1,366 +1,6 @@
 {
   "history": [
     {
-      "time": "2026-05-01 18:32",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:32",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:33",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:34",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:35",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:35",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:35",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:36",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:36",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-01 18:37",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:10",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:10",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:11",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:11",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:12",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:12",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:12",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:13",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:13",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:13",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:14",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:14",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:14",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:15",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:15",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:15",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:16",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:16",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:17",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:17",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:17",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:19",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:19",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:21",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:21",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-04 16:21",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
       "time": "2026-05-04 21:02",
       "state": {
         "fatigue": false,
@@ -899,6 +539,366 @@
         "low_energy": false,
         "late_night": false
       }
+    },
+    {
+      "time": "2026-05-10 21:16",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:17",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:20",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-10 21:20",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:17",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:20",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:21",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:22",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:23",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:23",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-18 15:23",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:03",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:03",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:04",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:04",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:05",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:06",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:06",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:06",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:07",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:07",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:15",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:16",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:16",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:17",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:17",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:18",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-05-31 12:19",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
     }
   ],
   "productive_hours": {
@@ -908,11 +908,11 @@
     "18": 56,
     "23": 5,
     "17": 28,
-    "15": 5,
+    "15": 15,
     "16": 30,
-    "21": 20,
+    "21": 30,
     "22": 30,
-    "12": 10
+    "12": 30
   },
   "low_points": {
     "15": 2

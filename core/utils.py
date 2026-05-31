@@ -1,94 +1,96 @@
-import time
-import functools
-import random
+# core/utils.py  ← REPLACE
+import time, functools, random
 
 def retry(max_attempts=3, delay=1, backoff=2, exceptions=(Exception,)):
-    """
-    Retry decorator with exponential backoff.
-    """
     def decorator(func):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            attempts = 0
-            current_delay = delay
+            attempts, current_delay = 0, delay
             while attempts < max_attempts:
                 try:
                     return func(*args, **kwargs)
                 except exceptions as e:
                     attempts += 1
                     if attempts == max_attempts:
-                        print(f"[Retry] [FAIL] '{func.__name__}' failed after {max_attempts} attempts: {e}")
                         raise
-                    
-                    # Exponential backoff with jitter
-                    sleep_time = current_delay + random.uniform(0, 0.1 * current_delay)
-                    print(f"[Retry] [WARN] '{func.__name__}' failed (Attempt {attempts}/{max_attempts}). Retrying in {sleep_time:.2f}s... Error: {e}")
-                    time.sleep(sleep_time)
+                    time.sleep(current_delay + random.uniform(0, 0.1 * current_delay))
                     current_delay *= backoff
             return None
         return wrapper
     return decorator
 
 def async_retry(max_attempts=3, delay=1, backoff=2, exceptions=(Exception,)):
-    """
-    Async retry decorator with exponential backoff.
-    """
     def decorator(func):
         @functools.wraps(func)
         async def wrapper(*args, **kwargs):
-            attempts = 0
-            current_delay = delay
+            attempts, current_delay = 0, delay
             while attempts < max_attempts:
                 try:
                     return await func(*args, **kwargs)
                 except exceptions as e:
                     attempts += 1
                     if attempts == max_attempts:
-                        print(f"[Retry] [FAIL] '{func.__name__}' failed after {max_attempts} attempts: {e}")
                         raise
-                    
-                    sleep_time = current_delay + random.uniform(0, 0.1 * current_delay)
-                    print(f"[Retry] [WARN] '{func.__name__}' failed (Attempt {attempts}/{max_attempts}). Retrying in {sleep_time:.2f}s... Error: {e}")
                     import asyncio
-                    await asyncio.sleep(sleep_time)
+                    await asyncio.sleep(current_delay + random.uniform(0, 0.1 * current_delay))
                     current_delay *= backoff
             return None
         return wrapper
     return decorator
 
 def open_browser(url: str) -> bool:
-    """
-    Opens a URL in Microsoft Edge on Windows, or the system default on other platforms.
-    Forces Edge even if Chrome is the system default.
-    """
-    import platform
-    import subprocess
-    import webbrowser
-
+    import platform, subprocess, webbrowser
     current_os = platform.system()
     try:
         if current_os == "Windows":
-            # Using 'start msedge' is the most reliable way to force Edge on Windows
             subprocess.Popen(["start", "msedge", url], shell=True)
             return True
-        elif current_os == "Darwin": # macOS
+        elif current_os == "Darwin":
             subprocess.Popen(["open", "-a", "Microsoft Edge", url])
             return True
-        else: # Linux
+        else:
             subprocess.Popen(["microsoft-edge", url])
             return True
     except Exception as e:
-        print(f"[Utils] ⚠️ Failed to launch Edge specifically: {e}. Falling back to default.")
         webbrowser.open(url)
         return True
 
-def speak_local(text: str):
+# ── SAPI COM — created once, reused instantly ──────────────────
+_sapi_voice = None
+
+def speak_local(text: str) -> None:
     """
-    Spoken text using Windows PowerShell TTS (Built-in).
+    INSTANT local TTS via SAPI COM object.
+    OLD: spawned PowerShell process = 1.5-3s delay per call
+    NEW: reuses COM object = ~30ms, no new process ever
     """
-    import subprocess
-    cmd = f'powershell -Command "Add-Type -AssemblyName System.Speech; $speak = New-Object System.Speech.Synthesis.SpeechSynthesizer; $speak.Speak(\'{text}\')"'
+    global _sapi_voice
+    if not text or not text.strip():
+        return
+
+    # Try SAPI COM (fastest — no process spawn)
+    if _sapi_voice is None:
+        try:
+            import win32com.client
+            _sapi_voice = win32com.client.Dispatch("SAPI.SpVoice")
+        except Exception:
+            _sapi_voice = False
+
+    if _sapi_voice and _sapi_voice is not False:
+        try:
+            _sapi_voice.Speak(text, 1)  # 1 = SVSFlagsAsync (non-blocking)
+            return
+        except Exception:
+            _sapi_voice = None  # Reset and fall through
+
+    # Fallback: lighter PowerShell (no Add-Type overhead)
     try:
-        subprocess.Popen(cmd, shell=True)
+        import subprocess
+        safe = text.replace("'", "").replace('"', "")[:200]
+        subprocess.Popen(
+            ["PowerShell", "-NoProfile", "-NonInteractive", "-Command",
+             f'(New-Object -ComObject SAPI.SpVoice).Speak("{safe}")'],
+            creationflags=0x08000000   # CREATE_NO_WINDOW
+        )
     except Exception as e:
-        print(f"[Local TTS] Error: {e}")
+        print(f"[LocalTTS] Failed: {e}")

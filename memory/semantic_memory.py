@@ -12,7 +12,7 @@ from core.config import BASE_DIR
 
 DB_PATH = BASE_DIR / "memory" / "semantic_memory.db"
 INDEX_PATH = BASE_DIR / "memory" / "semantic_index.faiss"
-MODEL_NAME = "all-MiniLM-L6-v2"
+MODEL_NAME = "paraphrase-MiniLM-L3-v2"
 
 class SemanticMemory:
     def __init__(self):

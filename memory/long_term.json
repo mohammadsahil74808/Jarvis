@@ -33,6 +33,10 @@
     "favorite_color": {
       "value": "black",
       "updated": "2026-04-26"
+    },
+    "guitar_practice_interest": {
+      "value": "Expressed interest in practicing guitar after a long time",
+      "updated": "2026-05-18"
     }
   },
   "projects": {
@@ -51,10 +55,19 @@
     "basic_website_project": {
       "value": "Created a basic website project in VS Code",
       "updated": "2026-04-18"
+    },
+    "ai_engineer_roadmap": {
+      "value": "Requested exact roadmap after Python: ML->DL->NLP/LLM->MLOps/Cloud",
+      "updated": "2026-05-31"
     }
   },
   "relationships": {},
-  "wishes": {},
+  "wishes": {
+    "ai_engineer_goal": {
+      "value": "Become a complete AI Engineer with expertise in ML, DL, NLP, and LLMs",
+      "updated": "2026-05-31"
+    }
+  },
   "notes": {
     "purpose": {
       "value": "not just to do work, but to understand and provide a better experience",
