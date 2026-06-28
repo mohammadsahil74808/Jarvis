@@ -1,0 +1,38 @@
+storage:
+  db_path: "memory/rag_metadata.db"
+  faiss_dir: "memory/faiss_indexes"
+
+embedding:
+  model_name: "BAAI/bge-small-en-v1.5"
+  dimension: 384
+  batch_size: 32
+
+retrieval:
+  top_k: 5
+  hybrid_rrf_k: 60
+
+namespaces:
+  code:
+    chunk_size: 1500
+    chunk_overlap: 200
+  memory:
+    chunk_size: 500
+    chunk_overlap: 50
+  docs:
+    chunk_size: 800
+    chunk_overlap: 100
+  ocr:
+    chunk_size: 600
+    chunk_overlap: 50
+  web:
+    chunk_size: 1000
+    chunk_overlap: 150
+    ttl_hours: 24
+  project:
+    chunk_size: 1000
+    chunk_overlap: 100
+
+watchdog:
+  debounce_seconds: 5
+  monitored_paths:
+    - "c:\\Users\\Ayan\\Jarvis"

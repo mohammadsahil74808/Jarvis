@@ -44,3 +44,9 @@ imutils
 flask
 flask-socketio
 
+# RAG Core Dependencies
+rank-bm25
+tree-sitter
+tree-sitter-python
+PyMuPDF
+watchdog

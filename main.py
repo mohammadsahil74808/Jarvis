@@ -340,6 +340,16 @@ class JarvisLive:
                 time.sleep(60)   # Was 30 — now 60s
         threading.Thread(target=_monitor_vitals, daemon=True).start()
 
+        def _load_rag_core():
+            try:
+                from rag_core import get_rag_engine
+                engine = get_rag_engine()
+                engine.start_background_jobs()
+                print("[JARVIS] RAG Core initialized and Watchdog started.")
+            except Exception as e:
+                print(f"[JARVIS] RAG Core Init Error: {e}")
+        threading.Thread(target=_load_rag_core, daemon=True).start()
+
         self.ui.root.after(900000, self._companion_heartbeat)
 
     def _companion_heartbeat(self):

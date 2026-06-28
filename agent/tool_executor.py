@@ -75,8 +75,8 @@ class ToolExecutor:
         if name == "screen_vision":
             return await self._handle_screen_vision(fc, args, loop)
             
-        if name == "recall_memory":
-            return await self._handle_recall_memory(fc, args, loop)
+        if name == "query_knowledge_base":
+            return await self._handle_query_knowledge_base(fc, args, loop)
             
         if name == "research_mode":
             return await self._handle_research_mode(fc, args, loop)
@@ -244,21 +244,15 @@ class ToolExecutor:
         _, types = _get_genai()
         return types.FunctionResponse(id=fc.id, name=fc.name, response={"result": result})
 
-    async def _handle_recall_memory(self, fc, args, loop):
+    async def _handle_query_knowledge_base(self, fc, args, loop):
         try:
             query = args.get("query")
-            k = args.get("k", 5)
-            from memory.semantic_memory import search_semantic_memory
-            memories = await loop.run_in_executor(None, lambda: search_semantic_memory(query, k))
-            if not memories:
-                result = "No similar memories found, sir."
-            else:
-                formatted = []
-                for m in memories:
-                    formatted.append(f"[{m['timestamp']}] {m['text']}")
-                result = "Found similar memories:\n" + "\n".join(formatted)
+            namespaces = args.get("namespaces", None)
+            from rag_core import get_rag_engine
+            engine = get_rag_engine()
+            result = await loop.run_in_executor(None, lambda: engine.query(query, namespaces=namespaces))
         except Exception as e:
-            result = f"Recall failed: {e}"
+            result = f"RAG Query failed: {e}"
         if not self.jarvis.ui.muted:
             self.jarvis.ui.set_state("LISTENING")
         _, types = _get_genai()

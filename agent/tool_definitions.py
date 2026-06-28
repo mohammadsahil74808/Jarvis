@@ -504,18 +504,19 @@ TOOL_DECLARATIONS = [
         }
     },
     {
-        "name": "recall_memory",
-        "description": "Searches past conversations and memories semantically to find relevant context or user preferences.",
+        "name": "query_knowledge_base",
+        "description": "Searches the unified RAG knowledge base for context. Retrieves information across Memory, Code, Documents (PDF/DOCX), Web, OCR, and Projects.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "query": {
                     "type": "STRING",
-                    "description": "The search query (e.g. 'favourite sports' or 'previous chat about coding')"
+                    "description": "The search query (e.g. 'how does main.py work?', 'find past chat about coding', 'summarize college notes')"
                 },
-                "k": {
-                    "type": "INTEGER",
-                    "description": "Number of relevant memories to retrieve (default: 5)"
+                "namespaces": {
+                    "type": "ARRAY",
+                    "items": {"type": "STRING"},
+                    "description": "Optional specific namespaces: code, memory, docs, ocr, web, project. If empty, the router auto-selects."
                 }
             },
             "required": ["query"]
