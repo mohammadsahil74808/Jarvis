@@ -1,639 +1,164 @@
-import os, json, time, math, random, threading, psutil, subprocess, shutil
-try:
-    from ctypes import windll, c_int, byref
-    windll.shcore.SetProcessDpiAwareness(1)
-except Exception:
-    pass
-
+import os, json, time, math, random, threading, sys
 import tkinter as tk
-from collections import deque
-from PIL import Image, ImageTk, ImageDraw
-import sys
 from pathlib import Path
+from functools import lru_cache
 
-from core.config import get_base_dir, BASE_DIR, CONFIG_DIR, API_CONFIG_PATH as API_FILE
+try:
+    from core.config import API_CONFIG_PATH as API_FILE
+except Exception:
+    API_FILE = Path("config/api_keys.json")
 
-SYSTEM_NAME = "J.A.R.V.I.S"
-MODEL_BADGE = "JARVIS"
+C_BG = "#000000"
 
-C_BG     = "#000000"
-C_PRI    = "#00d4ff"
-C_MID    = "#007a99"
-C_DIM    = "#003344"
-C_DIMMER = "#001520"
-C_ACC    = "#ff6600"
-C_ACC2   = "#ffcc00"
-C_TEXT   = "#8ffcff"
-C_PANEL  = "#010c10"
-C_GREEN  = "#00ff88"
-C_RED    = "#ff3333"
-C_MUTED  = "#ff3366"
+@lru_cache(maxsize=512)
+def _hex_to_rgb(h):
+    return tuple(int(h.lstrip('#')[i:i+2], 16) for i in (0, 2, 4))
 
+@lru_cache(maxsize=512)
+def _rgb_to_hex_fast(r, g, b):
+    return f"#{r:02x}{g:02x}{b:02x}"
 
-def apply_rounded_corners(window, w, h, r=40):
-    try:
-        from ctypes import windll
-        window.update_idletasks()
-        hwnd   = window.winfo_id()
-        region = windll.gdi32.CreateRoundRectRgn(0, 0, w, h, r, r)
-        windll.user32.SetWindowRgn(hwnd, region, True)
-    except Exception:
-        pass
+def _rgb_to_hex(r, g, b):
+    return _rgb_to_hex_fast(int(r), int(g), int(b))
 
+def _lerp_color(c1, c2, t):
+    r1, g1, b1 = _hex_to_rgb(c1)
+    r2, g2, b2 = _hex_to_rgb(c2)
+    return _rgb_to_hex(r1 + (r2 - r1) * t, g1 + (g2 - g1) * t, b1 + (b2 - b1) * t)
 
-# ══════════════════════════════════════════════════════════════
-# ConsolePanel — UPGRADED
-# FIX: instant logging for sys/err + word-by-word for AI/You
-# ══════════════════════════════════════════════════════════════
-class ConsolePanel(tk.Toplevel):
-    """Futuristic Live Typing Console Panel"""
-    def __init__(self, parent_ui):
-        super().__init__(parent_ui.root)
-        self.ui = parent_ui
-        self.title("J.A.R.V.I.S | DATA CONSOLE")
-        x = parent_ui.CX
-        self.geometry(f"{parent_ui.CW}x{parent_ui.CH}+{x}+50")
-        self.overrideredirect(True)
-        self.transient(parent_ui.root)
-        self.attributes("-alpha", 0.9)
-        self.configure(bg=C_BG)
-        apply_rounded_corners(self, parent_ui.CW, parent_ui.CH)
+def _blend_to_black(color, alpha):
+    r, g, b = _hex_to_rgb(color)
+    return _rgb_to_hex(r * alpha, g * alpha, b * alpha)
 
-        self.canvas = tk.Canvas(self, bg=C_BG, highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
+class Particle:
+    def __init__(self):
+        self.angle = random.uniform(0, 360)
+        self.dist = random.uniform(50, 100)
+        self.speed = random.uniform(10, 30)
+        self.size = random.uniform(1.0, 2.5)
+        self.alpha = 0.0
+        self.target_alpha = random.uniform(0.3, 0.8)
+        self.dr = random.uniform(-5, 5)
 
-        self.text_area = tk.Text(
-            self.canvas, fg=C_TEXT, bg=C_PANEL,
-            insertbackground=C_TEXT, borderwidth=0,
-            wrap="word", font=("Courier", 10), padx=8, pady=8
-        )
-        self.text_area.place(relx=0.05, rely=0.1, relwidth=0.9, relheight=0.85)
-        self.text_area.configure(state="disabled")
-        self.text_area.tag_config("you", foreground="#e8e8e8")
-        self.text_area.tag_config("ai",  foreground=C_PRI)
-        self.text_area.tag_config("sys", foreground=C_ACC2)
-        self.text_area.tag_config("err", foreground=C_RED)
-
-        self.canvas.create_text(
-            parent_ui.CW // 2, 15,
-            text="LIVE DATA STREAM", fill=C_ACC,
-            font=("Courier", 10, "bold")
-        )
-        self._typing_queue = deque()
-        self._is_typing    = False
-
-    def write_log(self, text: str):
-        self._typing_queue.append(text)
-        if not self._is_typing:
-            self._start_typing()
-
-    def _start_typing(self):
-        if not self._typing_queue:
-            self._is_typing = False
-            return
-        self._is_typing = True
-        text = self._typing_queue.popleft()
-        tl   = text.lower()
-
-        if "you:" in tl or "jarvis:" in tl:
-            clean = text.split(":", 1)[1].strip() if ":" in text else text
-            self.ui.activity_feed.append(f"▸ {clean[:20]}...")
-
-        tag = ("you" if tl.startswith("you:")
-               else "ai"  if (tl.startswith("jarvis:") or tl.startswith("ai:"))
-               else "err" if ("error" in tl or "failed" in tl)
-               else "sys")
-
-        self.text_area.configure(state="normal")
-
-        # ── INSTANT for sys/err (no animation overhead) ─────────
-        if tag in ("sys", "err") or len(text) < 25:
-            self.text_area.insert(tk.END, text + "\n", tag)
-            self.text_area.see(tk.END)
-            self.text_area.configure(state="disabled")
-            self._is_typing = False
-            if self._typing_queue:
-                self.after(30, self._start_typing)
-            return
-
-        # ── Word-by-word for You/AI (5x fewer after() calls) ────
-        words = text.split()
-        self._type_word(words, 0, tag)
-
-    def _type_word(self, words, i, tag):
-        if i < len(words):
-            self.text_area.insert(tk.END, words[i] + " ", tag)
-            self.text_area.see(tk.END)
-            self.after(30, self._type_word, words, i + 1, tag)
-        else:
-            self.text_area.insert(tk.END, "\n")
-            self.text_area.configure(state="disabled")
-            self._is_typing = False
-            if self._typing_queue:
-                self.after(60, self._start_typing)
-
-
-# ══════════════════════════════════════════════════════════════
-# StatsPanel
-# ══════════════════════════════════════════════════════════════
-class StatsPanel(tk.Toplevel):
-    """Futuristic Real-Time System Stats & HUD Panel"""
-    def __init__(self, parent_ui):
-        super().__init__(parent_ui.root)
-        self.ui = parent_ui
-        self.title("J.A.R.V.I.S | HUD MODULE")
-        self.geometry(f"{parent_ui.SW}x{parent_ui.SH1}")
-        self.overrideredirect(True)
-        self.transient(parent_ui.root)
-        self.attributes("-alpha", 1.0)
-        self.configure(bg=C_BG)
-        self.geometry(f"{parent_ui.SW}x{parent_ui.SH1}")
-        apply_rounded_corners(self, parent_ui.SW, parent_ui.SH1)
-
-        self.canvas     = tk.Canvas(self, bg=C_BG, highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
-        self.tick       = 0
-        self.start_time = time.time()
-        self._animate()
-
-    def _animate(self):
-        self.tick += 1
-        self.canvas.delete("dynamic")
-
-        cx, cy = 190, 100
-        self.canvas.create_arc(
-            cx-80, cy-80, cx+80, cy+80,
-            start=(self.tick*4) % 360, extent=120,
-            outline=C_PRI, width=3, style="arc", tags="dynamic")
-        self.canvas.create_arc(
-            cx-95, cy-95, cx+95, cy+95,
-            start=(self.tick*-2) % 360, extent=60,
-            outline="#ff3333", width=2, style="arc", tags="dynamic")
-        angle = math.radians(self.tick * 6)
-        x2    = cx + 60 * math.cos(angle)
-        y2    = cy + 60 * math.sin(angle)
-        self.canvas.create_line(cx, cy, x2, y2, fill=C_PRI, width=1, tags="dynamic")
-        self.canvas.create_oval(cx-6, cy-6, cx+6, cy+6, fill=C_PRI, outline="", tags="dynamic")
-
-        time_str = time.strftime("%I:%M:%S %p")
-        date     = time.strftime("%d %b %Y").upper()
-        ty       = 200
-        self.canvas.create_text(cx+1, ty+1, text=time_str, fill=C_DIM,   font=("Courier", 24, "bold"), tags="dynamic")
-        self.canvas.create_text(cx,   ty,   text=time_str, fill="#ffffff",font=("Courier", 24, "bold"), tags="dynamic")
-        self.canvas.create_text(cx,   ty+35, text=date,    fill=C_PRI,   font=("Courier", 10),         tags="dynamic")
-        self.canvas.create_text(cx,   ty+65, text="STATUS: READY", fill="#00ff88", font=("Courier", 9, "bold"), tags="dynamic")
-
-        user_name = "USER"
-        try:
-            if self.ui.jarvis:
-                user_name = self.ui.jarvis.profile_manager.get_profile().get("name", "USER").upper()
-        except Exception:
-            pass
-        self.canvas.create_text(cx, ty+82, text=f"WELCOME BACK, {user_name}", fill=C_MID, font=("Courier", 8), tags="dynamic")
-
-        status = self.ui._jarvis_state
-        color  = {"LISTENING": "#00ff88", "THINKING": "#ffcc00",
-                  "SPEAKING": C_PRI, "MUTED": "#ff3333"}.get(status, "#ffffff")
-        SY = 320
-        self.canvas.create_rectangle(60, SY, 320, SY+35, outline=color, width=2, tags="dynamic")
-        self.canvas.create_text(190, SY+17, text=status, fill=color, font=("Courier", 12, "bold"), tags="dynamic")
-
-        self.after(200, self._animate)
-
-
-# ══════════════════════════════════════════════════════════════
-# VitalsPanel  — includes WAVEFORM when JARVIS is speaking
-# ══════════════════════════════════════════════════════════════
-class VitalsPanel(tk.Toplevel):
-    def __init__(self, parent_ui):
-        super().__init__(parent_ui.root)
-        self.ui = parent_ui
-        self.geometry(f"{parent_ui.SW}x{parent_ui.SH2}+{parent_ui.SX}+{parent_ui.root.winfo_y() + parent_ui.SH1 + 15}")
-        self.overrideredirect(True)
-        self.transient(parent_ui.root)
-        self.attributes("-alpha", 1.0)
-        self.configure(bg=C_BG)
-        apply_rounded_corners(self, parent_ui.SW, parent_ui.SH2)
-        self.canvas = tk.Canvas(self, bg=C_BG, highlightthickness=0)
-        self.canvas.pack(fill="both", expand=True)
-        self.tick       = 0
-        self.start_time = time.time()
-
-        # ── Waveform state ─────────────────────────────────────
-        self._wave_bars      = [0.0] * 32   # 32 frequency bars
-        self._wave_target    = [0.0] * 32
-        self._wave_smooth    = 0.25          # lerp speed
-        self._you_bars       = [0.0] * 32   # user voice waveform
-        self._you_target     = [0.0] * 32
-
-        self._animate()
-
-    def _animate(self):
-        self.tick += 1
-        self.canvas.delete("dynamic")
-        status = self.ui._jarvis_state
-
-        # Vitals every 12 ticks (~2.4s)
-        if self.tick % 12 == 1:
-            self._draw_vitals()
-
-        # ── Live System Log ─────────────────────────────────────
-        fy = 280
-        self.canvas.create_text(
-            30, fy-25, text="LIVE SYSTEM LOG",
-            fill=C_PRI, font=("Courier", 9, "bold"),
-            anchor="w", tags="dynamic")
-        for i, act in enumerate(list(self.ui.activity_feed)):
-            self.canvas.create_text(
-                30, fy + (i*18), text=act,
-                fill="#aaaaaa", font=("Courier", 9),
-                anchor="w", tags="dynamic")
-
-        # ── UPGRADED WAVEFORM ────────────────────────────────────
-        wy     = 410
-        N_BARS = 32
-        BW     = 9         # bar width
-        GAP    = 1
-        STEP   = BW + GAP
-        x0     = (380 - N_BARS * STEP) // 2
-
-        # Update targets based on state
-        for i in range(N_BARS):
-            if status == "SPEAKING":
-                # Realistic speech waveform — sine wave + random
-                base = abs(math.sin(self.tick * 0.15 + i * 0.45)) * 28
-                self._wave_target[i] = base + random.uniform(0, 18)
-            elif status == "LISTENING":
-                # Subtle mic activity waveform (user voice)
-                base = abs(math.sin(self.tick * 0.08 + i * 0.35)) * 8
-                self._you_target[i]  = base + random.uniform(0, 6)
-                self._wave_target[i] = 3
-            elif status == "THINKING":
-                # Pulse animation while thinking
-                self._wave_target[i] = abs(math.sin(self.tick * 0.12 + i * 0.2)) * 20
-            else:
-                self._wave_target[i] = 3
-                self._you_target[i]  = 0
-
-        # Smooth lerp
-        for i in range(N_BARS):
-            self._wave_bars[i] += (self._wave_target[i] - self._wave_bars[i]) * self._wave_smooth
-            self._you_bars[i]  += (self._you_target[i]  - self._you_bars[i])  * self._wave_smooth
-
-        # Label
-        wave_label = {
-            "SPEAKING":  "◉ JARVIS SPEAKING",
-            "LISTENING": "◎ VOICE INPUT ACTIVE",
-            "THINKING":  "◌ PROCESSING",
-            "MUTED":     "⊘ MUTED",
-        }.get(status, "◌ STANDBY")
-
-        label_color = {
-            "SPEAKING":  C_PRI,
-            "LISTENING": C_GREEN,
-            "THINKING":  C_ACC2,
-            "MUTED":     C_MUTED,
-        }.get(status, C_DIM)
-
-        self.canvas.create_text(
-            190, wy - 22, text=wave_label,
-            fill=label_color, font=("Courier", 9, "bold"),
-            tags="dynamic")
-
-        # Draw waveform bars
-        for i in range(N_BARS):
-            x  = x0 + i * STEP
-            hb = max(3, int(self._wave_bars[i]))
-
-            # Color gradient: center bars brighter
-            center_dist = abs(i - N_BARS // 2) / (N_BARS // 2)
-            alpha_frac  = 1.0 - center_dist * 0.5
-
-            if status == "MUTED":
-                col = C_MUTED
-            elif status == "SPEAKING":
-                # Cyan to bright white at center
-                r = int(0   * alpha_frac)
-                g = int(180 * alpha_frac)
-                b = int(255 * alpha_frac)
-                col = f"#{r:02x}{g:02x}{b:02x}"
-            elif status == "LISTENING":
-                col = C_GREEN
-            elif status == "THINKING":
-                r = int(255 * alpha_frac)
-                g = int(200 * alpha_frac)
-                b = 0
-                col = f"#{r:02x}{g:02x}{b:02x}"
-            else:
-                col = C_DIM
-
-            # Main bar (centered, grows up AND down)
-            mid = wy + 18
-            self.canvas.create_rectangle(
-                x, mid - hb, x + BW, mid + hb,
-                fill=col, outline="", tags="dynamic")
-
-            # User voice bars (below, green) — only when LISTENING
-            if status == "LISTENING":
-                hy = max(2, int(self._you_bars[i]))
-                self.canvas.create_rectangle(
-                    x, mid + hb + 4, x + BW, mid + hb + 4 + hy,
-                    fill="#004422", outline="", tags="dynamic")
-
-        self.after(50, self._animate)   # 20fps for smooth waveform
-
-    def _draw_bar(self, y, label, val, col):
-        self.canvas.create_text(30, y, text=label, fill="#ffffff",
-                                font=("Courier", 8), anchor="w", tags="dynamic")
-        self.canvas.create_rectangle(30, y+10, 350, y+24, outline=C_DIM, width=1, tags="dynamic")
-        w = int(320 * (val / 100.0))
-        if w > 0:
-            self.canvas.create_rectangle(30, y+10, 30+w, y+24, fill=col, outline="", tags="dynamic")
-        self.canvas.create_text(360, y+17, text=f"{val:.0f}%",
-                                fill=col, font=("Courier", 8, "bold"),
-                                anchor="e", tags="dynamic")
-
-    def _draw_vitals(self):
-        self.canvas.delete("vitals")
-        stats     = self.ui.stats
-        user_name = "USER"
-        try:
-            if self.ui.jarvis:
-                user_name = self.ui.jarvis.profile_manager.get_profile().get("name", "USER").upper()
-        except Exception:
-            pass
-
-        uptime = int(time.time() - self.start_time)
-        ut_str = f"{uptime//3600:02d}:{(uptime%3600)//60:02d}:{uptime%60:02d}"
-        cpu    = stats.get("cpu", 0)
-        temp   = 36 + (cpu // 20) + random.uniform(-0.3, 0.3)
-        vy     = 20
-
-        self.canvas.create_text(30, vy, text="SYSTEM VITALS //",
-                                fill=C_ACC2, font=("Courier", 10, "bold"),
-                                anchor="w", tags="vitals")
-        self.canvas.create_text(30,  vy+35, text="OPR:", fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
-        self.canvas.create_text(75,  vy+35, text=user_name, fill="#ffffff", font=("Courier", 8, "bold"), anchor="w", tags="vitals")
-        self.canvas.create_text(30,  vy+55, text="LOC:", fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
-        self.canvas.create_text(75,  vy+55, text="DELHI, IN", fill="#ffffff", font=("Courier", 8, "bold"), anchor="w", tags="vitals")
-        self.canvas.create_text(190, vy+35, text="UPTIME:", fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
-        self.canvas.create_text(270, vy+35, text=ut_str, fill="#ffffff", font=("Courier", 8, "bold"), anchor="w", tags="vitals")
-        self.canvas.create_text(190, vy+55, text="TEMP:", fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
-        self.canvas.create_text(270, vy+55, text=f"{temp:.1f}°C", fill="#ffffff", font=("Courier", 8, "bold"), anchor="w", tags="vitals")
-
-        by     = vy + 90
-        v_items = [
-            ("CPU CORE LOAD",  cpu,                        C_PRI if cpu < 80 else "#ff3333"),
-            ("RAM USAGE LOAD", stats.get("ram", 0),        C_GREEN if stats.get("ram", 0) < 80 else "#ff3333"),
-            (f"NETWORK [{stats.get('net', '0 KB/s')}]",
-             35 if "MB" in stats.get("net","") else (12 if "KB" in stats.get("net","") else 4),
-             C_ACC2),
-        ]
-        for i, (lab, val, col) in enumerate(v_items):
-            yp = by + (i * 48)
-            self.canvas.create_text(30, yp, text=lab, fill=C_PRI, font=("Courier", 8), anchor="w", tags="vitals")
-            self.canvas.create_rectangle(30, yp+12, 350, yp+20, outline=C_DIM, width=1, tags="vitals")
-            w = int(320 * (min(100, val) / 100.0))
-            if w > 0:
-                self.canvas.create_rectangle(30, yp+12, 30+w, yp+20, fill=col, outline="", tags="vitals")
-
-
-# ══════════════════════════════════════════════════════════════
-# WebIntelManager
-# ══════════════════════════════════════════════════════════════
-class WebIntelManager:
-    def __init__(self, parent_ui):
-        self.ui        = parent_ui
-        self.proc      = None
-        self.edge_path = self._find_edge()
-
-    def _find_edge(self):
-        path = shutil.which("msedge")
-        if path:
-            return path
-        paths = [
-            os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)") + "\\Microsoft\\Edge\\Application\\msedge.exe",
-            os.environ.get("PROGRAMFILES", "C:\\Program Files")            + "\\Microsoft\\Edge\\Application\\msedge.exe",
-            os.path.expanduser("~") + "\\AppData\\Local\\Microsoft\\Edge\\Application\\msedge.exe",
-        ]
-        for p in paths:
-            if os.path.exists(p):
-                return p
-        return "msedge.exe"
-
-    def search(self, query):
-        if self.proc:
-            try:
-                self.proc.terminate()
-            except Exception:
-                pass
-        x, y, w, h = 160, 920, 550, 600
-        url      = f"https://www.google.com/search?q={query.replace(' ', '+')}"
-        data_dir = os.path.join(os.environ.get("LOCALAPPDATA", "C:\\Temp"), "JarvisEdgeProfile")
-        flags    = [
-            self.edge_path, f"--app={url}",
-            f"--window-position={x},{y}", f"--window-size={w},{h}",
-            f"--user-data-dir={data_dir}", "--force-device-scale-factor=0.6",
-            "--new-window", "--no-first-run", "--no-default-browser-check",
-            "--disable-first-run-ui", "--disable-sync",
-            "--disable-features=msEdgeSocialSidebar,msEdgeInPrivateSync",
-        ]
-        try:
-            self.proc = subprocess.Popen(flags, shell=False)
-        except Exception as e:
-            print(f"[UI] Edge launch failed: {e}")
-
-    def close(self):
-        if self.proc:
-            try:
-                self.proc.terminate()
-            except Exception:
-                pass
-            self.proc = None
-
-
-# ══════════════════════════════════════════════════════════════
-# JarvisUI — main window (unchanged logic, just cleaned up)
-# ══════════════════════════════════════════════════════════════
 class JarvisUI:
-    def __init__(self, face_path, size=None):
+    def __init__(self, face_path=None, size=None):
         self.root = tk.Tk()
-        self.root.title("J.A.R.V.I.S — MARK XXXV")
-        self.root.resizable(False, False)
-
+        self.root.title("J.A.R.V.I.S")
+        self.W, self.H = 240, 240
+        self.CX, self.CY = 120, 105
+        
         sw = self.root.winfo_screenwidth()
         sh = self.root.winfo_screenheight()
-
-        self.W, self.H         = 950, 800
-        self.CW, self.CH       = 320, 500
-        self.SW, self.SH1, self.SH2 = 380, 400, 420
-
-        W, H, CW, CH, SW, SH1 = self.W, self.H, self.CW, self.CH, self.SW, self.SH1
-        MARGIN  = 30
-        SPACING = max(10, min((sw - W - CW - SW - 2*MARGIN) // 2, 50))
-        RX      = (sw - W) // 2
-        RY      = (sh - H) // 2 - 60
-        CX      = max(MARGIN, RX - SPACING - CW)
-        SX      = min(RX + W + SPACING, sw - SW - MARGIN)
-
-        self.root.geometry(f"{W}x{H}+{RX}+{RY}")
+        RX = sw - self.W - 60
+        RY = 60
+        self.root.geometry(f"{self.W}x{self.H}+{RX}+{RY}")
         self.root.configure(bg=C_BG)
-
-        self.sw, self.sh = sw, sh
-        self.CX, self.SX = CX, SX
-
-        self.FACE_SZ = min(int(H * 0.52), 600)
-        self.FCX     = W // 2
-        self.FCY     = int(H * 0.16) + self.FACE_SZ // 2
-
-        config                 = self._get_config_internal()
-        self.wake_word_enabled = config.get("wake_word_activation", True)
-        self.speaking          = False
-        self.muted             = self.wake_word_enabled
-        self.scale             = 1.0
-        self.target_scale      = 1.0
-        self.halo_a            = 60.0
-        self.target_halo       = 60.0
-        self.last_t            = time.time()
-        self.tick              = 0
-        self.scan_angle        = 0.0
-        self.scan2_angle       = 180.0
-        self.rings_spin        = [0.0, 120.0, 240.0]
-        self.pulse_r           = [0.0, self.FACE_SZ * 0.26, self.FACE_SZ * 0.52]
-        self.status_text       = "INITIALISING"
-        self.status_blink      = True
-        self._jarvis_state     = "INITIALISING"
-        self.typing_queue      = deque()
-        self.activity_feed     = deque(maxlen=5)
-        self.is_typing         = False
-        self.on_text_command   = None
-        self.jarvis            = None   # Set by main() after JarvisLive init
-
-        self.stats = {"cpu": 0, "ram": 0, "net": "0 KB/s", "weather": "CLEAR", "status": "ONLINE"}
-        self.last_net_bytes = psutil.net_io_counters().bytes_sent + psutil.net_io_counters().bytes_recv
-        self._sync_pending  = False
-        self._start_stats_thread()
-
-        self._face_pil         = None
-        self._has_face         = False
-        self._face_scale_cache = None
-        self._load_face(face_path)
-
-        self.root.update_idletasks()
-
-        self.console_panel = ConsolePanel(self)
-        self.stats_panel   = StatsPanel(self)
-        self.vitals_panel  = VitalsPanel(self)
-
-        base_y = (sh - 800) // 2 - 60
-        self.stats_panel.geometry(f"{SW}x{SH1}+{SX}+{base_y}")
-        self.vitals_panel.geometry(f"{self.SW}x{self.SH2}+{SX}+{base_y + SH1 + 15}")
-
-        self.web_panel = WebIntelManager(self)
-
-        self.bg = tk.Canvas(self.root, width=W, height=H, bg=C_BG, highlightthickness=0)
-        self.bg.place(x=0, y=0)
-
-        LW      = int(W * 0.65)
-        LH      = 80
-        INPUT_Y = H - 45
-        LOG_Y   = INPUT_Y - LH
-
-        self.log_frame = tk.Frame(self.root, bg=C_PANEL,
-                                  highlightbackground=C_MID, highlightthickness=1)
-        self.log_frame.place(x=(W - LW) // 2, y=LOG_Y, width=LW, height=LH)
-        self.log_text = tk.Text(self.log_frame, fg=C_TEXT, bg=C_PANEL,
-                                insertbackground=C_TEXT, borderwidth=0,
-                                wrap="word", font=("Courier", 10), padx=10, pady=8)
-        self.log_text.pack(fill="both", expand=True)
-        self.log_text.configure(state="disabled")
-        self.log_text.tag_config("you", foreground="#e8e8e8")
-        self.log_text.tag_config("ai",  foreground=C_PRI)
-        self.log_text.tag_config("sys", foreground=C_ACC2)
-        self.log_text.tag_config("err", foreground=C_RED)
-        self.MAX_LOG_LINES = 1000
-
-        self._build_input_bar(LW, INPUT_Y)
-        self._build_mute_button()
-        self.root.bind("<F4>", lambda e: self._toggle_mute())
-
-        self._api_key_ready = self._api_keys_exist()
-        self._log_lock      = threading.Lock()
-        if not self._api_key_ready:
-            self._show_setup_ui()
-
-        self._animate()
-
-        def _sync(event=None):
-            if not self._sync_pending:
-                self._sync_pending = True
-                self.root.after(100, self._do_sync_and_reset)
-
-        self.root.bind("<Unmap>",     _sync)
-        self.root.bind("<Map>",       _sync)
-        self.root.bind("<Configure>", _sync)
-
-        def on_closing():
-            try:
-                self.console_panel.destroy()
-                self.stats_panel.destroy()
-                self.root.destroy()
-            finally:
-                os._exit(0)
-        self.root.protocol("WM_DELETE_WINDOW", on_closing)
-
-    def _perform_sync(self):
+        self.root.overrideredirect(True)
+        self.root.attributes("-topmost", True)
+        
         try:
-            state = self.root.state()
-            if state == "iconic":
-                self.console_panel.withdraw()
-                self.stats_panel.withdraw()
-                self.vitals_panel.withdraw()
-            else:
-                self.console_panel.deiconify()
-                self.stats_panel.deiconify()
-                self.vitals_panel.deiconify()
-                self.console_panel.lift()
-                self.stats_panel.lift()
-                self.vitals_panel.lift()
-        except Exception:
+            self.root.wm_attributes("-transparentcolor", C_BG)
+        except:
             pass
 
-    def _do_sync_and_reset(self):
-        self._sync_pending = False
-        self._perform_sync()
+        self.canvas = tk.Canvas(self.root, width=self.W, height=self.H, bg=C_BG, highlightthickness=0)
+        self.canvas.place(x=0, y=0)
+        
+        self._jarvis_state = "ONLINE"
+        self.speaking = False
+        self.muted = False
+        self.on_text_command = None
+        self.jarvis = None
+        
+        self.color_map = {
+            "ONLINE": "#0088ff",
+            "LISTENING": "#00ffff",
+            "THINKING": "#aa00ff",
+            "SPEAKING": "#e0ffff",
+            "MUTED": "#ff3366",
+            "ERROR": "#ff0000"
+        }
+        self.current_color = self.color_map["ONLINE"]
+        self.target_color = self.color_map["ONLINE"]
+        
+        self.scale = 1.0
+        self.target_scale = 1.0
+        self.rotation_speed = 30.0
+        self.base_angles = [0.0, 120.0, 240.0]
+        self.time_elapsed = 0.0
+        self.last_time = time.time()
+        
+        # Audio Energy
+        self.raw_mic_energy = 0.0
+        self.raw_speaker_energy = 0.0
+        self.smooth_mic_energy = 0.0
+        self.smooth_speaker_energy = 0.0
+        
+        self.eye_look_x = 0.0
+        self.eye_look_y = 0.0
+        self.target_look_x = 0.0
+        self.target_look_y = 0.0
+        self.eye_open = 1.0
+        self.eye_scale_w = 1.0
+        self.eye_scale_h = 1.0
+        self.eye_smile = 0.0
+        self.last_blink_time = time.time()
+        self.next_blink_delay = random.uniform(4.0, 8.0)
+        self.is_blinking = False
+        self.blink_phase = 0
+        self.last_look_time = time.time()
+        
+        self.particles = [Particle() for _ in range(10)]
+        
+        self.hover_eye = False
+        self.hover_mic = False
+        self.mic_scale = 1.0
+        self._drag_data = {"x": 0, "y": 0}
+        
+        self.canvas.bind("<ButtonPress-1>", self._on_click)
+        self.canvas.bind("<B1-Motion>", self._on_drag)
+        self.canvas.bind("<Motion>", self._on_mouse_move)
+        self.canvas.bind("<Leave>", self._on_mouse_leave)
+        self.root.bind("<Button-3>", self._show_context_menu)
+        self.root.bind("<F4>", lambda e: self.set_mute(not self.muted))
+        
+        self.menu = tk.Menu(self.root, tearoff=0, bg="#00111a", fg="#00d4ff", activebackground="#005577", activeforeground="#ffffff", borderwidth=0)
+        self.menu.add_command(label="Settings", state="disabled")
+        self.menu.add_command(label="Mute / Unmute", command=lambda: self.set_mute(not self.muted))
+        self.menu.add_command(label="Restart", state="disabled")
+        self.menu.add_command(label="Exit", command=self._exit_app)
+        
+        self._animate()
 
-    def open_browser_panel(self, query=None):
-        if query:
-            self.web_panel.search(query)
-
-    def _build_mute_button(self):
-        self.BTN_W, self.BTN_H = 120, 30
-        lw    = int(self.W * 0.65)
-        x0    = (self.W - lw) // 2
-        BTN_X = x0 - self.BTN_W - 10
-        BTN_Y = self.H - 45 - 4
-        self._mute_canvas = tk.Canvas(
-            self.root, width=self.BTN_W, height=self.BTN_H,
-            bg=C_BG, highlightthickness=0, cursor="hand2")
-        self._mute_canvas.place(x=BTN_X, y=BTN_Y)
-        self._mute_canvas.bind("<Button-1>", lambda e: self._toggle_mute())
-        self._draw_mute_button()
-
-    def _draw_mute_button(self):
-        c = self._mute_canvas
-        c.delete("all")
+    def _api_keys_exist(self): return API_FILE.exists()
+    
+    def wait_for_api_key(self):
+        while not self._api_keys_exist():
+            print("Waiting for API key in config/api_keys.json...")
+            time.sleep(2)
+        return True
+        
+    def write_log(self, text: str): print(f"[JARVIS LOG] {text}")
+    
+    def set_state(self, state: str):
+        self._jarvis_state = state
+        self.speaking = (state == "SPEAKING")
         if self.muted:
-            border, fill, icon, label, fg = C_MUTED, "#1a0008", "🔇", " MUTED", C_MUTED
+            self.target_color = self.color_map["MUTED"]
         else:
-            border, fill, icon, label, fg = C_MID, C_PANEL, "🎙", " LIVE",  C_GREEN
-        c.create_rectangle(0, 0, self.BTN_W, self.BTN_H, outline=border, fill=fill, width=1)
-        c.create_text(self.BTN_W//2, self.BTN_H//2, text=f"{icon}{label}",
-                      fill=fg, font=("Courier", 10, "bold"))
+            self.target_color = self.color_map.get(state, self.color_map["ONLINE"])
 
-    def _toggle_mute(self):
-        self.muted = not self.muted
-        self._draw_mute_button()
+    def start_speaking(self): self.set_state("SPEAKING")
+    def stop_speaking(self): self.set_state("ONLINE")
+    
+    def set_mic_energy(self, energy):
+        self.raw_mic_energy = energy
+
+    def set_speaker_energy(self, energy):
+        self.raw_speaker_energy = energy
+    
+    def set_mute(self, is_muted: bool):
+        self.muted = is_muted
         if self.muted:
             self.set_state("MUTED")
             self.write_log("SYS: Microphone muted.")
@@ -641,368 +166,259 @@ class JarvisUI:
             self.set_state("LISTENING")
             self.write_log("SYS: Microphone active.")
 
-    def set_mute(self, is_muted: bool):
-        if self.muted != is_muted:
-            self._toggle_mute()
+    def _exit_app(self):
+        self.root.destroy()
+        os._exit(0)
 
-    def _build_input_bar(self, lw: int, y: int):
-        x0    = (self.W - lw) // 2
-        BTN_W = 70
-        INP_W = lw - BTN_W - 4
-        self._input_var   = tk.StringVar()
-        self._input_entry = tk.Entry(
-            self.root, textvariable=self._input_var, fg=C_TEXT, bg="#000d12",
-            insertbackground=C_TEXT, borderwidth=0, font=("Courier", 8),
-            highlightthickness=1, highlightbackground=C_DIM, highlightcolor=C_PRI)
-        self._input_entry.place(x=x0, y=y, width=INP_W, height=22)
-        self._input_entry.bind("<Return>", self._on_input_submit)
-        self._send_btn = tk.Button(
-            self.root, text="SEND ▸", command=self._on_input_submit,
-            fg=C_PRI, bg=C_PANEL, activeforeground=C_BG, activebackground=C_PRI,
-            font=("Courier", 7, "bold"), borderwidth=0, cursor="hand2",
-            highlightthickness=1, highlightbackground=C_MID)
-        self._send_btn.place(x=x0 + INP_W + 4, y=y, width=BTN_W, height=22)
-
-    def _on_input_submit(self, event=None):
-        text = self._input_var.get().strip()
-        if not text:
-            return
-        self._input_var.set("")
-        self.write_log(f"You: {text}")
-        if self.on_text_command:
-            threading.Thread(target=self.on_text_command, args=(text,), daemon=True).start()
-
-    def set_state(self, state: str):
-        self._jarvis_state = state
-        mapping = {
-            "MUTED":      (False, "MUTED"),
-            "SPEAKING":   (True,  "SPEAKING"),
-            "THINKING":   (False, "THINKING"),
-            "LISTENING":  (False, "LISTENING"),
-            "PROCESSING": (False, "PROCESSING"),
-        }
-        self.speaking, self.status_text = mapping.get(state, (False, "ONLINE"))
-        self.stats["status"] = self.status_text
-
-    def _start_stats_thread(self):
-        def _loop():
-            while True:
-                try:
-                    cpu  = psutil.cpu_percent(interval=1)
-                    ram  = psutil.virtual_memory().percent
-                    curr = psutil.net_io_counters().bytes_sent + psutil.net_io_counters().bytes_recv
-                    diff = (curr - self.last_net_bytes) / 1024.0
-                    self.last_net_bytes = curr
-                    net_str = f"{diff:.1f} KB/s" if diff < 1024 else f"{diff/1024:.1f} MB/s"
-                    self.stats.update({"cpu": cpu, "ram": ram, "net": net_str})
-                    time.sleep(5)
-                except Exception:
-                    time.sleep(10)
-        threading.Thread(target=_loop, daemon=True).start()
-
-    def _load_face(self, path):
-        FW = self.FACE_SZ
+    def _show_context_menu(self, event):
         try:
-            img  = Image.open(path).convert("RGBA").resize((FW, FW), Image.LANCZOS)
-            mask = Image.new("L", (FW, FW), 0)
-            ImageDraw.Draw(mask).ellipse((2, 2, FW-2, FW-2), fill=255)
-            img.putalpha(mask)
-            self._face_pil, self._has_face = img, True
-        except Exception:
-            self._has_face = False
+            self.menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.menu.grab_release()
 
-    @staticmethod
-    def _ac(r, g, b, a):
-        f = a / 255.0
-        return f"#{int(r*f):02x}{int(g*f):02x}{int(b*f):02x}"
+    def _on_mouse_move(self, event):
+        dx_eye = event.x - self.CX
+        dy_eye = event.y - self.CY
+        self.hover_eye = ((dx_eye * dx_eye + dy_eye * dy_eye) < (65 * 65))
+        
+        dx_mic = event.x - self.CX
+        dy_mic = event.y - 210
+        self.hover_mic = ((dx_mic * dx_mic + dy_mic * dy_mic) < (20 * 20))
 
-    def _animate(self):
-        self.tick += 1
-        t   = self.tick
+    def _on_mouse_leave(self, event):
+        self.hover_eye = False
+        self.hover_mic = False
+
+    def _on_click(self, event):
+        if self.hover_mic:
+            self.set_mute(not self.muted)
+            self.mic_scale = 0.7 
+        else:
+            self._drag_data["x"] = event.x_root - self.root.winfo_x()
+            self._drag_data["y"] = event.y_root - self.root.winfo_y()
+
+    def _on_drag(self, event):
+        if not self.hover_mic:
+            x = event.x_root - self._drag_data["x"]
+            y = event.y_root - self._drag_data["y"]
+            self.root.geometry(f"+{x}+{y}")
+
+    def _update_physics(self, dt):
+        self.time_elapsed += dt
+        
+        # Smooth Audio Energy
+        self.smooth_mic_energy += (self.raw_mic_energy - self.smooth_mic_energy) * dt * 15.0
+        self.smooth_speaker_energy += (self.raw_speaker_energy - self.smooth_speaker_energy) * dt * 15.0
+        
+        # Decay the raw values quickly so they fall back to 0 when audio stops
+        self.raw_mic_energy *= max(0, 1.0 - dt * 10.0)
+        self.raw_speaker_energy *= max(0, 1.0 - dt * 10.0)
+        
+        self.current_color = _lerp_color(self.current_color, self.target_color, min(1.0, dt * 5.0))
+        state = self._jarvis_state if not self.muted else "MUTED"
+        
+        base_scale = 1.0
+        if self.hover_eye: base_scale = 1.05
+        
         now = time.time()
-
-        if now - self.last_t > (0.14 if self.speaking else 0.55):
-            if self.speaking:
-                self.target_scale = random.uniform(1.05, 1.11)
-                self.target_halo  = random.uniform(138, 182)
-            elif self.muted:
-                self.target_scale = random.uniform(0.998, 1.001)
-                self.target_halo  = random.uniform(20, 32)
+        
+        if not self.is_blinking and (now - self.last_blink_time > self.next_blink_delay):
+            self.is_blinking = True
+            self.blink_phase = -1.0
+            
+        target_open = 1.0
+        if state == "MUTED":
+            target_open = 0.5
+        elif state == "ERROR":
+            target_open = 0.8
+            
+        if self.is_blinking:
+            self.blink_phase += dt * 15.0
+            if self.blink_phase < 0:
+                target_open = 0.1
             else:
-                self.target_scale = random.uniform(1.001, 1.007)
-                self.target_halo  = random.uniform(50, 68)
-            self.last_t = now
-
-        sp = 0.35 if self.speaking else 0.16
-        self.scale  += (self.target_scale - self.scale)  * sp
-        self.halo_a += (self.target_halo  - self.halo_a) * sp
-
-        for i, spd in enumerate([1.2, -0.8, 1.9] if self.speaking else [0.5, -0.3, 0.82]):
-            self.rings_spin[i] = (self.rings_spin[i] + spd) % 360
-        self.scan_angle  = (self.scan_angle  + (2.8 if self.speaking else 1.2))  % 360
-        self.scan2_angle = (self.scan2_angle + (-1.7 if self.speaking else -0.68)) % 360
-
-        pspd  = 3.8 if self.speaking else 1.8
-        limit = self.FACE_SZ * 0.72
-        new_p = [r + pspd for r in self.pulse_r if r + pspd < limit]
-        if len(new_p) < 3 and random.random() < (0.06 if self.speaking else 0.022):
-            new_p.append(0.0)
-        self.pulse_r = new_p
-
-        if t % 40 == 0:
-            self.status_blink = not self.status_blink
-
-        self._draw()
-        self.root.after(50, self._animate)
+                target_open = 1.0
+                if self.blink_phase > 1.0:
+                    self.is_blinking = False
+                    self.last_blink_time = now
+                    self.next_blink_delay = random.uniform(4.0, 8.0)
+                    
+        self.eye_open += (target_open - self.eye_open) * dt * 25.0
+        
+        if state == "THINKING":
+            self.target_look_y = -8.0
+            self.target_look_x = math.sin(self.time_elapsed * 2.0) * 5.0
+        elif state == "LISTENING":
+            self.target_look_x = 0.0
+            self.target_look_y = 0.0
+        else:
+            if now - self.last_look_time > random.uniform(2.0, 5.0):
+                self.target_look_x = random.uniform(-6.0, 6.0)
+                self.target_look_y = random.uniform(-4.0, 4.0)
+                self.last_look_time = now
+                
+        if state == "SPEAKING":
+            jitter_y = math.sin(self.time_elapsed * 40.0) * 1.5
+            self.target_look_y = jitter_y
+            
+        target_scale_w = 1.0
+        target_scale_h = 1.0
+        target_smile = 0.0
+        
+        if state == "THINKING":
+            target_scale_w = 0.8
+            target_scale_h = 0.7
+        elif state == "LISTENING":
+            target_scale_w = 1.2
+            target_scale_h = 1.2
+            
+        if self.hover_eye:
+            target_smile = 1.0
+            
+        self.eye_scale_w += (target_scale_w - self.eye_scale_w) * dt * 10.0
+        self.eye_scale_h += (target_scale_h - self.eye_scale_h) * dt * 10.0
+        self.eye_smile += (target_smile - self.eye_smile) * dt * 15.0
+        
+        self.eye_look_x += (self.target_look_x - self.eye_look_x) * dt * 8.0
+        self.eye_look_y += (self.target_look_y - self.eye_look_y) * dt * 8.0
+        
+        if state == "SPEAKING":
+            self.rotation_speed = 80.0
+            self.target_scale = base_scale + (self.smooth_speaker_energy * 0.8)
+        elif state == "THINKING":
+            self.rotation_speed = 120.0
+            self.target_scale = base_scale
+        elif state == "LISTENING":
+            self.rotation_speed = 60.0
+            self.target_scale = base_scale + (self.smooth_mic_energy * 0.6)
+        elif state == "ERROR":
+            self.rotation_speed = random.uniform(-150.0, 150.0)
+            self.target_scale = base_scale
+        else:
+            self.rotation_speed = 20.0
+            self.target_scale = base_scale + math.sin(self.time_elapsed * 2.0) * 0.02
+            
+        self.scale += (self.target_scale - self.scale) * dt * 6.0
+        
+        for i in range(len(self.base_angles)):
+            mult = 1.0 if i % 2 == 0 else -1.5
+            self.base_angles[i] = (self.base_angles[i] + self.rotation_speed * mult * dt) % 360
+            
+        for p in self.particles:
+            p.angle = (p.angle + p.speed * dt) % 360
+            p.dist += p.dr * dt
+            if p.dist > 90 or p.dist < 60: p.dr *= -1
+            
+            if random.random() < 0.01:
+                p.target_alpha = random.uniform(0.1, 0.8) if random.random() > 0.3 else 0.0
+            p.alpha += (p.target_alpha - p.alpha) * dt * 2.0
+            
+        target_mic = 1.2 if self.hover_mic else 1.0
+        self.mic_scale += (target_mic - self.mic_scale) * dt * 12.0
 
     def _draw(self):
-        c = self.bg
-        W, H, t = self.W, self.H, self.tick
-        FCX, FCY, FW = self.FCX, self.FCY, self.FACE_SZ
-        c.delete("anim")
+        c = self.canvas
+        c.delete("all")
+        CX, CY = self.CX, self.CY
+        base_r = 65 * self.scale
+        
+        part_col = _blend_to_black(self.current_color, 1.0)
+        for p in self.particles:
+            if p.alpha > 0.05:
+                rad = math.radians(p.angle)
+                px = CX + p.dist * math.cos(rad)
+                py = CY + p.dist * math.sin(rad)
+                fill_c = _blend_to_black(part_col, p.alpha)
+                c.create_oval(px-p.size, py-p.size, px+p.size, py+p.size, fill=fill_c, outline="")
+        
+        ring_r = base_r + 4
+        bloom_layers = 4
+        for i in range(bloom_layers):
+            r = ring_r + (i * 3)
+            alpha = (1.0 - i/bloom_layers) * 0.4
+            if self.hover_eye: alpha *= 1.2
+            col = _blend_to_black(self.current_color, alpha)
+            c.create_oval(CX-r, CY-r, CX+r, CY+r, outline=col, width=2)
+            
+        arcs = [
+            (1.0, 3, 140, 40, self.base_angles[0]),
+            (1.05, 2, 80, 40, self.base_angles[1]),
+            (1.12, 1, 40, 80, self.base_angles[2])
+        ]
+        arc_col = _blend_to_black(self.current_color, 0.9)
+        for r_mult, width, extent, gap, angle in arcs:
+            r = base_r * r_mult
+            for s in range(360 // (extent + gap)):
+                start = (angle + s * (extent + gap)) % 360
+                c.create_arc(CX-r, CY-r, CX+r, CY+r, start=start, extent=extent, outline=arc_col, width=width, style="arc")
+                
+        c.create_oval(CX-base_r, CY-base_r, CX+base_r, CY+base_r, fill="#050505", outline="")
+        c.create_oval(CX-base_r+1, CY-base_r+1, CX+base_r-1, CY+base_r-1, outline=_blend_to_black(self.current_color, 0.3), width=2)
+        
+        eye_w = 7 * self.eye_scale_w
+        eye_h = 16 * max(0.1, self.eye_open) * self.eye_scale_h
+        eye_spacing = 16
+        ex = CX + self.eye_look_x
+        ey = CY + self.eye_look_y
+        
+        eye_color = "#ffffff"
+        if self._jarvis_state == "ERROR": eye_color = "#ffdddd"
+        elif self.muted: eye_color = "#ffcccc"
+        
+        c.create_oval(ex - eye_spacing - eye_w, ey - eye_h, ex - eye_spacing + eye_w, ey + eye_h, fill=eye_color, outline="")
+        c.create_oval(ex + eye_spacing - eye_w, ey - eye_h, ex + eye_spacing + eye_w, ey + eye_h, fill=eye_color, outline="")
+        
+        # Emotional Smile Cutout
+        if self.eye_smile > 0.01:
+            cut_y = ey + eye_h - (self.eye_smile * eye_h * 1.2)
+            c.create_oval(ex - eye_spacing - eye_w*1.5, cut_y, ex - eye_spacing + eye_w*1.5, cut_y + eye_h*2, fill="#050505", outline="")
+            c.create_oval(ex + eye_spacing - eye_w*1.5, cut_y, ex + eye_spacing + eye_w*1.5, cut_y + eye_h*2, fill="#050505", outline="")
+        
 
-        if t == 1:
-            for x in range(0, W, 44):
-                for y in range(0, H, 44):
-                    c.create_rectangle(x, y, x+1, y+1, fill=C_DIMMER, outline="", tags="grid")
-
-        for r in range(int(FW*0.54), int(FW*0.28), -22):
-            frac = 1.0 - (r - FW*0.28) / (FW*0.26)
-            ga   = max(0, min(255, int(self.halo_a * 0.09 * frac)))
-            col  = f"#{ga:02x}0011" if self.muted else f"#00{ga:02x}ff"
-            c.create_oval(FCX-r, FCY-r, FCX+r, FCY+r, outline=col, width=2, tags="anim")
-
-        for pr in self.pulse_r:
-            pa  = max(0, int(220 * (1.0 - pr / (FW*0.72))))
-            r   = int(pr)
-            col = self._ac(255, 30, 80, pa//3) if self.muted else self._ac(0, 212, 255, pa)
-            c.create_oval(FCX-r, FCY-r, FCX+r, FCY+r, outline=col, width=2, tags="anim")
-
-        for idx, (r_frac, w_ring, arc_l, gap) in enumerate([(0.47,3,110,75),(0.39,2,75,55),(0.31,1,55,38)]):
-            ring_r = int(FW * r_frac)
-            base_a = self.rings_spin[idx]
-            a_val  = max(0, min(255, int(self.halo_a * (1.0 - idx*0.18))))
-            col    = self._ac(255, 30, 80, a_val) if self.muted else self._ac(0, 212, 255, a_val)
-            for s in range(360 // (arc_l + gap)):
-                start = (base_a + s * (arc_l + gap)) % 360
-                c.create_arc(FCX-ring_r, FCY-ring_r, FCX+ring_r, FCY+ring_r,
-                             start=start, extent=arc_l,
-                             outline=col, width=w_ring, style="arc", tags="anim")
-
-        sr      = int(FW * 0.49)
-        scan_a  = min(255, int(self.halo_a * 1.4))
-        scan_col = self._ac(255, 30, 80, scan_a) if self.muted else self._ac(0, 212, 255, scan_a)
-        c.create_arc(FCX-sr, FCY-sr, FCX+sr, FCY+sr,
-                     start=self.scan_angle, extent=70 if self.speaking else 42,
-                     outline=scan_col, width=3, style="arc", tags="anim")
-        c.create_arc(FCX-sr, FCY-sr, FCX+sr, FCY+sr,
-                     start=self.scan2_angle, extent=70 if self.speaking else 42,
-                     outline=self._ac(255, 100, 0, scan_a//2), width=2, style="arc", tags="anim")
-
-        t_out, t_in = int(FW*0.495), int(FW*0.472)
-        a_mk = self._ac(0, 212, 255, 155)
-        for deg in range(0, 360, 10):
-            rad = math.radians(deg)
-            inn = t_in if deg % 30 == 0 else t_in + 5
-            c.create_line(FCX + t_out*math.cos(rad), FCY - t_out*math.sin(rad),
-                          FCX + inn*math.cos(rad),   FCY - inn*math.sin(rad),
-                          fill=a_mk, width=1, tags="anim")
-
-        ch_r = int(FW * 0.50)
-        gap  = int(FW * 0.15)
-        ch_a = self._ac(0, 212, 255, int(self.halo_a * 0.55))
-        for x1,y1,x2,y2 in [
-            (FCX-ch_r, FCY, FCX-gap, FCY), (FCX+gap, FCY, FCX+ch_r, FCY),
-            (FCX, FCY-ch_r, FCX, FCY-gap), (FCX, FCY+gap, FCX, FCY+ch_r)
-        ]:
-            c.create_line(x1, y1, x2, y2, fill=ch_a, width=1, tags="anim")
-
-        if self._has_face:
-            fw = int(FW * self.scale)
-            if self._face_scale_cache is None or abs(self._face_scale_cache[0] - self.scale) > 0.02:
-                scaled = self._face_pil.resize((fw, fw), Image.BILINEAR)
-                if self._face_scale_cache is not None:
-                    del self._face_scale_cache
-                self._face_scale_cache = (self.scale, ImageTk.PhotoImage(scaled))
-            c.create_image(FCX, FCY, image=self._face_scale_cache[1], tags="anim")
+        MX, MY = self.CX, 210
+        MR = 15 * self.mic_scale
+        mic_alpha = 0.8 if self.hover_mic else 0.3
+        
+        if self.muted:
+            mic_fill = _blend_to_black("#ff3366", mic_alpha)
+            mic_out = "#ff3366"
         else:
-            orb_r   = int(FW * 0.27 * self.scale)
-            orb_col = (255, 30, 80) if self.muted else (0, 65, 120)
-            for i in range(7, 0, -1):
-                frac = i / 7
-                c.create_oval(
-                    FCX-int(orb_r*frac), FCY-int(orb_r*frac),
-                    FCX+int(orb_r*frac), FCY+int(orb_r*frac),
-                    fill=self._ac(int(orb_col[0]*frac), int(orb_col[1]*frac),
-                                  int(orb_col[2]*frac), max(0, min(255, int(self.halo_a*1.1*frac)))),
-                    outline="", tags="anim")
-            c.create_text(FCX, FCY, text=SYSTEM_NAME,
-                          fill=self._ac(0, 212, 255, min(255, int(self.halo_a*2))),
-                          font=("Courier", 14, "bold"), tags="anim")
+            mic_fill = _blend_to_black(self.current_color, mic_alpha)
+            mic_out = _blend_to_black(self.current_color, 0.8)
+            
+        c.create_oval(MX-MR, MY-MR, MX+MR, MY+MR, fill=mic_fill, outline=mic_out, width=2)
+        
+        icon_col = "#ffffff" if self.hover_mic else _blend_to_black("#ffffff", 0.7)
+        if self.muted: icon_col = "#ffaaaa"
+        
+        mw, mh = 3, 6
+        c.create_oval(MX-mw, MY-mh-2, MX+mw, MY+mh-4, fill=icon_col, outline="") 
+        c.create_arc(MX-mw-2, MY-2, MX+mw+2, MY+6, start=180, extent=180, outline=icon_col, width=1.5, style="arc") 
+        c.create_line(MX, MY+6, MX, MY+9, fill=icon_col, width=1.5) 
+        c.create_line(MX-3, MY+9, MX+3, MY+9, fill=icon_col, width=1.5) 
 
-        HDR = 45
-        c.create_rectangle(0, 0, W, HDR, fill="#00080d", outline="", tags="anim")
-        c.create_line(0, HDR, W, HDR, fill=C_MID, width=1, tags="anim")
-        c.create_text(W//2, 28, text="Just A Rather Very Intelligent System",
-                      fill=C_MID, font=("Courier", 9), tags="anim")
-        c.create_text(16,   28, text=MODEL_BADGE, fill=C_DIM, font=("Courier", 9), anchor="w", tags="anim")
-        c.create_text(W-16, 28, text=time.strftime("%I:%M:%S %p"),
-                      fill=C_PRI, font=("Courier", 13, "bold"), anchor="e", tags="anim")
+    def _animate(self):
+        now = time.time()
+        dt = now - self.last_time
+        self.last_time = now
+        if dt > 0.1: dt = 0.1 
+        
+        self._update_physics(dt)
+        self._draw()
+        
+        state = self._jarvis_state if not self.muted else "MUTED"
+        fps_map = {
+            "SPEAKING": 16,
+            "LISTENING": 16,
+            "THINKING": 20,
+            "ONLINE": 22,
+            "IDLE": 22,
+            "MUTED": 22,
+            "ERROR": 20
+        }
+        delay = fps_map.get(state, 22)
+        self.root.after(delay, self._animate)
 
-        sc = (C_MUTED if self.muted
-              else C_ACC  if self.speaking
-              else C_GREEN if self._jarvis_state == "LISTENING"
-              else C_PRI)
-        c.create_text(W//2, FCY + FW//2 + 70,
-                      text=f"{'⊘' if self.muted else ('●' if self.status_blink else '○')} {self.status_text}",
-                      fill=sc, font=("Courier", 11, "bold"), tags="anim")
-
-        # ── MAIN WINDOW WAVEFORM (bottom of face) ─────────────
-        wy  = FCY + FW//2 + 95
-        N   = 48
-        BH  = 12
-        bw  = 10
-        wx0 = (W - N*bw) // 2
-        for i in range(N):
-            if self.muted:
-                hb  = 2
-                col = C_MUTED
-            elif self.speaking:
-                # Realistic waveform when JARVIS speaks
-                base = abs(math.sin(self.tick * 0.12 + i * 0.42)) * BH
-                hb   = max(2, int(base + random.randint(0, 4)))
-                # Color: bright cyan center, dimmer edges
-                center_dist = abs(i - N//2) / (N//2)
-                brightness  = int(255 * (1.0 - center_dist * 0.4))
-                col = f"#00{brightness:02x}ff"
-            else:
-                hb  = int(3 + 2 * math.sin(self.tick * 0.08 + i * 0.55))
-                col = C_DIM
-            c.create_rectangle(wx0+i*bw, wy+BH-hb, wx0+i*bw+bw-1, wy+BH,
-                                fill=col, outline="", tags="anim")
-
-        c.create_rectangle(0, H-22, W, H, fill="#00080d", outline="", tags="anim")
-        c.create_line(0, H-22, W, H-22, fill=C_DIM, width=1, tags="anim")
-        c.create_text(W-16, H-11, fill=C_DIM, font=("Courier", 7), text="[F4] MUTE", anchor="e", tags="anim")
-        c.create_text(W//2, H-11, fill=C_DIM, font=("Courier", 7), text="FatihMakes Industries  ·  MARK XXXV", tags="anim")
-
-    # ─────────────────────────────────────────────────────────
-    def write_log(self, text: str):
-        self.root.after(0, self._write_log_main_thread, text)
-
-    def _write_log_main_thread(self, text: str):
-        with self._log_lock:
-            if hasattr(self, "console_panel"):
-                self.console_panel.write_log(text)
-            self.typing_queue.append(text)
-            tl = text.lower()
-            if tl.startswith("you:"):
-                self.set_state("PROCESSING")
-            elif tl.startswith("jarvis:") or tl.startswith("ai:"):
-                self.set_state("SPEAKING")
-            if not self.is_typing:
-                self._start_typing()
-
-    def show_suggestion(self, text: str):
-        self.write_log(f"JARVIS [PREDICTION]: {text}")
-        if hasattr(self, "activity_feed"):
-            self.activity_feed.append(f"✧ {text[:20]}...")
-
-    def _start_typing(self):
-        if not self.typing_queue:
-            self.is_typing = False
-            if not self.speaking and not self.muted:
-                self.set_state("LISTENING")
-            return
-        self.is_typing = True
-        text = self.typing_queue.popleft()
-        tl   = text.lower()
-        tag  = ("you" if tl.startswith("you:")
-                else "ai"  if (tl.startswith("jarvis:") or tl.startswith("ai:"))
-                else "err" if ("error" in tl or "failed" in tl)
-                else "sys")
-        self.log_text.configure(state="normal")
-        self._trim_log()
-
-        # ── INSTANT for sys/err — no lag ─────────────────────
-        if tag in ("sys", "err") or len(text) < 25:
-            self.log_text.insert(tk.END, text + "\n", tag)
-            self.log_text.see(tk.END)
-            self.log_text.configure(state="disabled")
-            self.is_typing = False
-            if self.typing_queue:
-                self.root.after(20, self._start_typing)
-            return
-
-        # ── Word-by-word for You/AI ───────────────────────────
-        words = text.split()
-        self._type_word_main(words, 0, tag)
-
-    def _type_word_main(self, words, i, tag):
-        if i < len(words):
-            self.log_text.insert(tk.END, words[i] + " ", tag)
-            self.log_text.see(tk.END)
-            self.root.after(28, self._type_word_main, words, i+1, tag)
-        else:
-            self.log_text.insert(tk.END, "\n")
-            self.log_text.configure(state="disabled")
-            self.is_typing = False
-            if self.typing_queue:
-                self.root.after(50, self._start_typing)
-
-    def _trim_log(self):
-        try:
-            lines = int(self.log_text.index("end-1c").split(".")[0])
-            if lines > self.MAX_LOG_LINES:
-                self.log_text.delete("1.0", f"{lines - self.MAX_LOG_LINES + 1}.0")
-        except Exception:
-            pass
-
-    def start_speaking(self): self.set_state("SPEAKING")
-    def stop_speaking(self):
-        if not self.muted:
-            self.set_state("LISTENING")
-
-    def _api_keys_exist(self): return API_FILE.exists()
-
-    def wait_for_api_key(self):
-        while not self._api_key_ready:
-            time.sleep(0.1)
-
-    def _show_setup_ui(self):
-        self.setup_frame = tk.Frame(self.root, bg="#00080d",
-                                    highlightbackground=C_PRI, highlightthickness=1)
-        self.setup_frame.place(relx=0.5, rely=0.5, anchor="center")
-        tk.Label(self.setup_frame, text="◈  INITIALISATION REQUIRED",
-                 fg=C_PRI, bg="#00080d", font=("Courier", 13, "bold")).pack(pady=(18, 4))
-        tk.Label(self.setup_frame,
-                 text="Enter your Gemini API key to boot J.A.R.V.I.S.",
-                 fg=C_MID, bg="#00080d", font=("Courier", 9)).pack(pady=(0, 10))
-        self.gemini_entry = tk.Entry(self.setup_frame, width=52, fg=C_TEXT,
-                                     bg="#000d12", insertbackground=C_TEXT,
-                                     borderwidth=0, font=("Courier", 10), show="*")
-        self.gemini_entry.pack(pady=(0, 4))
-        tk.Button(self.setup_frame, text="▸  INITIALISE SYSTEMS",
-                  command=self._save_api_keys, bg=C_BG, fg=C_PRI,
-                  activebackground="#003344", font=("Courier", 10),
-                  borderwidth=0, pady=8).pack(pady=14)
-
-    def _get_config_internal(self):
-        try:
-            if API_FILE.exists():
-                with open(API_FILE, "r", encoding="utf-8") as f:
-                    return json.load(f)
-        except Exception:
-            pass
-        return {}
-
-    def _save_api_keys(self):
-        gemini = self.gemini_entry.get().strip()
-        if not gemini:
-            return
-        os.makedirs(CONFIG_DIR, exist_ok=True)
-        with open(API_FILE, "w", encoding="utf-8") as f:
-            json.dump({"gemini_api_key": gemini}, f, indent=4)
-        self.setup_frame.destroy()
-        self._api_key_ready = True
-        self.set_state("LISTENING")
+if __name__ == "__main__":
+    ui = JarvisUI()
+    ui.root.mainloop()

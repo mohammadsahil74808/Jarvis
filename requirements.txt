@@ -31,15 +31,13 @@ newspaper3k
 together
 python-dotenv
 pynput
-webrtcvad
-openai-whisper
+
 faster-whisper
 torch
 torchaudio
 torchvision
-deepface
 scikit-learn
-tensorflow
+keras
 imutils
 flask
 flask-socketio

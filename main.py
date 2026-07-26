@@ -22,13 +22,6 @@ from core.config import (
 )
 from core.utils import retry, async_retry
 
-try:
-    from ui.web_search_widget    import WebSearchWidget
-    from ui.deep_research_widget import DeepResearchWidget
-    from ui.file_search_widget   import FileSearchWidget
-    _WIDGETS_OK = True
-except ImportError:
-    _WIDGETS_OK = False
 
 
 # ── Lazy imports ───────────────────────────────────────────────
@@ -131,7 +124,7 @@ class JarvisLive:
 
         from agent.tool_executor import ToolExecutor
         from core.audio_engine import AudioEngine
-        self.tool_executor  = ToolExecutor(self, widgets_ok=_WIDGETS_OK)
+        self.tool_executor  = ToolExecutor(self, widgets_ok=False)
         self.audio_engine   = AudioEngine(self)
         self.ui.on_text_command = self._on_text_command
 
@@ -279,9 +272,10 @@ class JarvisLive:
                 list(model.transcribe(dummy_audio, beam_size=1)[0])
                 
                 self.whisper_fb = model
-                print("[JARVIS] ✓ Faster-Whisper base.en model loaded, warmed up, and ready.")
+                print("[JARVIS] Faster-Whisper base.en model loaded, warmed up, and ready.")
             except Exception as e:
-                print(f"[JARVIS] ⚠️ Faster-Whisper load failed: {e}")
+                print(f"[JARVIS] Faster-Whisper load failed: {e}")
+                self.whisper_model = None
         threading.Thread(target=_load_whisper, daemon=True).start()
 
         def _load_predictive():
@@ -386,7 +380,7 @@ class JarvisLive:
             self.wake_detector = WakeWordDetector()
             self.ui.write_log("SYS: openWakeWord system ready hai.")
         except Exception as e:
-            print(f"[JARVIS] ⚠️ WakeWord: {e}")
+            print(f"[JARVIS] WakeWord Error: {e}")
             self.wake_word_enabled = False
 
     def _on_text_command(self, text: str):
@@ -686,7 +680,6 @@ def main():
         print("[JARVIS] An instance is already running. Sent wake signal. Exiting.")
         sys.exit(0)
 
-    startup_check()
     ui = JarvisUI("face.png")
 
     def runner():
@@ -696,7 +689,7 @@ def main():
         try:
             asyncio.run(jarvis.run())
         except KeyboardInterrupt:
-            print("\n🔴 Shutting down...")
+            print("\nShutting down...")
 
     threading.Thread(target=runner, daemon=True).start()
     ui.root.mainloop()

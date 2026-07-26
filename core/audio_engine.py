@@ -160,6 +160,16 @@ class AudioEngine:
 
             if not jarvis_speaking and not self.jarvis.ui.muted:
                 data = indata.tobytes()
+                
+                # Extract RMS energy and pass to UI
+                if hasattr(self.jarvis.ui, "set_mic_energy"):
+                    try:
+                        import numpy as np
+                        rms = np.sqrt(np.mean(np.square(indata.astype(np.float32)))) / 32768.0
+                        self.jarvis.ui.set_mic_energy(rms)
+                    except Exception:
+                        pass
+                
                 self._loop.call_soon_threadsafe(
                     self.jarvis.out_queue.put_nowait,
                     {"data": data, "mime_type": "audio/pcm"}
@@ -196,6 +206,17 @@ class AudioEngine:
             while True:
                 chunk = await self.jarvis.audio_in_queue.get()
                 self.jarvis.set_speaking(True)
+                
+                # Extract RMS energy from output chunk and pass to UI
+                if hasattr(self.jarvis.ui, "set_speaker_energy"):
+                    try:
+                        import numpy as np
+                        audio_np = np.frombuffer(chunk, dtype=np.int16)
+                        rms = np.sqrt(np.mean(np.square(audio_np.astype(np.float32)))) / 32768.0
+                        self.jarvis.ui.set_speaker_energy(rms)
+                    except Exception:
+                        pass
+                        
                 await asyncio.to_thread(stream.write, chunk)
                 if self.jarvis.audio_in_queue.empty():
                     await asyncio.sleep(0.15)
