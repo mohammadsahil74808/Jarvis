@@ -1,0 +1,7 @@
+{
+    "gemini_api_key": "YOUR_GEMINI_API_KEY",
+    "groq_api_key": "",
+    "nvidia_api_key": "",
+    "openrouter_api_key": "",
+    "hf_api_key": ""
+}
