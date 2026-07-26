@@ -26,39 +26,74 @@
 
 ---
 
-## 🚀 Quick Start Guide
+## 🚀 Quick Start Guide (For New Setup / Fresh Clone)
 
-Setting up JARVIS on your PC takes just a few minutes. Follow these steps:
+Setting up JARVIS on a new PC or fresh clone takes just a few minutes. Follow these steps:
 
 ### 1. Prerequisites
 - **OS**: Windows 10 or 11
-- **Python**: Version 3.11 or 3.12 (Make sure to add to PATH)
-- **Hardware**: A working Microphone and Speakers
+- **Python**: Version 3.11 or 3.12 (Make sure to check "Add Python to PATH" during installation)
+- **Hardware**: Working Microphone and Speakers
 
-### 2. Installation
-Open your terminal (CMD or PowerShell) and run:
+---
+
+### 2. Clone & Setup
+
+Open **CMD** or **PowerShell** and run:
 
 ```bash
-# Clone the repository
+# 1. Clone the repository
 git clone https://github.com/mohammadsahil74808/Jarvis.git
 
-# Enter the directory
+# 2. Navigate into the project folder
 cd Jarvis
 
-# Install dependencies
+# 3. (Recommended) Create and activate a Virtual Environment
+python -m venv venv
+venv\Scripts\activate
+
+# 4. Install all required dependencies
 pip install -r requirements.txt
 
-# Install Playwright browsers (for Web Research/Builders)
+# 5. Install Playwright browsers (for Web Research & AI App Builders)
 playwright install
 ```
 
-### 3. Configuration
-1. Obtain a **FREE** API Key from [Google AI Studio (Gemini)](https://aistudio.google.com/apikey).
-2. Launch JARVIS:
+---
+
+### 3. Configure API Keys
+
+JARVIS requires a Gemini API key to operate.
+
+1. Get a **FREE** API key from [Google AI Studio](https://aistudio.google.com/apikey).
+2. Create your `config/api_keys.json` file from the provided template:
+
+   **In PowerShell / CMD:**
    ```bash
-   python main.py
+   copy config\api_keys.json.example config\api_keys.json
    ```
-3. Enter your API Key in the UI on the first launch. The key will be saved securely in `config.json`.
+3. Open `config/api_keys.json` in any text editor and paste your API key:
+   ```json
+   {
+       "gemini_api_key": "YOUR_GEMINI_API_KEY_HERE",
+       "groq_api_key": "",
+       "nvidia_api_key": "",
+       "openrouter_api_key": "",
+       "hf_api_key": ""
+   }
+   ```
+
+---
+
+### 4. Run JARVIS
+
+Start the assistant by running:
+
+```bash
+python main.py
+```
+
+> **Tip:** Press **F4** at any time to Mute/Unmute JARVIS microphone input!
 
 ---
 
