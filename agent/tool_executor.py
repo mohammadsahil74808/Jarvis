@@ -332,6 +332,12 @@ class ToolExecutor:
                     result = r or "Weather delivered."
                     break
 
+                elif name == "system_doctor":
+                    from actions.doctor import run_doctor
+                    r = await loop.run_in_executor(None, lambda: run_doctor(parameters=args, player=self.jarvis.ui))
+                    result = r or "Diagnostics completed."
+                    break
+
                 elif name == "browser_control":
                     from actions.browser_control import browser_control
                     r = await loop.run_in_executor(None, lambda: browser_control(parameters=args, player=self.jarvis.ui))

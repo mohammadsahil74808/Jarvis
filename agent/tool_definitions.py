@@ -34,6 +34,14 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "system_doctor",
+        "description": "Runs complete system health diagnostics (API keys, Python environment, Git status, path scope security, audio engine). Use when user asks to check system health, run doctor, or diagnose environment.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {}
+        }
+    },
+    {
         "name": "web_search",
         "description": "Searches the web for any information.",
         "parameters": {

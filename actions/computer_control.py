@@ -26,7 +26,7 @@ import platform
 from pathlib import Path
 
 try:
-    import pyautogui
+    import pyautogui  # type: ignore
     pyautogui.FAILSAFE = True
     pyautogui.PAUSE    = 0.05
     _PYAUTOGUI = True
@@ -34,7 +34,7 @@ except ImportError:
     _PYAUTOGUI = False
 
 try:
-    import pyperclip
+    import pyperclip  # type: ignore
     _PYPERCLIP = True
 except ImportError:
     _PYPERCLIP = False

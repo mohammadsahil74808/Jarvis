@@ -294,9 +294,10 @@ class BrowserManager:
                 self._is_running = False
 
     def get_browser_use_modules(self) -> tuple[Any, Any, Any, Any]:
-        """Loads and returns browser_use modules directly from jarvis.browser.browser_use package."""
-        from .browser_use.agent import service as agent_service
-        from .browser_use.browser import session as browser_mod
-        from .browser_use.browser import session as session_mod
-        from .browser_use.tools import service as controller_mod
+        """Loads and returns browser_use modules dynamically."""
+        import importlib
+        agent_service = importlib.import_module("browser_use.agent.service")
+        browser_mod = importlib.import_module("browser_use.browser.session")
+        session_mod = importlib.import_module("browser_use.browser.session")
+        controller_mod = importlib.import_module("browser_use.tools.service")
         return browser_mod, session_mod, controller_mod, agent_service
