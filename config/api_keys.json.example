@@ -3,5 +3,16 @@
     "groq_api_key": "",
     "nvidia_api_key": "",
     "openrouter_api_key": "",
-    "hf_api_key": ""
+    "hf_api_key": "",
+    "vision_context_enabled": true,
+    "vision_min_interval_sec": 2.0,
+    "vision_max_interval_sec": 15.0,
+    "vision_change_threshold": 0.018,
+    "vision_ocr_every_n_changes": 1,
+    "vision_max_ocr_chars": 2500,
+    "vision_privacy_excluded_apps": [
+        "1Password",
+        "Bitwarden",
+        "KeePass"
+    ]
 }
