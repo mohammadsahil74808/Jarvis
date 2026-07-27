@@ -40,7 +40,7 @@ def _generate_content_with_fallback(prompt: str) -> str:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.2
             )
-            return completion.choices[0].message.content
+            return completion.choices[0].message.content or ""
         except Exception as e:
             print(f"[CodeHelper] ⚠️ Groq fallback failed: {e}")
 
@@ -51,7 +51,7 @@ def _generate_content_with_fallback(prompt: str) -> str:
             model="gemini-2.0-flash",
             contents=prompt
         )
-        return response.text
+        return response.text or ""
     except Exception as e:
         print(f"[CodeHelper] ⚠️ Gemini 2.0 Flash failed: {e}, falling back to lightweight...")
 
@@ -62,7 +62,7 @@ def _generate_content_with_fallback(prompt: str) -> str:
             model="gemini-1.5-flash-8b",
             contents=prompt
         )
-        return response.text
+        return response.text or ""
     except Exception as e:
         raise RuntimeError(f"All coding models exhausted quota/failed: {e}")
 
@@ -492,17 +492,20 @@ Please:
 
 Be specific and actionable. If you see an error message, quote it exactly."""
 
-        contents = [
-            types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
-            analysis_prompt,
-        ]
+        contents = types.Content(
+            parts=[
+                types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                types.Part.from_text(text=analysis_prompt),
+            ]
+        )
 
         response = client.models.generate_content(
             model="gemini-2.0-flash",
             contents=contents,
         )
 
-        analysis = response.text.strip()
+        res_text = getattr(response, "text", "") or ""
+        analysis = res_text.strip()
         print(f"[Code] ✅ Screen analysis complete")
 
         try:

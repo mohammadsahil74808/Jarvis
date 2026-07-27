@@ -180,16 +180,17 @@ class _BrowserThread:
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result(timeout=timeout)
 
-    # ── Tarayıcı başlatma ────────────────────────────────────────────────────
-
     async def _launch_browser_if_needed(self):
-        """Ana tarayıcıyı başlat (henüz başlatılmadıysa)."""
+        """Launches the default browser if needed."""
         if self._browser and self._browser.is_connected():
             return
 
+        if self._playwright is None:
+            self._playwright = await async_playwright().start()
+
         prog_id                              = _get_default_browser_id()
         self._engine_name, self._exe_path, self._channel = _find_browser_executable(prog_id)
-        engine = getattr(self._playwright, self._engine_name)
+        engine = getattr(self._playwright, self._engine_name, self._playwright.chromium)
 
         launch_kwargs = {"headless": False}
         if self._engine_name == "chromium":
@@ -575,6 +576,25 @@ def browser_control(
         elif action == "close":
             result = _bt.run(_bt._close_browser())
 
+        elif action in ("list_tabs", "switch_tab", "close_tab", "execute_js", "go_back", "go_forward", "autonomous_task"):
+            from jarvis.browser.browser_adapter import get_browser_adapter
+            adapter = get_browser_adapter()
+            if action == "list_tabs":
+                result = adapter.list_tabs()
+            elif action == "switch_tab":
+                result = adapter.switch_tab(int(parameters.get("index", 0)))
+            elif action == "close_tab":
+                result = adapter.close_tab(int(parameters.get("index", -1)))
+            elif action == "execute_js":
+                result = adapter.execute_js(parameters.get("script", "document.title"))
+            elif action == "go_back":
+                result = adapter.go_back()
+            elif action == "go_forward":
+                result = adapter.go_forward()
+            elif action == "autonomous_task":
+                task_str = str(parameters.get("task") or parameters.get("text") or "")
+                result = adapter.perform_task(task_str)
+
         else:
             result = f"Unknown action: {action}"
 
@@ -583,8 +603,9 @@ def browser_control(
     except Exception as e:
         result = f"Browser error: {e}"
 
-    print(f"[Browser] {result[:80]}")
+    res_text = str(result or "")
+    print(f"[Browser] {res_text[:80]}")
     if player:
-        player.write_log(f"[browser] {result[:60]}")
+        player.write_log(f"[browser] {res_text[:60]}")
 
-    return result
+    return res_text

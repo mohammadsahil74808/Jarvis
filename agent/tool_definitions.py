@@ -207,19 +207,22 @@ TOOL_DECLARATIONS = [
         "name": "browser_control",
         "description": (
             "Controls the web browser. Use for: opening websites, searching the web, "
-            "clicking elements, filling forms, scrolling, any web-based task."
+            "clicking elements, filling forms, scrolling, managing tabs, running JS, autonomous multi-step tasks, any web-based task."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":      {"type": "STRING", "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | press | close"},
+                "action":      {"type": "STRING", "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | press | close | list_tabs | switch_tab | close_tab | execute_js | go_back | go_forward | autonomous_task"},
                 "url":         {"type": "STRING", "description": "URL for go_to action"},
                 "query":       {"type": "STRING", "description": "Search query for search action"},
                 "selector":    {"type": "STRING", "description": "CSS selector for click/type"},
-                "text":        {"type": "STRING", "description": "Text to click or type"},
+                "text":        {"type": "STRING", "description": "Text to click or type or task prompt"},
                 "description": {"type": "STRING", "description": "Element description for smart_click/smart_type"},
                 "direction":   {"type": "STRING", "description": "up or down for scroll"},
                 "key":         {"type": "STRING", "description": "Key name for press action"},
+                "index":       {"type": "INTEGER", "description": "Tab index for switch_tab/close_tab"},
+                "script":      {"type": "STRING", "description": "JavaScript code string for execute_js"},
+                "task":        {"type": "STRING", "description": "Autonomous browser task description for autonomous_task"},
                 "incognito":   {"type": "BOOLEAN", "description": "Open in private/incognito mode"},
             },
             "required": ["action"]

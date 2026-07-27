@@ -64,6 +64,27 @@ class BrowserUseAdapter:
     def perform_task(self, task_description: str) -> str:
         return self.controller.perform_task(task_description)
 
+    def scroll(self, direction: str = "down", amount: int = 500) -> str:
+        return self.controller.scroll(direction, amount)
+
+    def list_tabs(self) -> str:
+        return self.controller.list_tabs()
+
+    def switch_tab(self, index: int) -> str:
+        return self.controller.switch_tab(index)
+
+    def close_tab(self, index: int = -1) -> str:
+        return self.controller.close_tab(index)
+
+    def execute_js(self, script: str) -> str:
+        return self.controller.execute_js(script)
+
+    def go_back(self) -> str:
+        return self.controller.go_back()
+
+    def go_forward(self) -> str:
+        return self.controller.go_forward()
+
     def get_status(self) -> Dict[str, Any]:
         return {
             "browser_engine": "Firefox Persistent",

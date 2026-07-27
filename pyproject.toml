@@ -2,6 +2,8 @@
 project_root = "."
 ignore = ["**/__pyrefly_virtual__/**", "**/inmemory/**"]
 exclude = ["**/__pyrefly_virtual__/**", "**/inmemory/**"]
+search_paths = [".", "jarvis/browser"]
 
 [tool.pyright]
 exclude = ["**/__pyrefly_virtual__/**", "**/inmemory/**"]
+extraPaths = ["jarvis/browser"]

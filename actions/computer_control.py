@@ -149,8 +149,8 @@ def _type_text(text: str, interval: float = 0.03) -> str:
     return f"Typed: {text[:50]}{'...' if len(text) > 50 else ''}"
 
 
-def _click(x: int = None, y: int = None, button: str = "left",
-           clicks: int = 1, image: str = None) -> str:
+def _click(x: int | None = None, y: int | None = None, button: str = "left",
+           clicks: int = 1, image: str | None = None) -> str:
     """
     Clicks at coordinates or on a screen image.
     If image path given, locates it on screen and clicks.
@@ -234,7 +234,7 @@ def _clipboard_set(text: str) -> str:
     return "pyperclip not available"
 
 
-def _screenshot(save_path: str = None) -> str:
+def _screenshot(save_path: str | None = None) -> str:
     """Takes a screenshot."""
     _ensure_pyautogui()
     if not save_path:
@@ -347,15 +347,21 @@ def _analyze_screen_for_element(description: str) -> tuple[int, int] | None:
             f"If not found, return: NOT_FOUND"
         )
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=[
-                {"mime_type": "image/png", "data": image_bytes},
-                prompt
+        from google.genai import types
+
+        contents = types.Content(
+            parts=[
+                types.Part.from_bytes(data=image_bytes, mime_type="image/png"),
+                types.Part.from_text(text=prompt)
             ]
         )
+        response = client.models.generate_content(
+            model="gemini-2.0-flash",
+            contents=contents
+        )
 
-        text = response.text.strip()
+        res_text = getattr(response, "text", "") or ""
+        text = res_text.strip()
         if "NOT_FOUND" in text:
             return None
 
@@ -422,13 +428,10 @@ def computer_control(
             return _smart_type(text, clear_first=clear_first)
         
         elif action in ("click", "left_click"):
-            return _click(
-                x=parameters.get("x"),
-                y=parameters.get("y"),
-                button="left",
-                clicks=1,
-                image=parameters.get("image")
-            )
+            _x = int(parameters["x"]) if parameters.get("x") is not None else None
+            _y = int(parameters["y"]) if parameters.get("y") is not None else None
+            _img = str(parameters["image"]) if parameters.get("image") is not None else None
+            return _click(x=_x, y=_y, button="left", clicks=1, image=_img)
 
         elif action == "click_normalized":
             _ensure_pyautogui()
@@ -440,21 +443,15 @@ def computer_control(
             return _click(x=px_x, y=px_y, button="left", clicks=1)
 
         elif action == "double_click":
-            return _click(
-                x=parameters.get("x"),
-                y=parameters.get("y"),
-                button="left",
-                clicks=2,
-                image=parameters.get("image")
-            )
+            _x = int(parameters["x"]) if parameters.get("x") is not None else None
+            _y = int(parameters["y"]) if parameters.get("y") is not None else None
+            _img = str(parameters["image"]) if parameters.get("image") is not None else None
+            return _click(x=_x, y=_y, button="left", clicks=2, image=_img)
 
         elif action == "right_click":
-            return _click(
-                x=parameters.get("x"),
-                y=parameters.get("y"),
-                button="right",
-                clicks=1
-            )
+            _x = int(parameters["x"]) if parameters.get("x") is not None else None
+            _y = int(parameters["y"]) if parameters.get("y") is not None else None
+            return _click(x=_x, y=_y, button="right", clicks=1)
 
         elif action == "move":
             return _move_mouse(
@@ -493,7 +490,8 @@ def computer_control(
             return _clipboard_set(parameters.get("text", ""))
 
         elif action == "screenshot":
-            return _screenshot(parameters.get("path"))
+            _sp = str(parameters["path"]) if parameters.get("path") is not None else None
+            return _screenshot(save_path=_sp)
 
         elif action == "wait":
             return _wait(float(parameters.get("seconds", 1.0)))

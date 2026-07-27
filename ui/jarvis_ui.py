@@ -105,7 +105,7 @@ class JarvisUI:
         self.last_blink_time = time.time()
         self.next_blink_delay = random.uniform(4.0, 8.0)
         self.is_blinking = False
-        self.blink_phase = 0
+        self.blink_phase = 0.0
         self.last_look_time = time.time()
         
         self.particles = [Particle() for _ in range(10)]
@@ -115,6 +115,39 @@ class JarvisUI:
         self.mic_scale = 1.0
         self._drag_data = {"x": 0, "y": 0}
         
+        self.type_box_visible = False
+        self.type_frame = tk.Frame(
+            self.root, 
+            bg="#00111a", 
+            highlightbackground="#0088ff", 
+            highlightcolor="#00ffff", 
+            highlightthickness=1
+        )
+        
+        self.type_entry = tk.Entry(
+            self.type_frame,
+            bg="#000d14",
+            fg="#00ffff",
+            insertbackground="#00ffff",
+            relief="flat",
+            font=("Segoe UI", 9)
+        )
+        self.type_entry.pack(side="left", fill="both", expand=True, padx=4, pady=2)
+        self.type_entry.bind("<Return>", self._on_type_submit)
+        
+        self.send_btn = tk.Button(
+            self.type_frame,
+            text="➔",
+            bg="#003344",
+            fg="#00ffff",
+            activebackground="#005577",
+            activeforeground="#ffffff",
+            relief="flat",
+            font=("Segoe UI", 9, "bold"),
+            command=self._on_type_submit
+        )
+        self.send_btn.pack(side="right", padx=2, pady=2)
+
         self.canvas.bind("<ButtonPress-1>", self._on_click)
         self.canvas.bind("<B1-Motion>", self._on_drag)
         self.canvas.bind("<Motion>", self._on_mouse_move)
@@ -123,6 +156,7 @@ class JarvisUI:
         self.root.bind("<F4>", lambda e: self.set_mute(not self.muted))
         
         self.menu = tk.Menu(self.root, tearoff=0, bg="#00111a", fg="#00d4ff", activebackground="#005577", activeforeground="#ffffff", borderwidth=0)
+        self.menu.add_command(label="Type Box: Show", command=self.toggle_type_box)
         self.menu.add_command(label="Settings", state="disabled")
         self.menu.add_command(label="Mute / Unmute", command=lambda: self.set_mute(not self.muted))
         self.menu.add_command(label="Restart", state="disabled")
@@ -177,6 +211,43 @@ class JarvisUI:
             self.menu.tk_popup(event.x_root, event.y_root)
         finally:
             self.menu.grab_release()
+
+    def toggle_type_box(self):
+        if self.type_box_visible:
+            self.hide_type_box()
+        else:
+            self.show_type_box()
+
+    def show_type_box(self):
+        self.type_box_visible = True
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        self.root.geometry(f"{self.W}x{self.H + 40}+{x}+{y}")
+        self.type_frame.place(x=10, y=self.H + 5, width=self.W - 20, height=30)
+        self.type_entry.focus_set()
+        try:
+            self.menu.entryconfigure(0, label="Type Box: Hide")
+        except Exception:
+            pass
+
+    def hide_type_box(self):
+        self.type_box_visible = False
+        x = self.root.winfo_x()
+        y = self.root.winfo_y()
+        self.type_frame.place_forget()
+        self.root.geometry(f"{self.W}x{self.H}+{x}+{y}")
+        try:
+            self.menu.entryconfigure(0, label="Type Box: Show")
+        except Exception:
+            pass
+
+    def _on_type_submit(self, event=None):
+        text = self.type_entry.get().strip()
+        if text:
+            self.write_log(f"You (typed): {text}")
+            self.type_entry.delete(0, tk.END)
+            if self.on_text_command:
+                self.on_text_command(text)
 
     def _on_mouse_move(self, event):
         dx_eye = event.x - self.CX

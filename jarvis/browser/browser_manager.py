@@ -23,11 +23,11 @@ from playwright.async_api import async_playwright
 
 from .browser_context import BrowserContextManager
 
-# Ensure integrations/browser_use is in sys.path
+# Ensure jarvis/browser is in sys.path so browser_use package resolves cleanly
 _JARVIS_ROOT = get_base_dir()
-_BROWSER_USE_PATH = str(_JARVIS_ROOT / "integrations" / "browser_use")
-if _BROWSER_USE_PATH not in sys.path:
-    sys.path.insert(0, _BROWSER_USE_PATH)
+_BROWSER_DIR = str(_JARVIS_ROOT / "jarvis" / "browser")
+if _BROWSER_DIR not in sys.path:
+    sys.path.insert(0, _BROWSER_DIR)
 
 # Automatically sync JARVIS config API keys to os.environ for Browser Use
 if get_api_key():
@@ -122,17 +122,9 @@ class BrowserManager:
             if not self._is_running or not self._loop:
                 self._start_event_loop()
 
+        assert self._loop is not None
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result(timeout=timeout)
-
-    def get_browser_use_modules(self) -> tuple[Any, Any, Any, Any]:
-        """Dynamically imports and returns upstream Browser Use modules."""
-        import browser_use.agent.service as agent_service
-        import browser_use.browser as browser_mod
-        import browser_use.browser.session as session_mod
-        import browser_use.controller as controller_mod
-
-        return browser_mod, session_mod, controller_mod, agent_service
 
     async def async_get_or_create_browser(self, headful: bool = True) -> tuple[Any, Any]:
         """
@@ -300,3 +292,11 @@ class BrowserManager:
             if self._loop and self._loop.is_running():
                 self._loop.call_soon_threadsafe(self._loop.stop)
                 self._is_running = False
+
+    def get_browser_use_modules(self) -> tuple[Any, Any, Any, Any]:
+        """Loads and returns browser_use modules directly from jarvis.browser.browser_use package."""
+        from .browser_use.agent import service as agent_service
+        from .browser_use.browser import session as browser_mod
+        from .browser_use.browser import session as session_mod
+        from .browser_use.tools import service as controller_mod
+        return browser_mod, session_mod, controller_mod, agent_service

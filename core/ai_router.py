@@ -357,7 +357,7 @@ class FreeAIRouter:
         prompt:   str,
         width:    int = 1024,
         height:   int = 1024,
-        save_path: str = None,
+        save_path: str | None = None,
     ) -> str:
         """
         Generate image using FREE services.
@@ -387,7 +387,7 @@ class FreeAIRouter:
         return "Image generation failed — check internet connection"
 
     def _pollinations_image(self, prompt: str, width: int,
-                             height: int, save_path: str = None) -> Optional[str]:
+                             height: int, save_path: str | None = None) -> Optional[str]:
         """Pollinations.ai — completely free image generation."""
         from pathlib import Path
         import hashlib
@@ -411,7 +411,7 @@ class FreeAIRouter:
         return save_path
 
     def _hf_flux_image(self, prompt: str,
-                        save_path: str = None) -> Optional[str]:
+                        save_path: str | None = None) -> Optional[str]:
         """Hugging Face FLUX.1 — free with HF account."""
         from pathlib import Path
         import hashlib

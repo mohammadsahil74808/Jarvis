@@ -128,9 +128,11 @@ class BrowserController:
         try:
             from vision.context_store import get_screen_context
             ctx = get_screen_context()
-            if ctx and ctx.window_title and ("Firefox" in ctx.window_title or "Mozilla" in ctx.window_title):
-                if ctx.ocr_text and len(ctx.ocr_text) > 100:
-                    return f"Extracted via Screen Vision ({ctx.window_title}):\n{ctx.ocr_text[:1200]}"
+            win_title = str(getattr(ctx, "window_title", "") or "")
+            ocr_txt = str(getattr(ctx, "ocr_text", "") or "")
+            if ctx and ("Firefox" in win_title or "Mozilla" in win_title):
+                if len(ocr_txt) > 100:
+                    return f"Extracted via Screen Vision ({win_title}):\n{ocr_txt[:1200]}"
         except Exception:
             pass
 
@@ -266,3 +268,98 @@ class BrowserController:
             return f"Autonomous Task Finished: {result}"
         except Exception as e:
             return f"Autonomous task status: {e}"
+
+    def scroll(self, direction: str = "down", amount: int = 500) -> str:
+        """Scrolls active browser page up or down."""
+        async def _action():
+            _, context = await self.manager.async_get_or_create_browser()
+            page = await context.get_current_page()
+            delta = amount if direction.lower() == "down" else -amount
+            await page.evaluate(f"window.scrollBy(0, {delta})")
+            return f"Scrolled {direction} by {amount}px"
+
+        try:
+            res = self.manager.run_async(_action())
+            self.state.log_action("scroll", {"direction": direction, "amount": amount}, res)
+            return res
+        except Exception as e:
+            return f"Scroll failed: {e}"
+
+    def list_tabs(self) -> str:
+        """Lists all active browser tabs."""
+        async def _action():
+            _, context = await self.manager.async_get_or_create_browser()
+            pages = context.pages
+            tabs_info = []
+            for i, p in enumerate(pages):
+                title = await p.title()
+                tabs_info.append(f"[{i}] {title} ({p.url})")
+            return "\n".join(tabs_info) if tabs_info else "No open tabs found."
+
+        try:
+            return self.manager.run_async(_action())
+        except Exception as e:
+            return f"Failed to list tabs: {e}"
+
+    def switch_tab(self, index: int) -> str:
+        """Switches to the tab at the given 0-based index."""
+        async def _action():
+            _, context = await self.manager.async_get_or_create_browser()
+            pages = context.pages
+            if 0 <= index < len(pages):
+                page = pages[index]
+                await page.bring_to_front()
+                self.manager._active_page = page
+                title = await page.title()
+                return f"Switched to tab [{index}]: '{title}' ({page.url})"
+            return f"Tab index {index} out of bounds (open tabs: {len(pages)})"
+
+        try:
+            res = self.manager.run_async(_action())
+            self.state.log_action("switch_tab", {"index": index}, res)
+            return res
+        except Exception as e:
+            return f"Failed to switch tab: {e}"
+
+    def close_tab(self, index: int = -1) -> str:
+        """Closes tab at given index (defaults to active/last tab)."""
+        async def _action():
+            _, context = await self.manager.async_get_or_create_browser()
+            pages = context.pages
+            if not pages:
+                return "No open tabs to close."
+            target_page = pages[index] if 0 <= index < len(pages) else pages[-1]
+            title = await target_page.title()
+            await target_page.close()
+            return f"Closed tab: '{title}'"
+
+        try:
+            res = self.manager.run_async(_action())
+            self.state.log_action("close_tab", {"index": index}, res)
+            return res
+        except Exception as e:
+            return f"Failed to close tab: {e}"
+
+    def execute_js(self, script: str) -> str:
+        """Executes JavaScript code in active page context."""
+        async def _action():
+            _, context = await self.manager.async_get_or_create_browser()
+            page = await context.get_current_page()
+            result = await page.evaluate(script)
+            return str(result)
+
+        try:
+            res = self.manager.run_async(_action())
+            self.state.log_action("execute_js", {"script": script[:50]}, res)
+            return f"JS Result: {res}"
+        except Exception as e:
+            return f"JS execution failed: {e}"
+
+    def go_back(self) -> str:
+        """Navigates to previous page in history."""
+        return self.navigate("back")
+
+    def go_forward(self) -> str:
+        """Navigates to next page in history."""
+        return self.navigate("forward")
+

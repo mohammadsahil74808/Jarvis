@@ -15,6 +15,15 @@ def _get_genai():
         _genai_cache = (genai, types)
     return _genai_cache
 
+import importlib
+
+def _get_widget(module_name: str, class_name: str) -> Any:
+    try:
+        mod = importlib.import_module(module_name)
+        return getattr(mod, class_name, None)
+    except Exception:
+        return None
+
 class ToolExecutor:
     def __init__(self, jarvis, widgets_ok=False):
         self.jarvis = jarvis
@@ -188,11 +197,18 @@ class ToolExecutor:
                 "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
                 "Be concise. Format as a bulleted list."
             )
+            contents = types.Content(
+                parts=[
+                    types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
+                    types.Part.from_text(text=prompt)
+                ]
+            )
             response = client.models.generate_content(
                 model="gemini-2.0-flash",
-                contents=[types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"), prompt]
+                contents=contents
             )
-            return response.text.strip()
+            res_text = getattr(response, "text", "") or ""
+            return res_text.strip()
 
         try:
             self.jarvis.screen_context = await loop.run_in_executor(None, _blocking_capture)
@@ -258,13 +274,9 @@ class ToolExecutor:
         return types.FunctionResponse(id=fc.id, name=fc.name, response={"result": result})
 
     async def _handle_research_mode(self, fc, args, loop):
-        try:
-            from ui.deep_research_widget import DeepResearchWidget
-        except ImportError:
-            self._widgets_ok = False
-            
+        DeepResearchWidget = _get_widget("ui.deep_research_widget", "DeepResearchWidget")
         _rw = None
-        if self._widgets_ok:
+        if self._widgets_ok and DeepResearchWidget is not None:
             try:
                 _rw = DeepResearchWidget.launch(
                     self.jarvis.ui.root, args.get("query", ""))
@@ -299,11 +311,9 @@ class ToolExecutor:
         return types.FunctionResponse(id=fc.id, name=fc.name, response={"result": result})
 
     async def _execute_standard_tool(self, fc, name, args, loop):
-        try:
-            from ui.file_search_widget import FileSearchWidget
-            from ui.web_search_widget import WebSearchWidget
-        except ImportError:
-            self._widgets_ok = False
+        FileSearchWidget = _get_widget("ui.file_search_widget", "FileSearchWidget")
+        WebSearchWidget = _get_widget("ui.web_search_widget", "WebSearchWidget")
+        BuildWidget = _get_widget("ui.build_widget", "BuildWidget")
 
         result = "Done."
         attempts = 0
@@ -332,7 +342,7 @@ class ToolExecutor:
                     from actions.file_manager import file_manager
                     _fmw = None
                     _fm_act = args.get("action", "")
-                    if self._widgets_ok and _fm_act in ("find", "search", "deep_search"):
+                    if self._widgets_ok and _fm_act in ("find", "search", "deep_search") and FileSearchWidget is not None:
                         _fm_q = args.get("query") or args.get("name") or ""
                         try:
                             _fmw = FileSearchWidget.launch(
@@ -420,8 +430,7 @@ class ToolExecutor:
                     tmpl_name   = args.get("use_template", "")
 
                     _wbw = None
-                    if self._widgets_ok:
-                        from ui.build_widget import BuildWidget
+                    if self._widgets_ok and BuildWidget is not None:
                         _wbw = BuildWidget.launch(self.jarvis.ui.root, "WEBSITE", prompt or tmpl_name or "New Site")
 
                     # Template shortcut
@@ -472,8 +481,7 @@ class ToolExecutor:
                     do_apk    = args.get("build_apk", False)
 
                     _abw = None
-                    if self._widgets_ok:
-                        from ui.build_widget import BuildWidget
+                    if self._widgets_ok and BuildWidget is not None:
                         _abw = BuildWidget.launch(self.jarvis.ui.root, "MOBILE APP", prompt or tmpl_name or "New App")
 
                     if tmpl_name:
@@ -516,7 +524,7 @@ class ToolExecutor:
                     from actions.web_search import web_search as web_search_action
                     query = args.get("query", "")
                     _wsw = None
-                    if self._widgets_ok and query:
+                    if self._widgets_ok and query and WebSearchWidget is not None:
                         try:
                             _wsw = WebSearchWidget.launch(self.jarvis.ui.root, query)
                         except Exception as _e:
