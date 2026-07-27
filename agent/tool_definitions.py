@@ -25,8 +25,13 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "capture_screen_context",
-        "description": "Capture a screenshot and analyze the current state of the screen (active window, buttons, etc.).",
-        "parameters": {"type": "OBJECT", "properties": {}}
+        "description": "Return the latest persistent ScreenContext. Use force=true only when the user explicitly needs a fresh screenshot analysis.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "force": {"type": "BOOLEAN", "description": "Force a fresh screenshot + LLM vision call instead of using cached context."}
+            }
+        }
     },
     {
         "name": "web_search",

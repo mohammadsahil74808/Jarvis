@@ -171,28 +171,28 @@ class ToolExecutor:
         self.jarvis.ui.set_state("THINKING")
         loop = asyncio.get_running_loop()
         
+        force = bool(args.get("force", False))
+
         def _blocking_capture():
+            if not force and getattr(self.jarvis, "vision_service", None):
+                ctx = self.jarvis.vision_service.latest()
+                if ctx and ctx.status not in ("initializing", "unknown"):
+                    return ctx.to_prompt()
             from actions.screen_processor import _capture_screenshot
             from core.config import get_gemini_client
-            try:
-                img_bytes = _capture_screenshot()
-                _, types = _get_genai()
-                client = get_gemini_client()
-                prompt = (
-                    "Analyze this screenshot. Describe: 1. The active window. "
-                    "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
-                    "Be concise. Format as a bulleted list."
-                )
-                response = client.models.generate_content(
-                    model="gemini-2.0-flash",
-                    contents=[
-                        types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"),
-                        prompt
-                    ]
-                )
-                return response.text.strip()
-            except Exception as e:
-                return f"Screen capture failed: {e}"
+            img_bytes = _capture_screenshot()
+            _, types = _get_genai()
+            client = get_gemini_client()
+            prompt = (
+                "Analyze this screenshot. Describe: 1. The active window. "
+                "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
+                "Be concise. Format as a bulleted list."
+            )
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=[types.Part.from_bytes(data=img_bytes, mime_type="image/jpeg"), prompt]
+            )
+            return response.text.strip()
 
         try:
             self.jarvis.screen_context = await loop.run_in_executor(None, _blocking_capture)

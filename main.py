@@ -168,6 +168,7 @@ class JarvisLive:
         self.system_vitals     = {"cpu": 0, "ram": 0, "battery": None}
         self.active_plan       = None
         self.screen_context    = None
+        self.vision_service    = None
         self.memory_executor   = ThreadPoolExecutor(max_workers=1)
         self.usage_tracker     = None
         self.predictive_engine = None
@@ -327,6 +328,16 @@ class JarvisLive:
                 time.sleep(60)   # Was 30 — now 60s
         threading.Thread(target=_monitor_vitals, daemon=True).start()
 
+        def _load_vision_service():
+            from vision.service import VisionService
+            try:
+                self.vision_service = VisionService(config, on_context=self._on_screen_context)
+                self.vision_service.start()
+                self.ui.write_log("SYS: Persistent vision context active.")
+            except Exception as e:
+                print(f"[JARVIS] Vision Service: {e}")
+        threading.Thread(target=_load_vision_service, daemon=True).start()
+
         def _load_rag_core():
             try:
                 from rag_core import get_rag_engine
@@ -345,6 +356,18 @@ class JarvisLive:
             if msg:
                 self.notify(msg, voice=True)
         self.ui.root.after(900000, self._companion_heartbeat)
+
+    def _on_screen_context(self, context):
+        try:
+            self.screen_context = context.to_prompt()
+            self._config_dirty = True
+        except Exception as e:
+            print(f"[JARVIS] Screen context update: {e}")
+
+    def get_screen_context(self):
+        if self.vision_service:
+            return self.vision_service.latest()
+        return None
 
     def _on_app_activity(self, opened, closed):
         if opened:
