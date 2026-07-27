@@ -139,6 +139,8 @@ class JarvisUI:
         return True
         
     def write_log(self, text: str): print(f"[JARVIS LOG] {text}")
+    def show_suggestion(self, text: str): print(f"[PROACTIVE SUGGESTION] {text}")
+    def open_browser_panel(self, query: str = ""): print(f"[JARVIS LOG] SYS: Opening web search for '{query}'...")
     
     def set_state(self, state: str):
         self._jarvis_state = state

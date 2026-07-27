@@ -185,22 +185,35 @@ class AudioEngine:
                 await asyncio.sleep(5)
 
     # ─────────────────────────────────────────────────────────
-    async def play_loop(self):
-        """Plays received audio chunks from Gemini."""
+    async def play_loop(self) -> None:
+        """Plays received PCM audio chunks from Gemini Live with low latency & zero stutter."""
         print("[AudioEngine] Play started")
         stream = lazy_sd().RawOutputStream(
             samplerate=RECEIVE_SAMPLE_RATE,
             channels=CHANNELS,
             dtype="int16",
-            blocksize=CHUNK_SIZE,
+            latency="low",
         )
         stream.start()
+
+        speaking_timeout_task = None
+
+        async def _reset_speaking_delayed():
+            await asyncio.sleep(0.35)
+            if self.jarvis.audio_in_queue.empty():
+                self.jarvis.set_speaking(False)
+
         try:
             while True:
                 chunk = await self.jarvis.audio_in_queue.get()
+                if not chunk:
+                    continue
+
+                if speaking_timeout_task and not speaking_timeout_task.done():
+                    speaking_timeout_task.cancel()
+
                 self.jarvis.set_speaking(True)
-                
-                # Extract RMS energy from output chunk and pass to UI
+
                 if hasattr(self.jarvis.ui, "set_speaker_energy"):
                     try:
                         import numpy as np
@@ -209,16 +222,19 @@ class AudioEngine:
                         self.jarvis.ui.set_speaker_energy(rms)
                     except Exception:
                         pass
-                        
+
                 await asyncio.to_thread(stream.write, chunk)
+
                 if self.jarvis.audio_in_queue.empty():
-                    await asyncio.sleep(0.15)
-                    if self.jarvis.audio_in_queue.empty():
-                        self.jarvis.set_speaking(False)
+                    speaking_timeout_task = asyncio.create_task(_reset_speaking_delayed())
+
         except Exception as e:
             print(f"[AudioEngine] Play error: {e}")
             raise
         finally:
             self.jarvis.set_speaking(False)
-            stream.stop()
-            stream.close()
+            try:
+                stream.stop()
+                stream.close()
+            except Exception:
+                pass

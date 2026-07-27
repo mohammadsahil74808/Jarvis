@@ -157,9 +157,12 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str) -> dict:
 
         combined = f"User: {user_text[:500]}\nJarvis: {jarvis_text[:300]}"
 
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=(
+        response = None
+        for model_name in ["models/gemini-2.5-flash", "gemini-2.0-flash"]:
+            try:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=(
             f"Extract ALL memorable personal facts from this conversation. Any language.\n"
             f"Return ONLY valid JSON. Use {{}} if truly nothing is worth saving.\n\n"
             f"Category guide:\n"
@@ -190,7 +193,15 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str) -> dict:
             f' "wishes":{{"buy_guitar":{{"value":"wants an acoustic guitar"}}}},\n'
             f' "notes":{{"special_info":{{"value":"Some other detail"}}}}}}\n\n'
             )
-        )
+                )
+                if response and response.text:
+                    break
+            except Exception:
+                response = None
+
+        if not response or not response.text:
+            return {}
+
         raw = response.text.strip()
 
         import re

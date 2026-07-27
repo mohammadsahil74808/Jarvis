@@ -1,4 +1,9 @@
 from __future__ import annotations
+import os
+os.environ["PYTHONWARNINGS"] = "ignore"
+import warnings
+warnings.filterwarnings("ignore")
+
 import asyncio
 from typing import TYPE_CHECKING
 

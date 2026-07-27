@@ -1,0 +1,7 @@
+[tool.pyrefly]
+project_root = "."
+ignore = ["**/__pyrefly_virtual__/**", "**/inmemory/**"]
+exclude = ["**/__pyrefly_virtual__/**", "**/inmemory/**"]
+
+[tool.pyright]
+exclude = ["**/__pyrefly_virtual__/**", "**/inmemory/**"]

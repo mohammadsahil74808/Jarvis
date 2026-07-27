@@ -1,6 +1,8 @@
 import os
 import sys
 import json
+import warnings
+warnings.filterwarnings("ignore")
 from pathlib import Path
 from google import genai
 

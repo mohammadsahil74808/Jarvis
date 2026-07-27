@@ -9,29 +9,30 @@ from core.config import get_gemini_client
 
 
 
+from google.genai import types
+
 def _gemini_search(query: str) -> str:
     client = get_gemini_client()
-    
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=query,
-            config={"tools": [{"google_search": {}}]}
-        )
-    except Exception as e:
-        print(f"[WebSearch] [WARNING] Gemini 2.0 quota full, trying 1.5-flash... ({e})")
-        response = client.models.generate_content(
-            model="gemini-1.5-flash",
-            contents=query,
-            config={"tools": [{"google_search": {}}]}
-        )
-    text = ""
-    for part in response.candidates[0].content.parts:
-        if hasattr(part, "text") and part.text:
-            text += part.text
-    if not text.strip():
-        raise ValueError("Empty response")
-    return text.strip()
+    response = None
+    config = types.GenerateContentConfig(
+        tools=[types.Tool(google_search=types.GoogleSearch())]
+    )
+    for model_name in ["models/gemini-2.5-flash", "gemini-2.0-flash"]:
+        try:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=query,
+                config=config,
+            )
+            if response and response.text:
+                break
+        except Exception:
+            response = None
+
+    if not response or not response.text:
+        raise ValueError("Gemini search unavailable")
+
+    return response.text.strip()
 
 
 
