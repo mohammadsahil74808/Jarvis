@@ -13,15 +13,12 @@
 # ══════════════════════════════════════════════════════════════
 
 from __future__ import annotations
-import os
 import re
 import sys
 import shutil
 import subprocess
-import tempfile
 import time
 from pathlib import Path
-from typing import Optional
 
 from core.ai_router import get_ai_router
 

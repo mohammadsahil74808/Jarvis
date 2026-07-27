@@ -6,19 +6,16 @@
 #
 # Built-in: wallpaper change, icon arrangement, desktop cleanup, organize by type
 
-import os
 import sys
-import json
 import shutil
 import subprocess
 import ctypes
 import tempfile
-import pyautogui
 from pathlib import Path
 from datetime import datetime
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
+from core.config import get_gemini_client
 
 
 

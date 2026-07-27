@@ -2,8 +2,7 @@
 
 import asyncio
 import traceback
-import sys
-from typing import Dict, Any
+from typing import Any
 
 # We'll use lazy imports for genai and other heavy modules
 _genai_cache = None
@@ -432,7 +431,6 @@ class ToolExecutor:
                         if tmpl:
                             plan_overrides = {"site_name": prompt or tmpl.plan_data.get("site_name", "My Site")}
                             from actions.website_builder.engine import WebsiteEngine
-                            from actions.website_builder.brain import WebsiteBrain
                             engine = WebsiteEngine(
                                 log_callback=lambda m: self.jarvis.ui.write_log(f"[web] {m}"),
                                 widget=_wbw

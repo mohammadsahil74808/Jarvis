@@ -3,7 +3,6 @@ import time
 import psutil
 import socket
 from datetime import datetime
-from pathlib import Path
 
 try:
     import pygetwindow as gw

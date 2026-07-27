@@ -1,9 +1,7 @@
 import sqlite3
 import json
-from datetime import datetime
 from threading import RLock
-from pathlib import Path
-from typing import List, Dict, Optional, Any
+from typing import Optional
 
 from rag_core.config import get_db_path
 

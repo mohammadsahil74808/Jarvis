@@ -7,7 +7,6 @@
 # ══════════════════════════════════════════════════════════════
 
 from __future__ import annotations
-import json
 from pathlib import Path
 from typing import Callable, Optional
 from dataclasses import dataclass, field

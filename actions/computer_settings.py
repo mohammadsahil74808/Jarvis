@@ -10,7 +10,6 @@
 
 import time
 import subprocess
-import sys
 import platform
 from pathlib import Path
 
@@ -30,7 +29,7 @@ except ImportError:
 
 _OS = platform.system() 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
+from core.config import get_gemini_client
 
 import json
 

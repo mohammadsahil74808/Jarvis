@@ -13,13 +13,12 @@
 
 import subprocess
 import sys
-import json
 import re
 import time
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
+from core.config import get_gemini_client
 DESKTOP            = Path.home() / "Desktop"
 MAX_BUILD_ATTEMPTS = 3
 GEMINI_MODEL       = "gemini-2.0-flash"
@@ -28,7 +27,7 @@ GEMINI_MODEL       = "gemini-2.0-flash"
 
 
 def _generate_content_with_fallback(prompt: str) -> str:
-    from core.config import get_groq_api_key, get_api_key
+    from core.config import get_groq_api_key
     
     # 1. First try Groq API which has a massive code quota (if available)
     groq_key = get_groq_api_key()

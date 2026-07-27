@@ -18,14 +18,13 @@
 
 import json
 import re
-import sys
 import subprocess
 import platform
 from datetime import datetime, timedelta
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR, get_gemini_client
+from core.config import get_gemini_client
 
 
 def _parse_date(raw: str) -> str:

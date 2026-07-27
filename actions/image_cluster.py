@@ -14,7 +14,6 @@
 # ══════════════════════════════════════════════════════════════
 
 from __future__ import annotations
-import os
 import shutil
 from pathlib import Path
 from typing import Optional
@@ -168,7 +167,6 @@ def cluster_by_similarity(
     try:
         import numpy as np
         from sklearn.cluster import DBSCAN
-        import keras
         from keras import Model
         from keras.applications.vgg16 import VGG16, preprocess_input
         from keras.utils import load_img, img_to_array

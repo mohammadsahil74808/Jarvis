@@ -1,4 +1,3 @@
-import json
 import re
 import sys
 import threading
@@ -12,10 +11,9 @@ from agent.planner       import create_plan, replan
 from agent.error_handler import analyze_error, generate_fix, ErrorDecision
 
 
-from core.config import get_api_key as _get_api_key, get_gemini_client, BASE_DIR
+from core.config import get_gemini_client
 
 def _run_generated_code(description: str, speak: Callable | None = None) -> str:
-    from google import genai
     from google.genai import types
 
     client = get_gemini_client()

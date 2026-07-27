@@ -3,11 +3,7 @@ import mss.tools
 import cv2
 import numpy as np
 import pytesseract
-from PIL import Image
-import io
-import json
 import os
-from pathlib import Path
 
 # Tesseract path configuration (Common for Windows)
 TESSERACT_EXE = r"C:\Program Files\Tesseract-OCR\tesseract.exe"

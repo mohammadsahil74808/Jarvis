@@ -1,5 +1,4 @@
 import yaml
-from pathlib import Path
 from core.config import BASE_DIR
 
 CONFIG_PATH = BASE_DIR / "rag_config.yaml"

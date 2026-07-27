@@ -1,6 +1,5 @@
 # actions/weather_report.py
 
-import webbrowser
 from urllib.parse import quote_plus
 
 

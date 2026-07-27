@@ -1,4 +1,4 @@
-from typing import List, Dict, Any
+from typing import List, Dict
 from rag_core.retrieval.hybrid import reciprocal_rank_fusion
 from rag_core.config import get_rag_setting
 

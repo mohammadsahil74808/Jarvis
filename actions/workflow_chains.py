@@ -1,11 +1,8 @@
 import time
-import os
-import sys
 from datetime import datetime
 from actions.open_app import open_app, close_app_by_name
 from actions.computer_settings import computer_settings
 from actions.reminder import reminder
-from actions.browser_control import browser_control
 
 def workflow_chains(
     parameters: dict,

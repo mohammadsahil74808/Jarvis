@@ -10,24 +10,27 @@
 from __future__ import annotations
 import collections
 import threading
-import time
-from typing import Callable, Optional
+from typing import Callable
 import numpy as np
+
+
+class _EnergyVadFallback:
+    """Pure Python/NumPy fallback when C-compiled webrtcvad is unavailable."""
+    def __init__(self, mode: int = 3):
+        self.mode = mode
+        self.threshold = 350.0
+
+    def is_speech(self, raw_bytes: bytes, sample_rate: int) -> bool:
+        if not raw_bytes:
+            return False
+        arr = np.frombuffer(raw_bytes, dtype=np.int16).astype(np.float32)
+        rms = float(np.sqrt(np.mean(arr ** 2))) if len(arr) > 0 else 0.0
+        return rms > self.threshold
 
 
 class VADEngine:
     """
-    WebRTC-based voice activity detector.
-
-    How it works:
-    1. Receives 10ms PCM chunks from microphone
-    2. Google's WebRTC VAD checks if chunk contains speech
-    3. Uses 2-frame history to smooth out false triggers
-    4. Accumulates voiced frames into a buffer
-    5. When silence detected for 'sensitivity' seconds → fires callback
-
-    Used in:  audio_engine.py → detection_loop()
-    Replaces: raw amplitude check that triggered on music/knocks
+    WebRTC/Energy-based voice activity detector.
     """
 
     def __init__(
@@ -37,26 +40,18 @@ class VADEngine:
         aggressiveness: int = 3,
         sensitivity: float = 0.4,
     ):
-        """
-        Parameters
-        ----------
-        on_speech_end   : callback(audio_np) called when speech segment ends
-        sample_rate     : must be 8000, 16000, 32000, or 48000
-        aggressiveness  : 0 (least) to 3 (most aggressive noise rejection)
-                          mode 3 is best for home/office with background noise
-        sensitivity     : seconds of silence before speech is considered ended
-        """
         try:
-            import webrtcvad
+            import importlib
+            webrtcvad = importlib.import_module("webrtcvad")
             self._vad = webrtcvad.Vad(aggressiveness)
-        except ImportError:
-            raise ImportError(
-                "webrtcvad not installed. Run: pip install webrtcvad"
-            )
+        except Exception:
+            self._vad = _EnergyVadFallback(aggressiveness)
+
 
         self.sample_rate   = sample_rate
         self.sensitivity   = sensitivity
         self._callback     = on_speech_end
+
 
         # 10ms chunk = sample_rate / 100 samples × 2 bytes (int16)
         self._chunk_ms     = 10

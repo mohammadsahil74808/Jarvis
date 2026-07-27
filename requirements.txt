@@ -1,6 +1,5 @@
 sounddevice
 google-genai
-python-dotenv
 pillow
 requests
 beautifulsoup4
@@ -12,24 +11,19 @@ pygetwindow
 opencv-python
 numpy
 mss
-Pillow
 psutil
 comtypes
 pycaw               
-win10toast          
 send2trash
 youtube-transcript-api
 pywinauto
 openwakeword
-yt-dlp
 pytesseract
 faiss-cpu
 sentence-transformers
 PyPDF2
 python-docx
 newspaper3k
-together
-python-dotenv
 pynput
 
 faster-whisper
@@ -38,7 +32,6 @@ torchaudio
 torchvision
 scikit-learn
 keras
-imutils
 flask
 flask-socketio
 

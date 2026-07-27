@@ -14,11 +14,8 @@ import traceback
 from core.config import (
     CHANNELS, CHUNK_SIZE, SEND_SAMPLE_RATE, RECEIVE_SAMPLE_RATE
 )
+from core.utils import lazy_sd
 
-
-def _lazy_sd():
-    import sounddevice as sd
-    return sd
 
 
 class AudioEngine:
@@ -35,9 +32,8 @@ class AudioEngine:
 
     # ─────────────────────────────────────────────────────────
     def _try_init_vad(self):
-        """Try to initialize WebRTC VAD. Silent fail if not installed."""
+        """Initialize VAD Engine (WebRTC if available, or built-in NumPy energy detector)."""
         try:
-            import webrtcvad
             from core.vad_engine import VADEngine
             self._vad = VADEngine(
                 on_speech_end=self._on_vad_speech_end,
@@ -46,14 +42,11 @@ class AudioEngine:
                 sensitivity=0.4,
             )
             self._vad_enabled = True
-            print("[AudioEngine] ✓ WebRTC VAD active")
-        except ImportError:
-            self._vad_enabled = False
-            print("[AudioEngine] WebRTC VAD not installed — using standard mode")
-            print("             (Install: pip install webrtcvad)")
+            print("[AudioEngine] ✓ Voice Activity Detection (VAD) active")
         except Exception as e:
             self._vad_enabled = False
             print(f"[AudioEngine] VAD init failed: {e} — using standard mode")
+
 
     def _on_vad_speech_end(self, audio_numpy):
         """
@@ -177,7 +170,7 @@ class AudioEngine:
 
         while True:
             try:
-                with _lazy_sd().InputStream(
+                with lazy_sd().InputStream(
                     samplerate=SEND_SAMPLE_RATE,
                     channels=CHANNELS,
                     dtype="int16",
@@ -195,7 +188,7 @@ class AudioEngine:
     async def play_loop(self):
         """Plays received audio chunks from Gemini."""
         print("[AudioEngine] Play started")
-        stream = _lazy_sd().RawOutputStream(
+        stream = lazy_sd().RawOutputStream(
             samplerate=RECEIVE_SAMPLE_RATE,
             channels=CHANNELS,
             dtype="int16",

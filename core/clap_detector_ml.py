@@ -19,7 +19,7 @@ import threading
 import time
 import collections
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Optional
 import numpy as np
 
 # Model path relative to this file

@@ -7,11 +7,9 @@ if TYPE_CHECKING:
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
-import json
 import sys
 import socket
 import traceback
-from pathlib import Path
 
 from ui import JarvisUI
 from core.config import (
@@ -20,15 +18,10 @@ from core.config import (
     LIVE_MODEL, CHANNELS, SEND_SAMPLE_RATE,
     RECEIVE_SAMPLE_RATE, CHUNK_SIZE
 )
-from core.utils import retry, async_retry
 
 
 
 # ── Lazy imports ───────────────────────────────────────────────
-def _lazy_sd():
-    import sounddevice as sd
-    return sd
-
 def _lazy_proactive():
     from intelligence.proactive_engine import ProactiveEngine
     return ProactiveEngine

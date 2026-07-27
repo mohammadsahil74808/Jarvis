@@ -11,8 +11,6 @@ Düzeltmeler:
 import json, os, re
 from datetime import datetime
 from threading import RLock
-from pathlib import Path
-import sys
 
 
 from core.config import BASE_DIR, get_gemini_client

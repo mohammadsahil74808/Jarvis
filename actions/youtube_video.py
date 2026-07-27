@@ -1,6 +1,4 @@
-import json
 import re
-import sys
 import time
 import subprocess
 import platform
@@ -13,7 +11,6 @@ from PIL import ImageGrab
 
 try:
     import requests
-    from bs4 import BeautifulSoup
     _REQUESTS_OK = True
 except ImportError:
     _REQUESTS_OK = False
@@ -25,7 +22,7 @@ except ImportError:
     _TRANSCRIPT_OK = False
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
+from core.config import get_gemini_client
 
 HEADERS = {
     "User-Agent": (

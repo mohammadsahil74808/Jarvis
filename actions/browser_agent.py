@@ -2,9 +2,7 @@ import asyncio
 import threading
 import concurrent.futures
 import platform
-import shutil
 import time
-from pathlib import Path
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
 
 class BrowserAgent:

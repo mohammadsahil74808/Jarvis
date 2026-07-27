@@ -1,14 +1,10 @@
 # actions/screen_processor.py
-import base64
 import io
 import json
-import re
-import os
 import cv2
 import mss
 import mss.tools
 import numpy as np
-from pathlib import Path
 
 try:
     import PIL.Image
@@ -17,7 +13,7 @@ except ImportError:
     _PIL_OK = False
 
 from google.genai import types
-from core.config import get_api_key, API_CONFIG_PATH, get_gemini_client
+from core.config import API_CONFIG_PATH, get_gemini_client
 
 # Configuration
 IMG_MAX_W = 640

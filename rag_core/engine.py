@@ -1,5 +1,5 @@
 import hashlib
-from typing import List, Dict, Any
+from typing import List, Dict
 
 from rag_core.storage.sqlite_manager import SQLiteManager
 from rag_core.storage.faiss_manager import FAISSManager

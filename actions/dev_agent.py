@@ -8,7 +8,7 @@ import webbrowser
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
+from core.config import BASE_DIR, get_gemini_client
 PROJECTS_DIR     = BASE_DIR / "workspaces" / "dev_projects"
 MAX_FIX_ATTEMPTS = 5
 MODEL_PLANNER    = "gemini-2.0-flash"
@@ -29,7 +29,7 @@ def _create_backup(file_path: Path):
 
 
 def _generate_content_with_fallback(prompt: str) -> str:
-    from core.config import get_groq_api_key, get_api_key
+    from core.config import get_groq_api_key
     
     groq_key = get_groq_api_key()
     if groq_key:

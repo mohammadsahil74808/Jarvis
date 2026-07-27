@@ -1,12 +1,11 @@
 import subprocess
 import sys
-import json
 import re
 import shlex
 from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client, get_desktop_path
+from core.config import get_gemini_client, get_desktop_path
 
 
 

@@ -13,13 +13,12 @@ import time
 import shutil
 import signal
 import subprocess
-import threading
 import webbrowser
 from pathlib import Path
 from datetime import datetime
 from typing import Optional, Callable
 
-from .brain   import WebsitePlan, STACK_PROFILES
+from .brain   import WebsitePlan
 from .codegen import CodeGenerator
 from core.ai_router import get_ai_router
 from core.config import get_desktop_path

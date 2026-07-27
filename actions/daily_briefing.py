@@ -1,19 +1,15 @@
 # actions/daily_briefing.py
 
 import sys
-import os
-import subprocess
 import requests
 import json
 from datetime import datetime
-from pathlib import Path
 
 # Fix path for imports
 from core.config import BASE_DIR
 if str(BASE_DIR) not in sys.path:
     sys.path.append(str(BASE_DIR))
 
-from memory.memory_manager import load_memory
 from actions.news import news_report
 
 def get_daily_briefing(

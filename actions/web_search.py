@@ -3,12 +3,9 @@
 # Primary: Gemini google_search (yeni google.genai SDK)
 # Fallback: DuckDuckGo (ddgs)
 
-import json
-import sys
-from pathlib import Path
 
 
-from core.config import get_api_key, BASE_DIR, get_gemini_client
+from core.config import get_gemini_client
 
 
 

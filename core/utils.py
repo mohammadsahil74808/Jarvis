@@ -99,3 +99,8 @@ def speak_local(text: str) -> None:
         )
     except Exception as e:
         print(f"[LocalTTS] Failed: {e}")
+
+def lazy_sd():
+    import sounddevice as sd
+    return sd
+

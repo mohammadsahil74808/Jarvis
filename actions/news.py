@@ -1,11 +1,8 @@
 
 # actions/news.py
 
-import sys
-import json
 import requests
 import xml.etree.ElementTree as ET
-from pathlib import Path
 
 def news_report(
     parameters:     dict,

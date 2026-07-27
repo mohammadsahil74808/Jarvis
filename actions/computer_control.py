@@ -18,7 +18,6 @@
 #   - Find and click image/element on screen
 
 import json
-import sys
 import time
 import random
 import string
@@ -41,7 +40,7 @@ except ImportError:
     _PYPERCLIP = False
 
 
-from core.config import get_api_key, BASE_DIR, API_CONFIG_PATH, get_gemini_client
+from core.config import BASE_DIR, get_gemini_client
 
 
 def _load_user_profile() -> dict:

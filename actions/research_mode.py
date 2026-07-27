@@ -1,6 +1,4 @@
-import json
 import requests
-import warnings
 from bs4 import BeautifulSoup
 from newspaper import Article
 from concurrent.futures import ThreadPoolExecutor

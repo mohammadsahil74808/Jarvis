@@ -1,11 +1,9 @@
 import json
 import re
-import sys
-from pathlib import Path
 from enum import Enum
 
 
-from core.config import get_api_key as _get_api_key, get_gemini_client, BASE_DIR
+from core.config import get_gemini_client
 
 
 class ErrorDecision(Enum):
