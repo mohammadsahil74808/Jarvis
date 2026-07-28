@@ -20,6 +20,21 @@ class JarvisState:
         }
         self.active_plan = None
         self.screen_context = None
+        self.user_status = {
+            "emotion": None,
+            "stress_level": "normal",
+            "fatigue": False,
+            "last_emotion_time": 0.0
+        }
+        
+        try:
+            import json
+            from core.config import BASE_DIR
+            plan_file = BASE_DIR / "memory" / "active_plan.json"
+            if plan_file.exists():
+                self.active_plan = json.loads(plan_file.read_text(encoding="utf-8"))
+        except Exception:
+            self.active_plan = None
 
     def update_vitals(self, cpu: float, ram: float, battery: dict = None):
         self.system_vitals["cpu"] = cpu
@@ -33,3 +48,9 @@ class JarvisState:
 
     def get_session(self, key: str) -> str:
         return self.session_context.get(key)
+        
+    def update_user_status(self, key: str, value: any):
+        import time
+        if key in self.user_status:
+            self.user_status[key] = value
+            self.user_status["last_emotion_time"] = time.time()

@@ -28,12 +28,7 @@ pynput
 
 faster-whisper
 torch
-torchaudio
-torchvision
 scikit-learn
-keras
-flask
-flask-socketio
 
 # RAG Core Dependencies
 rank-bm25

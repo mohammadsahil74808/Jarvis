@@ -88,6 +88,17 @@ def _update_memory_async(jarvis, user_text: str, jarvis_text: str) -> None:
             return
         data = extract_memory(user_text, jarvis_text, api_key)
         if data:
+            # --- MEMORY-WRITE GUARD ---
+            source = "conversation"
+            last_tool = jarvis.state.get_session("last_tool")
+            if last_tool in ("web_search", "browser_control", "browser_agent", "file_manager", "vision_action", "code_helper"):
+                source = "tool_result"
+            
+            if source != "conversation":
+                print(f"[Memory Guard] Flagged potentially untrusted memory extraction from {last_tool}. Skipping silent write: {data}")
+                jarvis.ui.write_log(f"SYS: [Memory Guard] Blocked silent memory write from {last_tool}.")
+                return
+                
             update_memory(data)
             jarvis._config_dirty = True
     except Exception as e:
@@ -130,10 +141,10 @@ class JarvisLive:
         self.audio_engine   = AudioEngine(self)
         self.ui.on_text_command = self._on_text_command
 
-        # ── FIX 5: AppWatcher starts 15s after boot (not immediately) ──
+        # AppWatcher starts immediately (no artificial delay)
         from core.app_watcher import AppWatcher
         self.app_watcher = AppWatcher(callback=self._on_app_activity)
-        self.ui.root.after(15000, self.app_watcher.start)
+        self.ui.root.after(0, self.app_watcher.start)
 
         config = _get_config()
 
@@ -184,8 +195,8 @@ class JarvisLive:
         self._cached_config    = None
         self._config_dirty     = True
 
-        # ── Lazy background init after 5s ──────────────────────────────
-        self.ui.root.after(5000, self._background_lazy_init)
+        # ── Lazy background init immediately ──
+        self.ui.root.after(0, self._background_lazy_init)
 
         # ── UDP Wake Listener ──────────────────────────────────────────
         self._start_udp_listener()
@@ -567,6 +578,14 @@ class JarvisLive:
                             if txt:
                                 in_buf.append(txt)
 
+                        if getattr(sc, "interrupted", False):
+                            while not self.audio_in_queue.empty():
+                                try:
+                                    self.audio_in_queue.get_nowait()
+                                except asyncio.QueueEmpty:
+                                    break
+                            self.set_speaking(False)
+
                         if sc.turn_complete:
                             self.set_speaking(False)
 
@@ -594,10 +613,34 @@ class JarvisLive:
                         self.tool_call_pending = True
                         try:
                             fn_responses = []
+                            concurrent_tasks = []
+                            
                             for fc in response.tool_call.function_calls:
                                 print(f"[JARVIS] Tool: {fc.name}")
-                                fr = await self.tool_executor.execute(fc)
-                                fn_responses.append(fr)
+                                
+                                if fc.name in ("website_builder", "app_builder"):
+                                    from agent.task_queue import get_queue, TaskPriority
+                                    goal_desc = f"Use {fc.name} with args: {fc.args}"
+                                    get_queue().submit(goal=goal_desc, priority=TaskPriority.NORMAL, speak=self.speak)
+                                    
+                                    _, types = _lazy_genai()
+                                    fn_responses.append(
+                                        types.FunctionResponse(
+                                            id=fc.id, name=fc.name,
+                                            response={"result": f"Task '{fc.name}' dispatched to background. I will notify the user when done."}
+                                        )
+                                    )
+                                else:
+                                    concurrent_tasks.append(self.tool_executor.execute(fc))
+                                    
+                            if concurrent_tasks:
+                                results = await asyncio.gather(*concurrent_tasks, return_exceptions=True)
+                                for res in results:
+                                    if isinstance(res, BaseException):
+                                        print(f"[JARVIS] Tool Error: {res}")
+                                    elif res is not None:
+                                        fn_responses.append(res)  # type: ignore
+                                        
                             await self.session.send_tool_response(
                                 function_responses=fn_responses)
                             # ── FIX 3: was 0.5s — now 0.1s ──

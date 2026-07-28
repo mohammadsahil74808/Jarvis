@@ -76,15 +76,7 @@ class AudioEngine:
         """Sends audio chunks to the Gemini Live session."""
         while True:
             msg = await self.jarvis.out_queue.get()
-            # Block audio during tool calls OR when model is speaking
-            with self.jarvis._speaking_lock:
-                busy = (
-                    getattr(self.jarvis, "tool_call_pending", False)
-                    or self.jarvis._is_speaking
-                )
 
-            if busy:
-                continue
             if self.jarvis.session:
                 try:
                     await self.jarvis.session.send_realtime_input(media=msg)
@@ -143,9 +135,10 @@ class AudioEngine:
         def callback(indata, frames, time_info, status):
             # ── Route to detection queue (clap + wake word) ──
             if self.jarvis.clap_enabled or self.jarvis.wake_word_enabled:
-                self._loop.call_soon_threadsafe(
-                    self.jarvis.detection_queue.put_nowait, indata.copy()
-                )
+                if self._loop is not None:
+                    self._loop.call_soon_threadsafe(
+                        self.jarvis.detection_queue.put_nowait, indata.copy()
+                    )
 
             # ── Route to Gemini Live send queue ───────────────
             with self.jarvis._speaking_lock:
@@ -163,10 +156,11 @@ class AudioEngine:
                     except Exception:
                         pass
                 
-                self._loop.call_soon_threadsafe(
-                    self.jarvis.out_queue.put_nowait,
-                    {"data": data, "mime_type": "audio/pcm"}
-                )
+                if self._loop is not None:
+                    self._loop.call_soon_threadsafe(
+                        self.jarvis.out_queue.put_nowait,
+                        {"data": data, "mime_type": "audio/pcm"}
+                    )
 
         while True:
             try:

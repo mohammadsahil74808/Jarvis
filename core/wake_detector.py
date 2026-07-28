@@ -6,6 +6,7 @@
 # ══════════════════════════════════════════════════════════════
 
 import numpy as np
+import collections
 from openwakeword.model import Model
 
 class WakeWordDetector:
@@ -24,7 +25,7 @@ class WakeWordDetector:
             wakeword_models=["hey_jarvis"],
             inference_framework="onnx"
         )
-        self.buffer = []
+        self.buffer = collections.deque(maxlen=4800)
         self.keyword = "hey_jarvis"
         self.sample_rate = sample_rate
 
@@ -45,15 +46,12 @@ class WakeWordDetector:
 
         self.buffer.extend(flat)
 
-        # Safety constraint: keep buffer under 4,800 samples (300ms) to prevent build-up lag
-        if len(self.buffer) > 4800:
-            self.buffer = self.buffer[-4800:]
-
         detected = False
-        # Process in overlapping sliding windows of 1280 samples (80ms) with step of 320 samples (20ms)
-        step_size = 320
-        while len(self.buffer) >= 1280:
-            chunk = np.array(self.buffer[:1280], dtype=np.int16)
+        # openWakeWord handles its own temporal context; we just feed it non-overlapping 1280-sample chunks (80ms)
+        chunk_size = 1280
+        while len(self.buffer) >= chunk_size:
+            # Extract exactly one chunk and remove it from the deque
+            chunk = np.array([self.buffer.popleft() for _ in range(chunk_size)], dtype=np.int16)
             
             # Get predictions
             prediction = self.oww.predict(chunk)
@@ -62,10 +60,7 @@ class WakeWordDetector:
             # Default threshold for hey_jarvis is 0.5
             if score >= 0.5:
                 detected = True
-                self.buffer = []  # Reset buffer to avoid multi-trigger feedback
+                self.buffer.clear()  # Reset buffer to avoid multi-trigger feedback
                 break
-
-            # Slide window forward
-            self.buffer = self.buffer[step_size:]
 
         return detected

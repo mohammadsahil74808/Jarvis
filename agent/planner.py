@@ -217,10 +217,26 @@ def create_plan(goal: str, context: str = "") -> dict:
 
         for step in plan["steps"]:
             if step.get("tool") in ("generated_code",):
-                print(f"[Planner] [WARNING] generated_code detected in step {step.get('step')} -- replacing with web_search")
+                print(f"[Planner] [WARNING] generated_code detected in step {step.get('step')} -- replacing with code_helper")
                 desc = step.get("description", goal)
-                step["tool"] = "web_search"
-                step["parameters"] = {"query": desc[:200]}
+                step["tool"] = "code_helper"
+                step["parameters"] = {"action": "run", "description": desc[:200]}
+
+        # Plan Critique Pass
+        try:
+            critique_prompt = f"Goal: {goal}\nPlan: {json.dumps(plan, indent=2)}\nReview this plan. Is any step missing, wrong tool, or wrongly ordered? Return the plan unchanged if it is correct, or a corrected version (same JSON format) if not. ONLY return valid JSON."
+            critique_text = router.generate(
+                prompt=critique_prompt,
+                system_instruction="You are a strict plan review module. Return ONLY valid JSON matching the exact original structure."
+            )
+            critique_text = critique_text.strip()
+            critique_text = re.sub(r"```(?:json)?", "", critique_text).strip().rstrip("`").strip()
+            critique_plan = json.loads(critique_text)
+            if "steps" in critique_plan and isinstance(critique_plan["steps"], list):
+                plan = critique_plan
+                print("[Planner] [OK] Plan self-critique applied.")
+        except Exception as e:
+            print(f"[Planner] [WARNING] Plan critique failed, using original: {e}")
 
         print(f"[Planner] [OK] Plan: {len(plan['steps'])} steps")
         for s in plan["steps"]:

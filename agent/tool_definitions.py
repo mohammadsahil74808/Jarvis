@@ -2,7 +2,7 @@
 
 TOOL_DECLARATIONS = [
     {
-        "name": "open_app",
+         "name": "open_app",
         "description": (
             "Opens any application on the Windows computer. "
             "Use this whenever the user asks to open, launch, or start any app, "
@@ -60,7 +60,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "website_builder",
-        "description": "Build complete production-ready websites with AI. Creates portfolios, SaaS sites, e-commerce, dashboards, blogs, 3D sites, landing pages. Auto-setup, install deps, open browser preview. Use when user wants to create/build/make a website.",
+        "description": "Builds websites via AI templates. Use when user wants to create a website.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -83,7 +83,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "app_builder",
-        "description": "Build complete Flutter mobile apps with AI. Creates social, chat, ecommerce, fitness, finance, AI chat, music, dashboard apps. Full project with screens, auth, theme, navigation. Use when user wants to build a mobile app.",
+        "description": "Builds mobile apps via AI templates. Use when user wants to create an app.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
@@ -163,9 +163,7 @@ TOOL_DECLARATIONS = [
     {
         "name": "computer_settings",
         "description": (
-            "SYSTEM SETTINGS CONTROL: Use ONLY for Volume, Brightness, Mute, Dark Mode, WiFi, and Window State (maximize/minimize/close). "
-            "Example: 'set volume to 50', 'mute', 'brighten screen'. "
-            "Do NOT use for mouse movement or visual pixel tasks."
+            "System settings control (Volume, Brightness, Mute, Dark Mode, WiFi, Window State)."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -179,7 +177,7 @@ TOOL_DECLARATIONS = [
     },
     {
         "name": "generate_image",
-        "description": "Generate an AI image for free using Pollinations or FLUX. No paid API needed. Use when user wants to create, generate, or make an image or picture.",
+        "description": "Generate an AI image. Use when user wants to create an image or picture.",
         "parameters": {
             "type": "object",
             "properties": {

@@ -30,11 +30,8 @@ if _BROWSER_DIR not in sys.path:
     sys.path.insert(0, _BROWSER_DIR)
 
 # Automatically sync JARVIS config API keys to os.environ for Browser Use
-if get_api_key():
-    os.environ["GOOGLE_API_KEY"] = get_api_key()
-    os.environ["GEMINI_API_KEY"] = get_api_key()
-if get_groq_api_key():
-    os.environ["GROQ_API_KEY"] = get_groq_api_key()
+# Removed global os.environ mutation as per Phase 4 Security Audit
+# API Keys should be passed locally via kwargs to the LLM constructor where needed.
 
 T = TypeVar("T")
 

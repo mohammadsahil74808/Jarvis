@@ -5,7 +5,7 @@ from pathlib import Path
 from intelligence.state_monitor import StateMonitor
 from intelligence.history import HistoryManager
 from intelligence.rules import get_all_rules
-
+from core.ai_router import get_ai_router
 try:
     from emotion.state_detector import StateDetector
     from emotion.conversation_memory import ConversationMemory
@@ -24,8 +24,8 @@ class ProactiveEngine:
             self.detector = StateDetector()
             self.memory = ConversationMemory()
         else:
-            self.detector = None
-            self.memory = None
+            self.detector = None # type: ignore
+            self.memory = None # type: ignore
         
         self.config = {
             "poll_interval": 60, # seconds
@@ -85,7 +85,7 @@ class ProactiveEngine:
 
     def _check_and_suggest(self):
         # 0. Companion/Emotional check first (Arbitration layer)
-        if self.detector:
+        if self.detector is not None:
             engagement = self.detector.check_engagement()
             if engagement == "quiet":
                 # High priority emotional check-in
@@ -106,6 +106,11 @@ class ProactiveEngine:
         
         # Performance: Inject preloaded memory to avoid disk I/O in rules
         ctx_state["preloaded_memory"] = getattr(self.jarvis, "_preloaded_memory", "")
+        
+        if hasattr(self.jarvis, "state") and hasattr(self.jarvis.state, "user_status"):
+            ctx_state["user_status"] = self.jarvis.state.user_status
+        else:
+            ctx_state["user_status"] = {}
 
         # 3. Collect Candidates
         candidates = []
@@ -229,7 +234,21 @@ class ProactiveEngine:
         self.coalesced_events.clear()
         self._send_to_jarvis(batch_text)
 
+    def _rephrase_for_jarvis(self, text: str) -> str:
+        if "[EMOTIONAL_STATE:" in text or "[Escalated]" in text:
+            return text
+        try:
+            router = get_ai_router()
+            prompt = f"Rephrase this system alert naturally in Hinglish, matching JARVIS's personality. Keep it concise. Alert: {text}"
+            sys_inst = "You are JARVIS. Natural Hinglish me baat karo. Avoid starting every sentence with 'Sir'. Vary your phrasing naturally. Do not repeat fillers. Keep it short."
+            rephrased = router.generate(prompt=prompt, system=sys_inst)
+            return rephrased.strip()
+        except Exception as e:
+            print(f"[PROACTIVE] Rephrase error: {e}")
+            return text
+
     def _send_to_jarvis(self, text):
+        text = self._rephrase_for_jarvis(text)
         if hasattr(self.jarvis, "notify"):
             self.jarvis.notify(text, voice=True)
         else:
@@ -257,6 +276,13 @@ class ProactiveEngine:
         state = self.detector.analyze_input(user_text)
         self.memory.log_state(state)
         
+        if hasattr(self.jarvis, "state"):
+            self.jarvis.state.update_user_status("emotion", state)
+            if state.get("stress"):
+                self.jarvis.state.update_user_status("stress_level", "high")
+            if state.get("fatigue"):
+                self.jarvis.state.update_user_status("fatigue", True)
+                
         # Priority logic for emotional directives
         if state["stress"]:
             return "[EMOTIONAL_STATE: stress detected — respond with genuine care, empathy, and calm tone in Hinglish]"

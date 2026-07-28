@@ -144,7 +144,7 @@ class SQLiteManager:
         with self._lock:
             cursor = self._conn.cursor()
             cursor.execute("""
-                SELECT c.text, c.chunk_index, d.source_uri, d.metadata, n.name
+                SELECT c.text, c.chunk_index, d.source_uri, d.metadata, n.name, d.last_updated
                 FROM chunks c
                 JOIN documents d ON c.doc_id = d.id
                 JOIN namespaces n ON d.namespace_id = n.id
@@ -157,7 +157,8 @@ class SQLiteManager:
                     "chunk_index": row[1],
                     "source_uri": row[2],
                     "metadata": json.loads(row[3]) if row[3] else {},
-                    "namespace": row[4]
+                    "namespace": row[4],
+                    "last_updated": row[5]
                 }
             return None
             

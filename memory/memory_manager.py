@@ -13,7 +13,7 @@ Düzeltmeler:
   - Projeleri, favori şeyleri, arkadaşları daha iyi yakalar
 """
 
-import json, os, re
+import json, os, re, difflib
 from datetime import datetime
 from threading import RLock
 
@@ -71,6 +71,12 @@ def _truncate_value(val: str) -> str:
         return val[:MAX_VALUE_LENGTH].rstrip() + "…"
     return val
 
+def _find_similar_key(new_key: str, existing_keys: list) -> str:
+    matches = difflib.get_close_matches(new_key, existing_keys, n=1, cutoff=0.8)
+    if matches:
+        return matches[0]
+    return new_key
+
 
 def _recursive_update(target: dict, updates: dict) -> bool:
     changed = False
@@ -92,10 +98,11 @@ def _recursive_update(target: dict, updates: dict) -> bool:
             else:
                 new_val = _truncate_value(str(value))
 
+            actual_key = _find_similar_key(key, list(target.keys()))
             entry    = {"value": new_val, "updated": datetime.now().strftime("%Y-%m-%d")}
-            existing = target.get(key, {})
+            existing = target.get(actual_key, {})
             if not isinstance(existing, dict) or existing.get("value") != new_val:
-                target[key] = entry
+                target[actual_key] = entry
                 changed = True
 
     return changed
@@ -224,6 +231,16 @@ def extract_memory(user_text: str, jarvis_text: str, api_key: str) -> dict:
         return {}
 
 
+def _get_sorted_items(memory_dict: dict, limit: int) -> list:
+    items = list(memory_dict.items())
+    def get_date(item):
+        val = item[1]
+        if isinstance(val, dict) and "updated" in val:
+            return val["updated"]
+        return "1970-01-01"
+    items.sort(key=get_date, reverse=True)
+    return items[:limit]
+
 def format_memory_for_prompt(memory: dict | None) -> str:
     if not memory:
         return ""
@@ -249,7 +266,7 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     if prefs:
         lines.append("")
         lines.append("Preferences:")
-        for key, entry in list(prefs.items())[:15]:
+        for key, entry in _get_sorted_items(prefs, 15):
             val = entry.get("value") if isinstance(entry, dict) else entry
             if val:
                 lines.append(f"  - {key.replace('_', ' ').title()}: {val}")
@@ -258,7 +275,7 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     if projects:
         lines.append("")
         lines.append("Active Projects / Goals:")
-        for key, entry in list(projects.items())[:8]:
+        for key, entry in _get_sorted_items(projects, 8):
             val = entry.get("value") if isinstance(entry, dict) else entry
             if val:
                 lines.append(f"  - {key.replace('_', ' ').title()}: {val}")
@@ -267,7 +284,7 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     if patterns:
         lines.append("")
         lines.append("Patterns & Habits:")
-        for key, entry in list(patterns.items())[:10]:
+        for key, entry in _get_sorted_items(patterns, 10):
             val = entry.get("value") if isinstance(entry, dict) else entry
             if val:
                 lines.append(f"  - {key.replace('_', ' ').title()}: {val}")
@@ -276,7 +293,7 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     if rels:
         lines.append("")
         lines.append("People in their life:")
-        for key, entry in list(rels.items())[:10]:
+        for key, entry in _get_sorted_items(rels, 10):
             val = entry.get("value") if isinstance(entry, dict) else entry
             if val:
                 lines.append(f"  - {key.replace('_', ' ').title()}: {val}")
@@ -285,7 +302,7 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     if wishes:
         lines.append("")
         lines.append("Wishes / Plans / Wants:")
-        for key, entry in list(wishes.items())[:8]:
+        for key, entry in _get_sorted_items(wishes, 8):
             val = entry.get("value") if isinstance(entry, dict) else entry
             if val:
                 lines.append(f"  - {key.replace('_', ' ').title()}: {val}")
@@ -294,7 +311,7 @@ def format_memory_for_prompt(memory: dict | None) -> str:
     if notes:
         lines.append("")
         lines.append("Other notes:")
-        for key, entry in list(notes.items())[:8]:
+        for key, entry in _get_sorted_items(notes, 8):
             val = entry.get("value") if isinstance(entry, dict) else entry
             if val:
                 lines.append(f"  - {key}: {val}")

@@ -11,6 +11,28 @@ class FAISSManager:
         self.dim = get_embedding_dim()
         self._indexes = {}
         self._lock = RLock()
+        
+        self.dirty_namespaces = set()
+        import threading
+        self._save_timer = threading.Timer(30.0, self._periodic_save)
+        self._save_timer.daemon = True
+        self._save_timer.start()
+        
+        import atexit
+        atexit.register(self.save_all_dirty)
+
+    def _periodic_save(self):
+        self.save_all_dirty()
+        import threading
+        self._save_timer = threading.Timer(30.0, self._periodic_save)
+        self._save_timer.daemon = True
+        self._save_timer.start()
+
+    def save_all_dirty(self):
+        with self._lock:
+            for ns in list(self.dirty_namespaces):
+                self.save_index(ns)
+            self.dirty_namespaces.clear()
 
     def _get_index_path(self, namespace: str) -> Path:
         return self.faiss_dir / f"{namespace}.faiss"
@@ -44,7 +66,7 @@ class FAISSManager:
             vectors = np.array(vectors).astype('float32')
             ids = np.array(ids).astype('int64')
             index.add_with_ids(vectors, ids)
-            self.save_index(namespace)
+            self.dirty_namespaces.add(namespace)
 
     def remove_vectors(self, namespace: str, ids: list):
         if not ids:
@@ -53,7 +75,7 @@ class FAISSManager:
             index = self.get_index(namespace)
             id_selector = faiss.IDSelectorBatch(ids)
             index.remove_ids(id_selector)
-            self.save_index(namespace)
+            self.dirty_namespaces.add(namespace)
 
     def search(self, namespace: str, query_vector: np.ndarray, k: int = 5):
         with self._lock:

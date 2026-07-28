@@ -2,10 +2,16 @@ import numpy as np
 from rank_bm25 import BM25Okapi
 from typing import List, Dict
 
+import os
+import pickle
+
 class HybridRetriever:
-    def __init__(self):
+    def __init__(self, data_dir=".jarvis/bm25"):
         self._bm25_models = {}
         self._corpus_map = {} # namespace -> dict mapping chunk id -> tokenized document
+        self.data_dir = data_dir
+        os.makedirs(self.data_dir, exist_ok=True)
+        self.dirty_namespaces = set()
 
     def rebuild_bm25(self, namespace: str, chunks: List[dict]):
         """Rebuilds the BM25 index from scratch for a given namespace."""
@@ -30,6 +36,41 @@ class HybridRetriever:
         else:
             self._bm25_models[namespace] = None
             self._corpus_map[namespace] = {}
+            
+        self.dirty_namespaces.add(namespace)
+
+    def save_bm25(self, namespace: str = None):
+        """Saves BM25 index to disk. If namespace is None, saves all dirty namespaces."""
+        namespaces_to_save = [namespace] if namespace else list(self.dirty_namespaces)
+        for ns in namespaces_to_save:
+            model = self._bm25_models.get(ns)
+            corpus_map = self._corpus_map.get(ns)
+            path = os.path.join(self.data_dir, f"{ns}.pkl")
+            if model and corpus_map:
+                try:
+                    with open(path, "wb") as f:
+                        pickle.dump({"model": model, "corpus_map": corpus_map}, f)
+                    if ns in self.dirty_namespaces:
+                        self.dirty_namespaces.remove(ns)
+                except Exception as e:
+                    print(f"[HybridRetriever] Error saving {ns} BM25: {e}")
+            else:
+                if os.path.exists(path):
+                    os.remove(path)
+
+    def load_bm25(self, namespace: str) -> bool:
+        """Loads BM25 index from disk. Returns True if successful."""
+        path = os.path.join(self.data_dir, f"{namespace}.pkl")
+        if os.path.exists(path):
+            try:
+                with open(path, "rb") as f:
+                    data = pickle.load(f)
+                    self._bm25_models[namespace] = data.get("model")
+                    self._corpus_map[namespace] = data.get("corpus_map")
+                    return True
+            except Exception as e:
+                print(f"[HybridRetriever] Error loading {namespace} BM25: {e}")
+        return False
 
     def get_bm25_scores(self, namespace: str, query: str) -> Dict[int, float]:
         model = self._bm25_models.get(namespace)

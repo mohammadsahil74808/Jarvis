@@ -54,8 +54,10 @@ class RAGEngine:
 
     def _rebuild_all_bm25(self):
         for ns in self.adapters.keys():
-            chunks = self.sqlite.get_all_chunks_for_namespace(ns)
-            self.retriever.rebuild_bm25(ns, chunks)
+            if not self.retriever.load_bm25(ns):
+                chunks = self.sqlite.get_all_chunks_for_namespace(ns)
+                self.retriever.rebuild_bm25(ns, chunks)
+                self.retriever.save_bm25(ns)
 
     def _ingest_worker(self):
         while True:
@@ -70,9 +72,13 @@ class RAGEngine:
                 self.ingest_queue.task_done()
 
     def _hash_file(self, filepath: str) -> str:
+        import os
         try:
-            with open(filepath, "rb") as f:
-                return hashlib.md5(f.read()).hexdigest()
+            if not os.path.exists(filepath):
+                return ""
+            mtime = os.path.getmtime(filepath)
+            size = os.path.getsize(filepath)
+            return f"mtime_{mtime}_size_{size}"
         except:
             return ""
 
@@ -103,6 +109,7 @@ class RAGEngine:
         if source_uri == "_rebuild_bm25_only_":
             all_chunks = self.sqlite.get_all_chunks_for_namespace(namespace)
             self.retriever.rebuild_bm25(namespace, all_chunks)
+            self.retriever.save_bm25(namespace)
             return
 
         print(f"[RAGEngine] Ingesting {source_uri} into {namespace}...")
@@ -134,6 +141,7 @@ class RAGEngine:
         # 5. Rebuild BM25
         all_chunks = self.sqlite.get_all_chunks_for_namespace(namespace)
         self.retriever.rebuild_bm25(namespace, all_chunks)
+        self.retriever.save_bm25(namespace)
 
     def search_vectors(self, namespace: str, query: str, k: int = 5) -> List[Dict]:
         query_vec = self.embedder.encode([query])[0]
@@ -160,7 +168,13 @@ class RAGEngine:
             ns = h.get("namespace", "unknown")
             src = h.get("source_uri", "unknown")
             text_snip = h.get("text", "")
-            res.append(f"[{ns}] Source: {src}\n{text_snip}\n")
+            dist = h.get("distance")
+            updated = h.get("last_updated")
+            meta = []
+            if dist is not None: meta.append(f"Relevance: {dist:.3f}")
+            if updated: meta.append(f"Date: {updated}")
+            meta_str = f" ({', '.join(meta)})" if meta else ""
+            res.append(f"[{ns}] Source: {src}{meta_str}\n{text_snip}\n")
         return "\n---\n".join(res)
 
     def auto_ingest_file(self, filepath: str):

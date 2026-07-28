@@ -12,6 +12,7 @@ from agent.error_handler import analyze_error, generate_fix, ErrorDecision
 
 
 from core.config import get_gemini_client
+from core.ai_router import get_ai_router
 
 def _run_generated_code(description: str, speak: Callable | None = None) -> str:
     from google.genai import types
@@ -116,39 +117,21 @@ def _inject_context(params: dict, tool: str, step_results: dict, goal: str = "")
                 print(f"[Executor] [OK] Injected + translated content")
 
     return params
-def _detect_language(text: str) -> str:
-    client = get_gemini_client()
-    try:
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=(
-                f"What language is this text written in? "
-                f"Reply with ONLY the language name in English (e.g. Turkish, English, French).\n\n"
-                f"Text: {text[:200]}"
-            )
-        )
-        return (response.text or "").strip()
-    except Exception:
-        return "English"
-
-
 def _translate_to_goal_language(content: str, goal: str) -> str:
     if not goal:
         return content
     try:
         client = get_gemini_client()
-
-        target_lang = _detect_language(goal)
-        print(f"[Executor] [LANG] Translating to: {target_lang}")
+        print(f"[Executor] [LANG] Translating to language of: {goal[:50]}...")
 
         prompt = (
-            f"You are a professional translator. "
-            f"Translate the following text into {target_lang}.\n"
+            f"You are a professional translator. First, determine the language of this user goal: '{goal}'. "
+            f"Then, translate the following text into that exact language.\n"
             f"IMPORTANT:\n"
-            f"- Translate EVERYTHING, leave nothing in English\n"
+            f"- Translate EVERYTHING, leave nothing in English (unless the goal is English)\n"
             f"- Keep all facts, numbers, and data intact\n"
             f"- Keep the structure and formatting\n"
-            f"- Output ONLY the translated text, nothing else\n\n"
+            f"- Output ONLY the translated text, nothing else. Do not output the name of the language.\n\n"
             f"Text to translate:\n{content[:4000]}"
         )
         response = client.models.generate_content(
@@ -156,7 +139,7 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
             contents=prompt
         )
         translated = (response.text or "").strip()
-        print(f"[Executor] [OK] Translation done ({target_lang})")
+        print(f"[Executor] [OK] Translation done")
         return translated
     except Exception as e:
         print(f"[Executor] [FAIL] Translation failed: {e}")
@@ -249,6 +232,14 @@ class AgentExecutor:
                         break
                     try:
                         result = _call_tool(tool, params, speak)
+                        
+                        if step.get("critical", False):
+                            router = get_ai_router()
+                            verify_prompt = f"Goal: {desc}\nTool Output: {result}\nDid the tool output indicate success for the goal? Answer ONLY 'yes' or 'no'."
+                            verify_res = router.generate(prompt=verify_prompt, system="You are a strict verification module.").strip().lower()
+                            if "no" in verify_res:
+                                raise Exception(f"Result verification failed. Output did not satisfy the goal: {result}")
+                                
                         step_results[step_num] = result 
                         completed_steps.append(step)
                         safe_res = result[:100].encode('ascii', 'ignore').decode('ascii')
@@ -289,7 +280,7 @@ class AgentExecutor:
                             if fix_suggestion and tool != "generated_code":
                                 try:
                                     fixed_step = generate_fix(step, error_msg, fix_suggestion)
-                                    if speak: speak("Trying an alternative approach, sir.")
+                                    if speak: speak("Sir, I'm writing a custom script to handle this — reviewing it before running.")
                                     res = _call_tool(
                                         fixed_step["tool"],
                                         fixed_step["parameters"],
