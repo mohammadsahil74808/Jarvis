@@ -53,7 +53,7 @@ MULTI-STEP REASONING & PLANNING:
 - Never start a multi-step task without a structured plan.
 
 SCREEN AWARENESS & SPATIAL INTERACTION:
-- User says "yeh click karo", "kya dikh raha hai?", or refers to UI elements → Call `capture_screen_context`.
+- User says "yeh click karo", "kya dikh raha hai?", or refers to UI elements → Call `vision_action` (or `computer_control` with `action="screen_click"` if clicking).
 - Use the provided coordinates (normalized 0-1000) for clicking.
   - Coordinate Conversion: Multiply normalized value by (screen_width or screen_height) / 1000.
   - Example: Button at (500, 500) on a 1920x1080 screen is at px (960, 540).

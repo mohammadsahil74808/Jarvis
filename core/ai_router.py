@@ -28,9 +28,15 @@ import logging
 import requests
 import urllib.parse
 from typing import Optional
+import time
 from core.config import get_config, get_api_key
 
 logger = logging.getLogger("FreeAIRouter")
+
+class AIAuthError(Exception): pass
+class AIRateLimitError(Exception): pass
+class AINetworkError(Exception): pass
+class AIProviderError(Exception): pass
 
 
 # ══════════════════════════════════════════════════════════════
@@ -130,6 +136,7 @@ class FreeAIRouter:
 
     def __init__(self):
         self._config = {}
+        self._auth_cooldown = {}
         self._refresh_keys()
 
     def _refresh_keys(self):
@@ -178,11 +185,18 @@ class FreeAIRouter:
             if m not in ordered:
                 ordered.append(m)
 
-        # Try each model
+        errors = set()
         for model_info in ordered:
             key_cfg = model_info.get("key_cfg")
+            provider = model_info["provider"]
+            
             # Skip if key needed but not configured
             if key_cfg and not self._config.get(key_cfg, ""):
+                continue
+                
+            # Skip if auth cooldown active
+            if self._auth_cooldown.get(provider, 0) > time.time():
+                errors.add("Auth/Key Error")
                 continue
 
             try:
@@ -191,11 +205,40 @@ class FreeAIRouter:
                 if result and result.strip():
                     logger.info(f"Success: {model_info['id']}")
                     return result
+            except AIAuthError as e:
+                logger.warning(f"Failed {model_info['id']} (Auth Error): {e}")
+                self._auth_cooldown[provider] = time.time() + 60
+                errors.add("Auth/Key Error")
+            except AIRateLimitError as e:
+                logger.warning(f"Failed {model_info['id']} (Rate Limit): {e}")
+                errors.add("Rate Limited")
+            except AINetworkError as e:
+                logger.warning(f"Failed {model_info['id']} (Network): {e}")
+                errors.add("Network Error")
+            except AIProviderError as e:
+                logger.warning(f"Failed {model_info['id']} (Provider Down): {e}")
+                errors.add("Provider Down")
             except Exception as e:
                 logger.warning(f"Failed {model_info['id']}: {e}")
-                continue
+                err_str = str(e).lower()
+                if "401" in err_str or "403" in err_str or "auth" in err_str:
+                    self._auth_cooldown[provider] = time.time() + 60
+                    errors.add("Auth/Key Error")
+                elif "429" in err_str or "rate limit" in err_str:
+                    errors.add("Rate Limited")
+                elif "timeout" in err_str or "connection" in err_str:
+                    errors.add("Network Error")
+                else:
+                    errors.add("Unknown Error")
 
-        return "Error: All free AI models failed. Check your internet connection."
+        if "Auth/Key Error" in errors and len(errors) == 1:
+            return "Error: All configured providers rejected the request. Please check your API keys."
+        elif "Network Error" in errors and len(errors) == 1:
+            return "Error: Network appears unreachable."
+        elif "Rate Limited" in errors and len(errors) == 1:
+            return "Error: All configured providers are currently rate-limiting you."
+        
+        return "Error: All free AI models failed. (Issues: " + ", ".join(errors) + ")"
 
     # ─────────────────────────────────────────────────────────
     def _call_model(self, info: dict, prompt: str,
@@ -256,11 +299,21 @@ class FreeAIRouter:
             "max_tokens":  max_tokens,
             "stream":      False,
         }
-        r = requests.post(url, headers=headers, json=payload, timeout=60)
+        try:
+            r = requests.post(url, headers=headers, json=payload, timeout=60)
+        except requests.exceptions.RequestException as e:
+            raise AINetworkError(str(e))
+            
         if r.status_code == 200:
             return r.json()["choices"][0]["message"]["content"]
-        logger.warning(f"NVIDIA {r.status_code}: {r.text[:200]}")
-        return None
+        elif r.status_code in (401, 403):
+            raise AIAuthError(f"NVIDIA Auth error {r.status_code}")
+        elif r.status_code == 429:
+            raise AIRateLimitError(f"NVIDIA Rate limit")
+        elif r.status_code >= 500:
+            raise AIProviderError(f"NVIDIA down {r.status_code}")
+        else:
+            raise Exception(f"NVIDIA HTTP {r.status_code}: {r.text[:200]}")
 
     # ─────────────────────────────────────────────────────────
     # GEMINI — Free tier (15 req/min, 1M tokens/day)
@@ -296,10 +349,21 @@ class FreeAIRouter:
             ],
             "max_tokens": max_tokens,
         }
-        r = requests.post(url, headers=headers, json=payload, timeout=30)
+        try:
+            r = requests.post(url, headers=headers, json=payload, timeout=30)
+        except requests.exceptions.RequestException as e:
+            raise AINetworkError(str(e))
+            
         if r.status_code == 200:
             return r.json()["choices"][0]["message"]["content"]
-        return None
+        elif r.status_code in (401, 403):
+            raise AIAuthError(f"OpenRouter Auth error {r.status_code}")
+        elif r.status_code == 429:
+            raise AIRateLimitError(f"OpenRouter Rate limit")
+        elif r.status_code >= 500:
+            raise AIProviderError(f"OpenRouter down {r.status_code}")
+        else:
+            raise Exception(f"OpenRouter HTTP {r.status_code}: {r.text[:200]}")
 
     # ─────────────────────────────────────────────────────────
     # HUGGING FACE — Free inference API
@@ -321,12 +385,24 @@ class FreeAIRouter:
             "max_tokens": 1024,
             "stream":     False,
         }
-        r = requests.post(url, headers=headers, json=payload, timeout=60)
+        try:
+            r = requests.post(url, headers=headers, json=payload, timeout=60)
+        except requests.exceptions.RequestException as e:
+            raise AINetworkError(str(e))
+            
         if r.status_code == 200:
             data = r.json()
             if "choices" in data:
                 return data["choices"][0]["message"]["content"]
-        return None
+            return None
+        elif r.status_code in (401, 403):
+            raise AIAuthError(f"HuggingFace Auth error {r.status_code}")
+        elif r.status_code == 429:
+            raise AIRateLimitError(f"HuggingFace Rate limit")
+        elif r.status_code >= 500:
+            raise AIProviderError(f"HuggingFace down {r.status_code}")
+        else:
+            raise Exception(f"HuggingFace HTTP {r.status_code}: {r.text[:200]}")
 
     # ─────────────────────────────────────────────────────────
     # POLLINATIONS — 100% FREE, NO API KEY, NO SIGNUP
@@ -341,13 +417,22 @@ class FreeAIRouter:
                 {"role": "user",   "content": prompt},
             ],
         }
-        r = requests.post(url, json=payload, timeout=30)
+        try:
+            r = requests.post(url, json=payload, timeout=30)
+        except requests.exceptions.RequestException as e:
+            raise AINetworkError(str(e))
+            
         if r.status_code == 200:
             try:
                 return r.json()["choices"][0]["message"]["content"]
             except Exception:
                 return r.text if r.text else None
-        return None
+        elif r.status_code == 429:
+            raise AIRateLimitError(f"Pollinations Rate limit")
+        elif r.status_code >= 500:
+            raise AIProviderError(f"Pollinations down {r.status_code}")
+        else:
+            raise Exception(f"Pollinations HTTP {r.status_code}: {r.text[:200]}")
 
     # ─────────────────────────────────────────────────────────
     # IMAGE GENERATION (FREE)

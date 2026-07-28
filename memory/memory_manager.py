@@ -1,6 +1,11 @@
 """
 memory_manager.py — MARK XXV Hafıza Sistemi
 ============================================
+Architecture Note:
+  This file implements the structured (JSON-based) memory tier for concrete facts,
+  preferences, and explicit identity markers. It operates independently of the semantic 
+  memory tier (FAISS-based RAG) which handles full conversational indexing.
+  
 Düzeltmeler:
   - _MEMORY_EVERY_N_TURNS: 3 → 1 (her turda kontrol)
   - Stage 1 YES/NO check daha geniş kriterlere sahip
@@ -122,16 +127,16 @@ def should_extract_memory_local(user_text: str) -> bool:
     
     # Preferences and favorites
     pref_patterns = [
-        r'\bi (like|love|prefer|enjoy|hate|dislike)\b',
+        r'\bi (always )?(like|love|prefer|enjoy|hate|dislike) (eating|watching|reading|listening)\b',
         r'\bmy favorite\b', r'\bmujhe .+ pasand\b',
         r'\bmera favorite\b'
     ]
     
     # Personal information and status
     info_patterns = [
-        r'\bi (work|live|study)\b', r'\bmy (job|city|age|birthday)\b',
-        r'\bi\'m (from|a|an)\b', r'\bmain .+ hun\b',
-        r'\bi want to\b', r'\bi need to\b'
+        r'\bi (work (at|for|as)|live (in|at)|study (at|in))\b', 
+        r'\bmy (job|city|age|birthday)\b',
+        r'\bi\'m from\b', r'\bmain .+ hun\b'
     ]
     
     text_lower = user_text.lower()

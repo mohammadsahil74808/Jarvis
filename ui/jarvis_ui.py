@@ -203,6 +203,11 @@ class JarvisUI:
             self.write_log("SYS: Microphone active.")
 
     def _exit_app(self):
+        if self.jarvis and hasattr(self.jarvis, "shutdown"):
+            try:
+                self.jarvis.shutdown()
+            except Exception as e:
+                print(f"[JARVIS UI] Shutdown error: {e}")
         self.root.destroy()
         os._exit(0)
 

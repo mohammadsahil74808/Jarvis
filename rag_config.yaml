@@ -35,4 +35,4 @@ namespaces:
 watchdog:
   debounce_seconds: 5
   monitored_paths:
-    - "c:\\Users\\Ayan\\Jarvis"
+    - "c:\\Projects\\Jarvis"

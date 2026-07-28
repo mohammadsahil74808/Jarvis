@@ -52,6 +52,8 @@ def _load_system_prompt() -> str:
             "Never simulate results — always call the appropriate tool."
         )
 
+# Global process-singleton socket used to ensure only one JARVIS instance runs at a time
+# and to receive wake-up pings from external triggers.
 _shared_udp_socket = None
 
 
@@ -66,10 +68,7 @@ def startup_check():
 
 
 # ── Memory helpers ─────────────────────────────────────────────
-_last_memory_input = ""
-
 def _update_memory_async(jarvis, user_text: str, jarvis_text: str) -> None:
-    global _last_memory_input
     user_text   = (user_text   or "").strip()
     jarvis_text = (jarvis_text or "").strip()
     try:
@@ -78,9 +77,10 @@ def _update_memory_async(jarvis, user_text: str, jarvis_text: str) -> None:
     except Exception as e:
         print(f"[Interaction Layer] Error: {e}")
 
-    if len(user_text) < 5 or user_text == _last_memory_input:
+    last_input = jarvis.state.get_session("last_memory_input")
+    if len(user_text) < 5 or user_text == last_input:
         return
-    _last_memory_input = user_text
+    jarvis.state.update_session("last_memory_input", user_text)
     try:
         from memory.memory_manager import should_extract_memory, extract_memory, update_memory
         api_key = _get_api_key()
@@ -94,11 +94,13 @@ def _update_memory_async(jarvis, user_text: str, jarvis_text: str) -> None:
         if "429" not in str(e):
             print(f"[Memory] ⚠️ {e}")
 
-def _index_conversation_async(user_text: str, jarvis_text: str) -> None:
+def _index_conversation_async(jarvis, user_text: str, jarvis_text: str) -> None:
     if not user_text.strip() and not jarvis_text.strip():
         return
     combined = f"User: {user_text}\nJarvis: {jarvis_text}"
     try:
+        if hasattr(jarvis, "rag_ready"):
+            jarvis.rag_ready.wait()
         from memory.semantic_memory import add_semantic_memory
         add_semantic_memory(combined)
     except Exception as e:
@@ -106,23 +108,25 @@ def _index_conversation_async(user_text: str, jarvis_text: str) -> None:
 
 
 from agent.tool_definitions import TOOL_DECLARATIONS
+_CACHED_TOOLS = [{"function_declarations": TOOL_DECLARATIONS}]
 
 
 class JarvisLive:
 
     def __init__(self, ui: JarvisUI):
+        from typing import Any
         self.ui             = ui
-        self.session        = None
-        self.audio_in_queue = None
-        self.out_queue      = None
-        self._loop          = None
+        self.session: Any   = None
+        self.audio_in_queue: Any = None
+        self.out_queue: Any      = None
+        self._loop: Any          = None
         self._is_speaking   = False
         self._speaking_lock = threading.Lock()
-        self._last_wake_time = 0
+        self._last_wake_time: float = 0.0
 
         from agent.tool_executor import ToolExecutor
         from core.audio_engine import AudioEngine
-        self.tool_executor  = ToolExecutor(self, widgets_ok=False)
+        self.tool_executor  = ToolExecutor(self)
         self.audio_engine   = AudioEngine(self)
         self.ui.on_text_command = self._on_text_command
 
@@ -149,14 +153,14 @@ class JarvisLive:
                     print("[JARVIS] ML Clap Detector loaded")
                 else:
                     from core.clap_detector import ClapDetector
-                    self.detector = ClapDetector()
+                    self.detector: Any = ClapDetector() # type: ignore
                     print("[JARVIS] Basic Clap Detector loaded")
             except Exception as e:
                 print(f"[JARVIS] ClapDetector failed: {e}")
-                self.detector     = None
+                self.detector: Any = None # type: ignore
                 self.clap_enabled = False
         else:
-            self.detector = None
+            self.detector: Any = None # type: ignore
 
         # ── Wake Word ──────────────────────────────────────────────────
         self.wake_detector     = None
@@ -165,22 +169,18 @@ class JarvisLive:
             threading.Thread(target=self._load_wake_detector, daemon=True).start()
 
         # ── Session state ──────────────────────────────────────────────
-        self.session_context = {
-            "last_app": None, "last_query": None,
-            "last_file": None, "last_action": None, "last_tool": None
-        }
+        from core.state import JarvisState
+        self.state = JarvisState()
+        
         self._preloaded_memory = ""
-        self.system_vitals     = {"cpu": 0, "ram": 0, "battery": None}
-        self.active_plan       = None
-        self.screen_context    = None
         self.vision_service    = None
-        self.memory_executor   = ThreadPoolExecutor(max_workers=1)
+        self.memory_executor   = ThreadPoolExecutor(max_workers=2)
+        self.rag_ready         = threading.Event()
         self.usage_tracker     = None
         self.predictive_engine = None
         self.proactive_engine  = None
         self._profile_manager  = None
         self._personal_context = None
-        self._companion_engine = None
         self._cached_config    = None
         self._config_dirty     = True
 
@@ -247,13 +247,6 @@ class JarvisLive:
             self._personal_context = get_personal_context()
         return self._personal_context
 
-    @property
-    def companion_engine(self):
-        if self._companion_engine is None:
-            from emotion.companion_engine import get_companion_engine
-            self._companion_engine = get_companion_engine(self)
-        return self._companion_engine
-
     # ─────────────────────────────────────────────────────────────
     def _background_lazy_init(self):
         config = _get_config()
@@ -288,7 +281,6 @@ class JarvisLive:
             except Exception as e:
                 print(f"[JARVIS] Predictive: {e}")
         threading.Thread(target=_load_predictive, daemon=True).start()
-        self.ui.root.after(5000, self._prediction_loop)
 
         def _load_proactive():
             try:
@@ -309,29 +301,47 @@ class JarvisLive:
                 print(f"[JARVIS] Memory preload: {e}")
         threading.Thread(target=_preload_memory, daemon=True).start()
 
-        # ── FIX 6: Vitals 60s interval + only dirty when values change ──
-        def _monitor_vitals():
-            import psutil, time
+        # ── Unified Background Scheduler ──
+        def _shared_scheduler_loop():
+            import psutil, time  # type: ignore
             _last_cpu, _last_ram = 0, 0
+            ticks = 0
             while True:
+                time.sleep(60)
+                ticks += 1
+                
+                # 1. Vitals (every 1 min)
                 try:
                     new_cpu = psutil.cpu_percent(interval=0.1)
                     new_ram = psutil.virtual_memory().percent
                     if abs(new_cpu - _last_cpu) > 10 or abs(new_ram - _last_ram) > 5:
-                        self.system_vitals["cpu"] = new_cpu
-                        self.system_vitals["ram"] = new_ram
+                        self.state.update_vitals(new_cpu, new_ram)
                         self._config_dirty = True
                         _last_cpu, _last_ram = new_cpu, new_ram
                     bat = psutil.sensors_battery()
                     if bat:
-                        self.system_vitals["battery"] = {
+                        self.state.update_vitals(new_cpu, new_ram, {
                             "percent": bat.percent,
                             "plugged":  bat.power_plugged
-                        }
+                        })
                 except Exception:
                     pass
-                time.sleep(60)   # Was 30 — now 60s
-        threading.Thread(target=_monitor_vitals, daemon=True).start()
+
+                # 2. Proactive Engine tick (every 1 min)
+                if self.proactive_engine and getattr(self.proactive_engine, 'running', False):
+                    try:
+                        self.proactive_engine._loop_tick()
+                    except Exception:
+                        pass
+
+                # 3. Prediction loop (every 10 min)
+                if ticks % 10 == 0:
+                    try:
+                        self._prediction_loop()
+                    except Exception:
+                        pass
+
+        threading.Thread(target=_shared_scheduler_loop, daemon=True).start()
 
         def _load_vision_service():
             from vision.service import VisionService
@@ -349,22 +359,14 @@ class JarvisLive:
                 engine = get_rag_engine()
                 engine.start_background_jobs()
                 print("[JARVIS] RAG Core initialized and Watchdog started.")
+                self.rag_ready.set()
             except Exception as e:
                 print(f"[JARVIS] RAG Core Init Error: {e}")
         threading.Thread(target=_load_rag_core, daemon=True).start()
 
-        self.ui.root.after(900000, self._companion_heartbeat)
-
-    def _companion_heartbeat(self):
-        if self.companion_engine:
-            msg = self.companion_engine.check_proactive()
-            if msg:
-                self.notify(msg, voice=True)
-        self.ui.root.after(900000, self._companion_heartbeat)
-
     def _on_screen_context(self, context):
         try:
-            self.screen_context = context.to_prompt()
+            self.state.screen_context = context.to_prompt()
             self._config_dirty = True
         except Exception as e:
             print(f"[JARVIS] Screen context update: {e}")
@@ -376,8 +378,8 @@ class JarvisLive:
 
     def _on_app_activity(self, opened, closed):
         if opened:
-            self.session_context["last_app"]    = opened[0]
-            self.session_context["last_action"] = "opened"
+            self.state.update_session("last_app", opened[0])
+            self.state.update_session("last_action", "opened")
             self._config_dirty = True
         if closed:
             self._config_dirty = True
@@ -423,7 +425,6 @@ class JarvisLive:
             suggestion = self.predictive_engine.get_suggestion()
             if suggestion:
                 self.ui.show_suggestion(suggestion["text"])
-        self.ui.root.after(600000, self._prediction_loop)
 
     def set_speaking(self, value: bool):
         with self._speaking_lock:
@@ -446,7 +447,7 @@ class JarvisLive:
             self._loop
         )
 
-    def speak_error(self, tool_name: str, error: str):
+    def speak_error(self, tool_name: str, error: Exception | str):
         short = str(error)[:120]
         self.ui.write_log(f"ERR: {tool_name} — {short}")
         self.speak(f"Sir, {tool_name} encountered an error. {short}")
@@ -477,26 +478,26 @@ class JarvisLive:
             f"Right now it is: {now.strftime('%A, %B %d, %Y — %I:%M %p')}\n\n"
         )
 
-        ctx_parts = []
-        for k, label in [("last_app","Last app"),("last_query","Last query"),
-                         ("last_file","Last file"),("last_action","Last action")]:
-            v = self.session_context.get(k)
-            if v: ctx_parts.append(f"{label}: {v}")
+        mem_parts = []
+        for k in ["last_app", "last_file", "last_action", "last_query"]:
+            v = self.state.get_session(k)
+            if v:
+                mem_parts.append(f"{k.replace('_', ' ').title()}: {v}")
 
         session_ctx_str = ""
-        if ctx_parts:
-            session_ctx_str = "[SESSION CONTEXT]\n" + "\n".join(ctx_parts) + "\n\n"
+        if mem_parts:
+            session_ctx_str = "[SESSION CONTEXT]\n" + "\n".join(mem_parts) + "\n\n"
 
         plan_str = ""
-        if self.active_plan:
+        if self.state.active_plan:
             steps = []
-            for i, s in enumerate(self.active_plan, 1):
+            for i, s in enumerate(self.state.active_plan, 1):
                 steps.append(f"{i}. {'[DONE]' if s['done'] else '[PENDING]'} {s['step']}")
             plan_str = "[ACTIVE PLAN]\n" + "\n".join(steps) + "\n\n"
 
         screen_ctx_str = ""
-        if self.screen_context:
-            screen_ctx_str = f"[SCREEN CONTEXT]\n{self.screen_context}\n\n"
+        if self.state.screen_context:
+            screen_ctx_str = f"[SCREEN CONTEXT]\n{self.state.screen_context}\n\n"
 
         parts = [time_ctx]
         if session_ctx_str: parts.append(session_ctx_str)
@@ -505,11 +506,11 @@ class JarvisLive:
         if mem_str:          parts.append(mem_str)
 
         user_ctx     = self.personal_context.get_context_summary()
-        emotion_ctx  = self.companion_engine.get_emotional_context()
+        emotion_ctx  = self.proactive_engine.get_emotional_context() if self.proactive_engine else ""
         parts.append(f"[USER PERSONAL CONTEXT]\n{user_ctx}\n")
         parts.append(f"{emotion_ctx}\n")
 
-        v = self.system_vitals
+        v = self.state.system_vitals
         vitals = f"[SYSTEM: CPU {v.get('cpu',0):.0f}%, RAM {v.get('ram',0):.0f}%"
         if v.get("battery"):
             bat = v["battery"]
@@ -524,7 +525,7 @@ class JarvisLive:
             output_audio_transcription={},
             input_audio_transcription={},
             system_instruction="\n".join(parts),
-            tools=[{"function_declarations": TOOL_DECLARATIONS}],
+            tools=_CACHED_TOOLS,
             session_resumption=_types.SessionResumptionConfig(),
             speech_config=_types.SpeechConfig(
                 voice_config=_types.VoiceConfig(
@@ -583,11 +584,11 @@ class JarvisLive:
                                 self.memory_executor.submit(
                                     _update_memory_async, self, full_in, full_out)
                                 self.memory_executor.submit(
-                                    _index_conversation_async, full_in, full_out)
-                                caring = self.companion_engine.process_interaction(full_in)
+                                    _index_conversation_async, self, full_in, full_out)
+                                caring = self.proactive_engine.process_interaction(full_in) if self.proactive_engine else None
                                 if caring:
                                     self.ui.root.after(2000,
-                                        lambda m=caring: self.notify(m, voice=True))
+                                        lambda: self.notify(caring, voice=True))
 
                     if response.tool_call:
                         self.tool_call_pending = True
@@ -683,6 +684,29 @@ class JarvisLive:
                 self.set_speaking(False)
                 await asyncio.sleep(retry_delay)
                 retry_delay = min(retry_delay * 2, 30)
+    def shutdown(self):
+        print("[JARVIS] Shutting down services...")
+        if getattr(self, "vision_service", None):
+            try:
+                self.vision_service.stop()
+                print("[JARVIS] Vision service stopped.")
+            except Exception as e:
+                print(f"[JARVIS] Vision stop error: {e}")
+
+        if getattr(self, "proactive_engine", None):
+            try:
+                self.proactive_engine.stop()
+                print("[JARVIS] Proactive engine stopped.")
+            except Exception as e:
+                print(f"[JARVIS] Proactive stop error: {e}")
+
+        try:
+            from jarvis.browser.browser_adapter import get_browser_adapter
+            adapter = get_browser_adapter()
+            adapter.shutdown()
+            print("[JARVIS] Browser adapter stopped.")
+        except Exception as e:
+            print(f"[JARVIS] Browser close error: {e}")
 
 
 # ─────────────────────────────────────────────────────────────

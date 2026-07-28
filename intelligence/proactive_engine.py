@@ -1,9 +1,17 @@
 import threading
 import time
+import random
 from pathlib import Path
 from intelligence.state_monitor import StateMonitor
 from intelligence.history import HistoryManager
 from intelligence.rules import get_all_rules
+
+try:
+    from emotion.state_detector import StateDetector
+    from emotion.conversation_memory import ConversationMemory
+except ImportError:
+    StateDetector = None
+    ConversationMemory = None
 
 class ProactiveEngine:
     def __init__(self, jarvis_live, history_path: Path):
@@ -11,6 +19,13 @@ class ProactiveEngine:
         self.monitor = StateMonitor()
         self.history = HistoryManager(history_path)
         self.rules = get_all_rules()
+        
+        if StateDetector and ConversationMemory:
+            self.detector = StateDetector()
+            self.memory = ConversationMemory()
+        else:
+            self.detector = None
+            self.memory = None
         
         self.config = {
             "poll_interval": 60, # seconds
@@ -35,24 +50,13 @@ class ProactiveEngine:
         if self.running:
             return
         self.running = True
-        self._schedule_next()
         print("[PROACTIVE] Engine started.")
 
     def stop(self):
         self.running = False
-        if self._timer:
-            self._timer.cancel()
         if self._coalescer_timer:
             self._coalescer_timer.cancel()
         print("[PROACTIVE] Engine stopping...")
-
-    def _schedule_next(self):
-        if self._timer:
-            self._timer.cancel()
-        if self.running:
-            self._timer = threading.Timer(self.config["poll_interval"], self._loop_tick)
-            self._timer.daemon = True
-            self._timer.start()
 
     def _schedule_coalescer_flush(self):
         if self._coalescer_timer:
@@ -78,10 +82,20 @@ class ProactiveEngine:
             self._check_and_suggest()
         except Exception as e:
             print(f"[PROACTIVE] Timer Error: {e}")
-        finally:
-            self._schedule_next()
 
     def _check_and_suggest(self):
+        # 0. Companion/Emotional check first (Arbitration layer)
+        if self.detector:
+            engagement = self.detector.check_engagement()
+            if engagement == "quiet":
+                # High priority emotional check-in
+                self._dispatch_suggestion({
+                    "rule_id": "companion_quiet",
+                    "suggestion": {"text": "[EMOTIONAL_STATE: user is unusually quiet — check in on them gently in Hinglish]"}
+                })
+                # If we did an emotional interrupt, skip the standard system rules to avoid conflicting messages
+                return
+
         # 1. Global Cooldown Check
         if self.history.get_global_cooldown() < self.config["global_cooldown"]:
             return
@@ -233,3 +247,32 @@ class ProactiveEngine:
         else:
             self.history.mark_as_rejected(rule_id)
             print(f"[PROACTIVE] Rejected: {rule_id}")
+
+    def process_interaction(self, user_text: str):
+        """Analyze interaction and return a directive for the LLM if an emotional state is detected."""
+        if not self.detector:
+            return None
+            
+        self.detector.update_timestamp()
+        state = self.detector.analyze_input(user_text)
+        self.memory.log_state(state)
+        
+        # Priority logic for emotional directives
+        if state["stress"]:
+            return "[EMOTIONAL_STATE: stress detected — respond with genuine care, empathy, and calm tone in Hinglish]"
+        
+        if state["fatigue"]:
+            return "[EMOTIONAL_STATE: fatigue detected — respond with supportive, low-energy comforting tone in Hinglish]"
+        
+        if state["late_night"] and random.random() < 0.3:
+            return "[EMOTIONAL_STATE: late night detected — respond by gently reminding user to rest, in Hinglish]"
+        
+        return None
+
+    def get_emotional_context(self):
+        """Returns context for the AI prompt."""
+        if not self.memory:
+            return ""
+        insights = self.memory.get_insights()
+        return f"[EMOTIONAL CONTEXT: {insights}]"
+

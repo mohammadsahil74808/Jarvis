@@ -37,6 +37,14 @@
     "guitar_practice_interest": {
       "value": "Expressed interest in practicing guitar after a long time",
       "updated": "2026-05-18"
+    },
+    "favorite_music": {
+      "value": "Spotify",
+      "updated": "2026-07-28"
+    },
+    "hobbies": {
+      "value": "Coding",
+      "updated": "2026-07-28"
     }
   },
   "projects": {

@@ -42,6 +42,7 @@ class VisionService:
     def __init__(self, config: dict | None = None, on_context: Callable[[ScreenContext], None] | None = None):
         cfg = config or {}
         self.enabled = bool(cfg.get("vision_context_enabled", True))
+        self.continuous = bool(cfg.get("vision_continuous_polling", False))
         self.min_interval = float(cfg.get("vision_min_interval_sec", 2.0))
         self.max_interval = float(cfg.get("vision_max_interval_sec", 15.0))
         self.change_threshold = float(cfg.get("vision_change_threshold", 0.018))
@@ -59,7 +60,7 @@ class VisionService:
         self._interval = self.min_interval
 
     def start(self) -> None:
-        if not self.enabled or self._thread and self._thread.is_alive():
+        if not self.enabled or not self.continuous or (self._thread and self._thread.is_alive()):
             return
         self._thread = threading.Thread(target=self._loop, name="VisionService", daemon=True)
         self._thread.start()
@@ -217,16 +218,28 @@ class VisionService:
         newest: tuple[float, Path] | None = None
         ignored = {".git", "node_modules", "venv", ".venv", "__pycache__", "models"}
         scanned = 0
-        for path in cwd.rglob("*"):
+
+        for root, dirs, files in os.walk(cwd):
+            if Path(root) != cwd:
+                dirs[:] = []
+            else:
+                dirs[:] = [d for d in dirs if d not in ignored]
+                
             if scanned >= 1500:
                 break
-            if any(part in ignored for part in path.parts):
-                continue
-            if path.is_file():
+            for file in files:
+                if file in ignored:
+                    continue
+                path = Path(root) / file
                 scanned += 1
-                mtime = path.stat().st_mtime
-                if newest is None or mtime > newest[0]:
-                    newest = (mtime, path)
+                try:
+                    mtime = path.stat().st_mtime
+                    if newest is None or mtime > newest[0]:
+                        newest = (mtime, path)
+                except Exception:
+                    pass
+                if scanned >= 1500:
+                    break
         if newest:
             ctx.recently_modified_file = str(newest[1].relative_to(cwd))
 

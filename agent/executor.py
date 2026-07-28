@@ -56,7 +56,7 @@ def _run_generated_code(description: str, speak: Callable | None = None) -> str:
             ),
             contents=f"Write Python code to accomplish this task:\n\n{description}"
         )
-        code = response.text.strip()
+        code = (response.text or "").strip()
         code = re.sub(r"```(?:python)?", "", code).strip().rstrip("`").strip()
 
         with tempfile.NamedTemporaryFile(
@@ -127,7 +127,7 @@ def _detect_language(text: str) -> str:
                 f"Text: {text[:200]}"
             )
         )
-        return response.text.strip()
+        return (response.text or "").strip()
     except Exception:
         return "English"
 
@@ -155,7 +155,7 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
             model="gemini-2.0-flash",
             contents=prompt
         )
-        translated = response.text.strip()
+        translated = (response.text or "").strip()
         print(f"[Executor] [OK] Translation done ({target_lang})")
         return translated
     except Exception as e:
@@ -163,90 +163,28 @@ def _translate_to_goal_language(content: str, goal: str) -> str:
         return content
 
 def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
-
-    if tool == "open_app":
-        from actions.open_app import open_app
-        return open_app(parameters=parameters, player=None) or "Done."
-
-    elif tool == "web_search":
-        from actions.web_search import web_search
-        return web_search(parameters=parameters, player=None) or "Done."
-    elif tool == "game_updater":
-        from actions.game_updater import game_updater
-        return game_updater(parameters=parameters, player=None, speak=speak) or "Done."
-    elif tool == "browser_control":
-        from actions.browser_control import browser_control
-        return browser_control(parameters=parameters, player=None) or "Done."
-
-    elif tool == "file_controller":
-        from actions.file_controller import file_controller
-        return file_controller(parameters=parameters, player=None) or "Done."
-
-    elif tool == "cmd_control":
-        from actions.cmd_control import cmd_control
-        return cmd_control(parameters=parameters, player=None) or "Done."
-
-    elif tool == "code_helper":
-        from actions.code_helper import code_helper
-        return code_helper(parameters=parameters, player=None, speak=speak) or "Done."
-
-    elif tool == "dev_agent":
-        from actions.dev_agent import dev_agent
-        return dev_agent(parameters=parameters, player=None, speak=speak) or "Done."
-
-    elif tool == "screen_process":
-        from actions.screen_processor import screen_process
-        return screen_process(parameters=parameters, player=player)
-
-    elif tool == "send_message":
-        from actions.send_message import send_message
-        return send_message(parameters=parameters, player=None) or "Done."
-
-    elif tool == "reminder":
-        from actions.reminder import reminder
-        return reminder(parameters=parameters, player=None) or "Done."
-
-    elif tool == "youtube_video":
-        from actions.youtube_video import youtube_video
-        return youtube_video(parameters=parameters, player=None) or "Done."
-
-    elif tool == "weather_report":
-        from actions.weather_report import weather_action
-        return weather_action(parameters=parameters, player=None) or "Done."
-
-    elif tool == "computer_settings":
-        from actions.computer_settings import computer_settings
-        return computer_settings(parameters=parameters, player=None) or "Done."
-
-    elif tool == "desktop_control":
-        from actions.desktop import desktop_control
-        return desktop_control(parameters=parameters, player=None) or "Done."
-
-    elif tool == "computer_control":
-        from actions.computer_control import computer_control
-        return computer_control(parameters=parameters, player=None) or "Done."
-
-    elif tool == "generated_code":
+    if tool == "generated_code":
         description = parameters.get("description", "")
         if not description:
             raise ValueError("generated_code requires a 'description' parameter.")
         return _run_generated_code(description, speak=speak)
 
-    elif tool == "flight_finder":
-        from actions.flight_finder import flight_finder
-        return flight_finder(parameters=parameters, player=None, speak=speak) or "Done."
+    from core.tool_registry import get_tool_callable
+    func = get_tool_callable(tool)
+    if func:
+        # Some tools accept speak, others don't.
+        import inspect
+        sig = inspect.signature(func)
+        from typing import Any
+        kwargs: dict[str, Any] = {"parameters": parameters, "player": None}
+        if "speak" in sig.parameters:
+            kwargs["speak"] = speak
+            
+        result = func(**kwargs)
+        return result or "Done."
 
-    elif tool == "news_report":
-        from actions.news import news_report
-        return news_report(parameters=parameters, player=None) or "Done."
-
-    elif tool == "daily_briefing":
-        from actions.daily_briefing import get_daily_briefing
-        return get_daily_briefing(parameters=parameters, player=None) or "Done."
-
-    else:
-        print(f"[Executor] [WARNING] Unknown tool '{tool}' -- falling back to generated_code")
-        return _run_generated_code(f"Accomplish this task: {parameters}", speak=speak)
+    print(f"[Executor] [ERROR] Unknown tool '{tool}'")
+    raise ValueError(f"Unknown tool '{tool}'")
 
 class AgentExecutor:
 
@@ -258,7 +196,7 @@ class AgentExecutor:
         speak:       Callable | None        = None,
         cancel_flag: threading.Event | None = None,
     ) -> str:
-        safe_goal = str(goal).encode('ascii', 'ignore').decode('ascii')
+        safe_goal = goal.encode('ascii', 'ignore').decode('ascii')
         print(f"\n[Executor] [GOAL] Goal: {safe_goal}")
 
         replan_attempts = 0
@@ -313,14 +251,14 @@ class AgentExecutor:
                         result = _call_tool(tool, params, speak)
                         step_results[step_num] = result 
                         completed_steps.append(step)
-                        safe_res = str(result)[:100].encode('ascii', 'ignore').decode('ascii')
+                        safe_res = result[:100].encode('ascii', 'ignore').decode('ascii')
                         print(f"[Executor] [OK] Step {step_num} done: {safe_res}")
                         step_ok = True
                         break
 
                     except Exception as e:
                         error_msg = str(e)
-                        safe_err = str(error_msg).encode('ascii', 'ignore').decode('ascii')
+                        safe_err = error_msg.encode('ascii', 'ignore').decode('ascii')
                         print(f"[Executor] [FAIL] Step {step_num} attempt {attempt} failed: {safe_err}")
 
                         recovery = analyze_error(step, error_msg, attempt=attempt)
@@ -388,7 +326,7 @@ class AgentExecutor:
             if speak: speak("Adjusting my approach, sir.")
 
             replan_attempts += 1
-            plan = replan(goal, completed_steps, failed_step, failed_error)
+            plan = replan(goal, completed_steps, failed_step or {}, failed_error)
 
     def _summarize(self, goal: str, completed_steps: list, speak: Callable | None) -> str:
         fallback = f"All done, sir. Completed {len(completed_steps)} steps for: {goal[:60]}."
@@ -405,7 +343,7 @@ class AgentExecutor:
                 model="gemini-2.0-flash",
                 contents=prompt
             )
-            summary  = response.text.strip()
+            summary  = (response.text or "").strip()
             if speak: speak(summary)
             return summary
         except Exception:

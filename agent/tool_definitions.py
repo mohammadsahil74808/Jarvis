@@ -24,13 +24,16 @@ TOOL_DECLARATIONS = [
         }
     },
     {
-        "name": "capture_screen_context",
-        "description": "Return the latest persistent ScreenContext. Use force=true only when the user explicitly needs a fresh screenshot analysis.",
+        "name": "vision_action",
+        "description": "Unified vision tool to analyze screen or camera, OCR text, or extract UI elements.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "force": {"type": "BOOLEAN", "description": "Force a fresh screenshot + LLM vision call instead of using cached context."}
-            }
+                "action": {"type": "STRING", "description": "analyze | ocr | detect | context (default: analyze)"},
+                "angle": {"type": "STRING", "description": "screen | camera (default: screen)"},
+                "query": {"type": "STRING", "description": "User's specific question about the image (for analyze action)"}
+            },
+            "required": []
         }
     },
     {
@@ -155,24 +158,6 @@ TOOL_DECLARATIONS = [
                 "url":    {"type": "STRING", "description": "Video URL for get_info action"},
             },
             "required": []
-        }
-    },
-    {
-        "name": "screen_process",
-        "description": (
-            "Captures and analyzes the screen or webcam image. "
-            "MUST be called when user asks what is on screen, what you see, "
-            "analyze my screen, look at camera, etc. "
-            "You have NO visual ability without this tool. "
-            "After calling this tool, stay SILENT — the vision module speaks directly."
-        ),
-        "parameters": {
-            "type": "OBJECT",
-            "properties": {
-                "angle": {"type": "STRING", "description": "'screen' to capture display, 'camera' for webcam. Default: 'screen'"},
-                "text":  {"type": "STRING", "description": "The question or instruction about the captured image"}
-            },
-            "required": ["text"]
         }
     },
     {
