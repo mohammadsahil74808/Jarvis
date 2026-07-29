@@ -10,7 +10,6 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from google.genai import types
 import threading
-import time
 from concurrent.futures import ThreadPoolExecutor
 import sys
 import socket
@@ -18,11 +17,10 @@ import traceback
 
 from ui import JarvisUI
 from core.config import (
-    get_base_dir, get_config, get_api_key, get_gemini_client,
+    get_config, get_api_key, get_gemini_client,
     rotate_api_key,
-    BASE_DIR, API_CONFIG_PATH, PROMPT_PATH,
-    LIVE_MODEL, CHANNELS, SEND_SAMPLE_RATE,
-    RECEIVE_SAMPLE_RATE, CHUNK_SIZE
+    BASE_DIR, PROMPT_PATH,
+    LIVE_MODEL
 )
 
 
@@ -818,7 +816,7 @@ class JarvisLive:
         try:
             from jarvis.browser.browser_adapter import get_browser_adapter
             adapter = get_browser_adapter()
-            if adapter:
+            if adapter is not None:
                 adapter.shutdown()
                 print("[JARVIS] Browser adapter shutdown completed.")
         except Exception as e:
