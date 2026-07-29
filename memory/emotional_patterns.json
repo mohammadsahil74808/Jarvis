@@ -1,276 +1,6 @@
 {
   "history": [
     {
-      "time": "2026-05-10 12:30",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:30",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:30",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:31",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:31",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:32",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:32",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:33",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:33",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 12:33",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:16",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:17",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:19",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:19",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:20",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-10 21:20",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:17",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:18",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:19",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:19",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:20",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:21",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:22",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:23",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:23",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
-      "time": "2026-05-18 15:23",
-      "state": {
-        "fatigue": false,
-        "stress": false,
-        "low_energy": false,
-        "late_night": false
-      }
-    },
-    {
       "time": "2026-05-31 12:03",
       "state": {
         "fatigue": false,
@@ -899,13 +629,283 @@
         "low_energy": false,
         "late_night": false
       }
+    },
+    {
+      "time": "2026-07-28 18:51",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:51",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:52",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:57",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:57",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:58",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:58",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:59",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:59",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 18:59",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:00",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:00",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:04",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:04",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:05",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:05",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:05",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:05",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:06",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:06",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:06",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:07",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:08",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:08",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:09",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:09",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:10",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:10",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:10",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
+    },
+    {
+      "time": "2026-07-28 19:11",
+      "state": {
+        "fatigue": false,
+        "stress": false,
+        "low_energy": false,
+        "late_night": false
+      }
     }
   ],
   "productive_hours": {
     "13": 32,
-    "19": 12,
+    "19": 32,
     "20": 98,
-    "18": 56,
+    "18": 66,
     "23": 5,
     "17": 38,
     "15": 15,

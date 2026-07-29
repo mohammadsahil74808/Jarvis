@@ -1,4 +1,4 @@
-from typing import List, Dict
+from typing import List, Dict, Optional
 from rag_core.retrieval.hybrid import reciprocal_rank_fusion
 from rag_core.config import get_rag_setting
 
@@ -37,12 +37,12 @@ class QueryRouter:
             
         return list(namespaces)
 
-    def query(self, text: str, namespaces: List[str] = None, top_k: int = None) -> List[Dict]:
+    def query(self, text: str, namespaces: Optional[List[str]] = None, top_k: Optional[int] = None) -> List[Dict]:
         if not namespaces:
             namespaces = self.classify_intent(text)
             
         if top_k is None:
-            top_k = self.top_k
+            top_k = int(self.top_k) if isinstance(self.top_k, (int, float, str)) else 5
             
         all_results = []
         

@@ -1,4 +1,5 @@
 # core/state.py
+from typing import Any, Optional
 
 class JarvisState:
     """
@@ -13,9 +14,9 @@ class JarvisState:
             "last_action": None, 
             "last_tool": None
         }
-        self.system_vitals = {
-            "cpu": 0, 
-            "ram": 0, 
+        self.system_vitals: dict[str, Any] = {
+            "cpu": 0.0, 
+            "ram": 0.0, 
             "battery": None
         }
         self.active_plan = None
@@ -26,6 +27,7 @@ class JarvisState:
             "fatigue": False,
             "last_emotion_time": 0.0
         }
+        self.active_persona = "jarvis"
         
         try:
             import json
@@ -36,7 +38,7 @@ class JarvisState:
         except Exception:
             self.active_plan = None
 
-    def update_vitals(self, cpu: float, ram: float, battery: dict = None):
+    def update_vitals(self, cpu: float, ram: float, battery: Optional[dict] = None):
         self.system_vitals["cpu"] = cpu
         self.system_vitals["ram"] = ram
         if battery is not None:
@@ -46,10 +48,10 @@ class JarvisState:
         if key in self.session_context:
             self.session_context[key] = value
 
-    def get_session(self, key: str) -> str:
+    def get_session(self, key: str) -> Optional[str]:
         return self.session_context.get(key)
         
-    def update_user_status(self, key: str, value: any):
+    def update_user_status(self, key: str, value: Any):
         import time
         if key in self.user_status:
             self.user_status[key] = value

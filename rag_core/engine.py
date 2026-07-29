@@ -1,5 +1,6 @@
 import hashlib
-from typing import List, Dict
+from typing import List, Dict, Optional
+import numpy as np
 
 from rag_core.storage.sqlite_manager import SQLiteManager
 from rag_core.storage.faiss_manager import FAISSManager
@@ -136,7 +137,7 @@ class RAGEngine:
             fid = self.sqlite.insert_chunk(doc_id, chunk["text"], chunk["chunk_index"], 0)
             faiss_ids.append(fid)
             
-        self.faiss.add_vectors(namespace, embeddings, faiss_ids)
+        self.faiss.add_vectors(namespace, embeddings, np.array(faiss_ids))
         
         # 5. Rebuild BM25
         all_chunks = self.sqlite.get_all_chunks_for_namespace(namespace)
@@ -157,7 +158,7 @@ class RAGEngine:
                 results.append(chunk_data)
         return results
 
-    def query(self, text: str, namespaces: List[str] = None, top_k: int = None) -> str:
+    def query(self, text: str, namespaces: Optional[List[str]] = None, top_k: Optional[int] = None) -> str:
         """High level query returning formatted markdown context."""
         hits = self.router.query(text, namespaces, top_k)
         if not hits:
@@ -178,12 +179,19 @@ class RAGEngine:
         return "\n---\n".join(res)
 
     def auto_ingest_file(self, filepath: str):
+        import os
         # Simple heuristic
         if filepath.endswith(".py"):
             self.ingest("code", filepath)
         elif filepath.endswith(".dart"):
             self.ingest("project", filepath)
         elif filepath.endswith((".pdf", ".docx")):
+            try:
+                if filepath.endswith(".pdf") and os.path.getsize(filepath) > 50 * 1024 * 1024:
+                    print(f"[RAGEngine] Skipping large PDF: {filepath} (>50MB)")
+                    return
+            except OSError:
+                pass
             self.ingest("docs", filepath)
 
     def auto_remove_file(self, filepath: str):
@@ -201,7 +209,7 @@ class RAGEngine:
                     
                     self.ingest_queue.put((ns, "_rebuild_bm25_only_", {}))
 
-    def add_memory(self, text: str, metadata: dict = None):
+    def add_memory(self, text: str, metadata: Optional[dict] = None):
         self.ingest("memory", text[:50], text=text, metadata=metadata)
         
     def start_background_jobs(self):

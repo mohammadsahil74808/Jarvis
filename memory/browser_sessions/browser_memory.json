@@ -1,24 +1,16 @@
 {
-  "active_url": "https://github.com/",
-  "active_title": "GitHub \u00b7 Change is constant. GitHub keeps you ahead. \u00b7 GitHub",
-  "action_count": 2,
+  "active_url": "https://www.google.com/search?q=test",
+  "active_title": "Loading https://www.google.com/search?q=test&sei=tb5pare0EtCtp84Pn86e6Ao",
+  "action_count": 1,
   "last_actions": [
     {
-      "timestamp": 1785160426.3204613,
+      "timestamp": 1785314996.0531578,
       "action": "open_website",
       "details": {
-        "url": "https://github.com"
+        "url": "https://www.google.com/search?q=test"
       },
-      "result": "GitHub \u00b7 Change is constant. GitHub keeps you ahead. \u00b7 GitHub"
-    },
-    {
-      "timestamp": 1785160430.556631,
-      "action": "open_website",
-      "details": {
-        "url": "https://github.com"
-      },
-      "result": "GitHub \u00b7 Change is constant. GitHub keeps you ahead. \u00b7 GitHub"
+      "result": "Loading https://www.google.com/search?q=test&sei=tb5pare0EtCtp84Pn86e6Ao"
     }
   ],
-  "last_updated": 1785160430.5566144
+  "last_updated": 1785314996.0531008
 }

@@ -28,6 +28,18 @@ class BrowserController:
         self.context_mgr = BrowserContextManager()
         self.state = BrowserState()
 
+    def shutdown(self) -> None:
+        """Closes the browser manager."""
+        if self.manager:
+            self.manager.close()
+            
+    def get_status(self) -> dict:
+        """Returns the current browser status."""
+        return {
+            "browser_engine": "Firefox",
+            "active_url": self.state.active_tab_url if hasattr(self.state, "active_tab_url") else ""
+        }
+
     def open_website(self, url: str) -> str:
         """Navigates current active Firefox tab to the specified URL."""
         if not url.startswith(("http://", "https://")):

@@ -71,9 +71,9 @@ class SQLiteManager:
                 return row[0]
             cursor.execute("INSERT INTO namespaces (name, description) VALUES (?, ?)", (name, description))
             self._conn.commit()
-            return cursor.lastrowid
+            return cursor.lastrowid or 0
 
-    def upsert_document(self, namespace: str, source_uri: str, file_hash: str = "", metadata: dict = None) -> int:
+    def upsert_document(self, namespace: str, source_uri: str, file_hash: str = "", metadata: Optional[dict] = None) -> int:
         ns_id = self.ensure_namespace(namespace)
         meta_str = json.dumps(metadata or {})
         with self._lock:
@@ -94,7 +94,7 @@ class SQLiteManager:
                     INSERT INTO documents (namespace_id, source_uri, file_hash, metadata)
                     VALUES (?, ?, ?, ?)
                 """, (ns_id, source_uri, file_hash, meta_str))
-                doc_id = cursor.lastrowid
+                doc_id = cursor.lastrowid or 0
             self._conn.commit()
             return doc_id
 

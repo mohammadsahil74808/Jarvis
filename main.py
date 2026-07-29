@@ -19,6 +19,7 @@ import traceback
 from ui import JarvisUI
 from core.config import (
     get_base_dir, get_config, get_api_key, get_gemini_client,
+    rotate_api_key,
     BASE_DIR, API_CONFIG_PATH, PROMPT_PATH,
     LIVE_MODEL, CHANNELS, SEND_SAMPLE_RATE,
     RECEIVE_SAMPLE_RATE, CHUNK_SIZE
@@ -42,9 +43,14 @@ def _get_api_key() -> str:
 def _get_config() -> dict:
     return get_config()
 
-def _load_system_prompt() -> str:
+def _load_system_prompt(persona="jarvis") -> str:
     try:
-        return PROMPT_PATH.read_text(encoding="utf-8")
+        from core.config import BASE_DIR
+        prompt_path = BASE_DIR / "core" / f"{persona}_prompt.txt"
+        if not prompt_path.exists() and persona == "jarvis":
+            prompt_path = PROMPT_PATH
+            
+        return prompt_path.read_text(encoding="utf-8")
     except Exception:
         return (
             "You are JARVIS, Tony Stark's AI assistant. "
@@ -194,6 +200,7 @@ class JarvisLive:
         self._personal_context = None
         self._cached_config    = None
         self._config_dirty     = True
+        self._force_restart    = False
 
         # ── Lazy background init immediately ──
         self.ui.root.after(0, self._background_lazy_init)
@@ -437,6 +444,30 @@ class JarvisLive:
             if suggestion:
                 self.ui.show_suggestion(suggestion["text"])
 
+    def interrupt_speaking(self):
+        with self._speaking_lock:
+            was_speaking = self._is_speaking
+            self._is_speaking = False
+            
+        if was_speaking:
+            try:
+                while not self.audio_in_queue.empty():
+                    self.audio_in_queue.get_nowait()
+                    self.audio_in_queue.task_done()
+            except Exception:
+                pass
+            if not self.ui.muted:
+                self.ui.set_state("LISTENING")
+                
+            if self._loop and self.session:
+                asyncio.run_coroutine_threadsafe(
+                    self.session.send_client_content(
+                        turns={"parts": [{"text": "User interrupted."}]},
+                        turn_complete=True
+                    ),
+                    self._loop
+                )
+
     def set_speaking(self, value: bool):
         with self._speaking_lock:
             self._is_speaking = value
@@ -482,7 +513,8 @@ class JarvisLive:
             except Exception:
                 pass
 
-        sys_prompt = _load_system_prompt()
+        persona = getattr(self.state, "active_persona", "jarvis")
+        sys_prompt = _load_system_prompt(persona)
         now        = datetime.now()
         time_ctx   = (
             f"[CURRENT DATE & TIME]\n"
@@ -530,18 +562,24 @@ class JarvisLive:
         parts.append(vitals)
         parts.append(sys_prompt)
 
+        system_instruction_str = "\n".join(parts)
+        # Hardcode Gemini context limit to ~1M tokens (approx 3.5M characters)
+        if len(system_instruction_str) > 3500000:
+            system_instruction_str = system_instruction_str[-3500000:]
+            
         _genai, _types = _lazy_genai()
+        voice_name = "Aoede" if persona == "friday" else "Charon"
         config_obj = _types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},
             input_audio_transcription={},
-            system_instruction="\n".join(parts),
+            system_instruction=system_instruction_str,
             tools=_CACHED_TOOLS,
             session_resumption=_types.SessionResumptionConfig(),
             speech_config=_types.SpeechConfig(
                 voice_config=_types.VoiceConfig(
                     prebuilt_voice_config=_types.PrebuiltVoiceConfig(
-                        voice_name="Charon"
+                        voice_name=voice_name
                     )
                 )
             ),
@@ -657,13 +695,15 @@ class JarvisLive:
     # RUN
     # ─────────────────────────────────────────────────────────────
     async def run(self):
-        client      = get_gemini_client()
         first_run   = True
         local_greet = True
         retry_delay = 2
 
         while True:
             try:
+                persona = getattr(self.state, "active_persona", "jarvis")
+                client = get_gemini_client(persona)
+                
                 if local_greet:
                     local_greet = False
                     from core.utils import speak_local
@@ -705,28 +745,44 @@ class JarvisLive:
                     tg.create_task(self._receive_audio())
                     tg.create_task(self.audio_engine.play_loop())
 
-                    if first_run:
-                        first_run = False
-                        # ── FIX 2: was 4s — now 1s ──
-                        await asyncio.sleep(1)
+                    if getattr(self, "pending_greeting", None):
+                        msg = self.pending_greeting
+                        self.pending_greeting = None
+                        await asyncio.sleep(0.5)
                         await session.send_client_content(
-                            turns={"parts": [{"text":
-                                "System call: Perform 'daily_briefing' for Sahil now."}]},
+                            turns={"parts": [{"text": msg}]},
                             turn_complete=True
                         )
 
                     while True:
-                        await asyncio.sleep(1)
+                        if self._force_restart:
+                            self._force_restart = False
+                            raise Exception("RESTART_SESSION")
+                        await asyncio.sleep(0.1)
 
             except Exception as e:
-                print(f"[JARVIS] Connection error: {e}")
-                self.ui.write_log(
-                    f"SYS: Connection lost. Reconnecting in {retry_delay}s...")
+                err_str = str(e).lower()
+                if "restart_session" in err_str:
+                    print("[JARVIS] Restarting session for new config...")
+                    retry_delay = 0
+                    await asyncio.sleep(0.5) # Let PortAudio clean up streams
+                elif "429" in err_str or "quota" in err_str or "exhausted" in err_str:
+                    print(f"[JARVIS] API Quota Exceeded! Switching API key...")
+                    self.ui.write_log("SYS: API Quota Exceeded. Rotating key...")
+                    rotate_api_key()
+                    retry_delay = 0
+                else:
+                    print(f"[JARVIS] Connection error: {e}")
+                    self.ui.write_log(
+                        f"SYS: Connection lost. Reconnecting in {retry_delay}s...")
+                    retry_delay = min(retry_delay * 2, 30)
+                    
                 self.ui.set_state("INITIALISING")
                 self.session = None
                 self.set_speaking(False)
-                await asyncio.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 30)
+                if retry_delay > 0:
+                    await asyncio.sleep(retry_delay)
+                retry_delay = max(2, retry_delay) # Reset to at least 2 for next real error
     def shutdown(self):
         print("[JARVIS] Shutting down services...")
         if getattr(self, "vision_service", None):
@@ -742,14 +798,33 @@ class JarvisLive:
                 print("[JARVIS] Proactive engine stopped.")
             except Exception as e:
                 print(f"[JARVIS] Proactive stop error: {e}")
-
+                
+        if getattr(self, "app_watcher", None):
+            try:
+                self.app_watcher.stop()
+                print("[JARVIS] AppWatcher stopped.")
+            except: pass
+            
+        if getattr(self, "audio_engine", None):
+            try:
+                self.audio_engine.stop()
+            except: pass
+            
+        if getattr(self, "memory_executor", None):
+            try:
+                self.memory_executor.shutdown(wait=False)
+            except: pass
+            
         try:
             from jarvis.browser.browser_adapter import get_browser_adapter
             adapter = get_browser_adapter()
-            adapter.shutdown()
-            print("[JARVIS] Browser adapter stopped.")
+            if adapter:
+                adapter.shutdown()
+                print("[JARVIS] Browser adapter shutdown completed.")
         except Exception as e:
-            print(f"[JARVIS] Browser close error: {e}")
+            print(f"[JARVIS] Browser cleanup error: {e}")
+
+
 
 
 # ─────────────────────────────────────────────────────────────
@@ -769,15 +844,31 @@ def main():
         sys.exit(0)
 
     ui = JarvisUI("face.png")
+    
+    # Store reference so we can access it on exit
+    _jarvis_instance = None
+
+    def on_close():
+        if _jarvis_instance:
+            _jarvis_instance.shutdown()
+        ui.root.quit()
+        ui.root.destroy()
+
+    ui.root.protocol("WM_DELETE_WINDOW", on_close)
 
     def runner():
+        nonlocal _jarvis_instance
         ui.wait_for_api_key()
         jarvis    = JarvisLive(ui)
         ui.jarvis = jarvis
+        _jarvis_instance = jarvis
         try:
             asyncio.run(jarvis.run())
         except KeyboardInterrupt:
             print("\nShutting down...")
+            if _jarvis_instance is not None:
+                _jarvis_instance.shutdown()
+            ui.root.quit()
 
     threading.Thread(target=runner, daemon=True).start()
     ui.root.mainloop()

@@ -1,0 +1,534 @@
+<!-- vim: syntax=Markdown -->
+
+# Changelog
+
+## v0.7.0 (upcoming)
+
+**All systems:**
+- 🗲 Breaking: Drop support for Python 3.9.
+- Fix unresposive window when selecting larger screen regions.
+
+**Windows**:
+- Fix crash on `NormCap.exe --help`. ([#783](https://github.com/dynobo/normcap/issues/783))
+
+**Linux**:
+- Add clickable desktop notifications in FlatPak package.
+- Add a new clipboard-handler `qt_wayland` to improve reliabilty of writing to clipboard on Wayland systems.
+
+## v0.6.0 (2025-08-31)
+
+**All systems:**
+- 🗲 Breaking: Remove commandline argument `--mode {parse,raw}` in favor of a new
+argument `--parse-text {True, False}`.
+- Add (optional) QR-Code and barcode detection.
+- Add option `--screenshot-handler` to explicitly choose among available methods.
+- Fix language downloads for some specific languages by falling back to different model type ([#744](https://github.com/dynobo/normcap/issues/744)).
+
+**Windows:**
+- Add automatic export of debug logs (when running `normcap.exe -v debug`) to `{DESKTOP_FOLDER}\normcap.log` for easier access.
+- Fix crash on start if user directory contains special characters ([#608](https://github.com/dynobo/normcap/issues/608)).
+
+**Linux:**
+- 🗲 Breaking: Drop support for Ubuntu 20.04 and Gnome < 41.0
+- 🗲 Deprecating: AppImage builds are being deprecated. Even with a lot of effort, it turns out that AppImage is too unreliable.
+  (We will still build AppImage for a while, but they might go away any time.)
+- Change priority of clipboard handlers: `wl-clipboard` is now lowest priority (as it seems least reliable), below `xsel` and `xclip`. (Please [open an issues](https://github.com/dynobo/normcap/issues/new/choose), if this doesn't work well for you.)
+- Add handlers to take screenshots via `gnome-screenshot` or `spectacle`. Should mitigate some issue for screenshots on Wayland (not all!).
+- Fix AppImage requires `libcrypt`, which is not the case anymore.
+- Fix NormCap not getting focus when moved with Gnome extension "Window Calls"
+- Fix trying incompatible screenshot and clipboard handlers in Flatpak.
+
+**MacOS:**
+
+- 🗲 Breaking: Drop support for macOS 12 (Monterey) and older.
+
+## v0.5.9 (2024-11-10)
+
+- All: Add Chinese translation. Thanks, [@mofazhe](https://github.com/mofazhe)! ([#661](https://github.com/dynobo/normcap/pull/661))
+- All: Add Portuguese translation. Thanks, ssantos!
+- Windows: Add portable package. Thanks, [@mofazhe](https://github.com/mofazhe)! ([#660](https://github.com/dynobo/normcap/pull/660), [#671](https://github.com/dynobo/normcap/pull/671))
+- macOS: Drop support for macOS 12 (end of life).
+
+## v0.5.8 (2024-05-19)
+
+- Linux: Next try to fix issue on Ubuntu/Unity where the window doesn't show up. ([#651](https://github.com/dynobo/normcap/pull/651))
+
+## v0.5.7 (2024-05-18)
+
+- All: Add french translation. Thanks, [@NathanBnm](https://github.com/NathanBnm)! ([#648](https://github.com/dynobo/normcap/pull/648))
+- Linux: Fix crash on wayland in case of user's home directory contains special character. Thanks, [@supersonictw](https://github.com/supersonictw)! ([#643](https://github.com/dynobo/normcap/issues/643))
+- Linux: Fix issue on Ubuntu/Unity where the window doesn't show up. ([#651](https://github.com/dynobo/normcap/pull/651))
+
+## v0.5.6 (2024-05-08)
+
+- All: Fix minor typos in translations. ([#641](https://github.com/dynobo/normcap/pull/641))
+- Linux: Fix clipboard on Wayland desktops other than GNOME. ([#640](https://github.com/dynobo/normcap/pull/640))
+
+## v0.5.5 (2024-05-07)
+
+- All: Add ukrainian translation. Thanks, [@thevllad](https://github.com/thevllad)! ([#625](https://github.com/dynobo/normcap/pull/625))
+- All: Add russian translation. Thanks, [@ViktorOn](https://github.com/ViktorOn)! ([#611](https://github.com/dynobo/normcap/pull/611))
+- All: Add italian translation. Thanks, [@albanobattistella](https://github.com/albanobattistella)! ([#622](https://github.com/dynobo/normcap/pull/622))
+- All: Add spanish translation. Thanks, [@haggen88](https://github.com/haggen88)! ([#614](https://github.com/dynobo/normcap/pull/614))
+- All: Add brazilian translation. Thanks, [@NameLessGO](https://github.com/NameLessGo)! ([#632](https://github.com/dynobo/normcap/pull/632))
+- Linux: Add `xsel` as another clipboard handler. Try `--clipboard-handler xsel` if
+  NormCap's result isn't copied to the clipboard correctly.
+- Linux: Fix clipboard on Gnome 46 + Wayland. ([#620](https://github.com/dynobo/normcap/pull/620))
+- Linux: Auto-remove screenshot file from pictures-directory on Wayland. Thanks, [@PavelDobCZ23](https://github.com/PavelDobCZ23)! ([#600](https://github.com/dynobo/normcap/issues/600))
+- Linux: Fix `grim` being tried for screenshots on non-compatible compositors.
+- MacOS: Fix crash on start. ([#584](https://github.com/dynobo/normcap/issues/586))
+- MacOS: Add automated build for M1. ([#636](https://github.com/dynobo/normcap/issues/636))
+
+## v0.5.4 (2024-01-15)
+
+- All: Fix duplicate capture window if started twice
+  ([#580](https://github.com/dynobo/normcap/issues/580))
+- Linux: Improve robustness of window positioning on Wayland.
+- Linux: Improve debug output regarding clipboard methods.
+  ([#581](https://github.com/dynobo/normcap/issues/581))
+
+## v0.5.3 (2024-01-04)
+
+- All: Add CLI argument for selecting clipboard handler (mainly intended for debugging).
+- Linux: Revert clipboard handling to use Qt on Xorg, wl-clipboard on Wayland, and xclip
+  only on AwesomeWM and Gnome 45. ([#581](https://github.com/dynobo/normcap/issues/581))
+
+## v0.5.2 (2023-12-12)
+
+- All: Fix `normcap` entry point to non-existing function.
+
+## v0.5.1 (2023-12-12)
+
+- All: Fix accidentally removed `normcap` entry point for Python package.
+
+## v0.5.0 (2023-12-12)
+
+- All: Add Swedish [localization](./normcap/resources/locales/README.md). Thanks,
+  [@eson57](https://github.com/eson57)!
+  ([#599](https://github.com/dynobo/normcap/pull/566))
+- All: Fix issue where introduction window was still visible on the screen capture UI.
+  ([#536 comment](https://github.com/dynobo/normcap/issues/536#issuecomment-1752110232))
+- All: Fix missing line breaks in "raw"-mode
+  ([#502 comment](https://github.com/dynobo/normcap/issues/502#issuecomment-1726291608))
+- All: Improve line breaks for paragraphs detected in "parse"-mode
+  ([#502](https://github.com/dynobo/normcap/issues/502))
+- All: Add verification of top level domains to reduce false positive URL detections in
+  "parse"-mode.
+- All: Add cleansing of some UTF-8 chars in "parse"-mode, e.g. `„` and `“` will be
+  replaced by `"`. (You can still use "raw"-mode to leave them intact.)
+- Windows, macOS: Fix notifications not clickable in "raw"-Mode.
+  ([#438 comment](https://github.com/dynobo/normcap/issues/438#issuecomment-1752175090))
+- Linux: Fig segfault in AppImage.
+  ([#543](https://github.com/dynobo/normcap/issues/534))
+- Linux: Fix incorrect selection when display scaling is active.
+  ([#397](https://github.com/dynobo/normcap/issues/397))
+- Linux: Add support for using `xclip` to copy result to clipboard. This seems more
+  stable on Wayland systems than `wl-clipboard`, at least until compatibility with
+  latest Gnome updates is restored.
+
+## v0.5.0beta1 (2023-10-08)
+
+- All: Add [support for localization](./normcap/resources/locales/README.md) of the
+  NormCap UI. Available translations so far:
+  - German
+- All: Add introduction on startup.
+  ([#443](https://github.com/dynobo/normcap/issues/443))
+- All: Add explanatory tooltips to many menu entries.
+- All: Fix wrong detection of some special characters.
+- All: Fix crash caused by update checker.
+- All: Improve startup and recognition speed slightly.
+- Windows & macOS: Add click action to desktop notifications. If a notification is
+  clicked, the (last) result is opened in an appropriate application. E.g. if a URL was
+  detected, it is opened in the default browser. If plain text was detected, it is saved
+  as temporary text file, which is opened in the default text editor.
+  ([#438](https://github.com/dynobo/normcap/issues/438))
+- Windows: Change installation path from `..\dynobo\NormCap` to simpler `..\NormCap`
+- Linux: Fix NormCap to work with Sway DE.
+  ([#485](https://github.com/dynobo/normcap/issues/485))
+- Linux: Fix multi monitor setups with Wayland causing unnecessary timeouts.
+  ([#494](https://github.com/dynobo/normcap/issues/494))
+- Linux: Fix crash due to missing `xcb-utils-cursor` in AppImage, by including it.
+  ([#457](https://github.com/dynobo/normcap/issues/457))
+- Linux: Add support for hyprland display manager. Currently, requires `grim` for taking
+  screenshots. ([#375](https://github.com/dynobo/normcap/issues/357))
+- Linux: On Wayland, improve handling of missing screenshot permission.
+  ([#533](https://github.com/dynobo/normcap/issues/533))
+- macOS: Improve UX in case of missing screenshot permission.
+
+## v0.4.4 (2023-06-04)
+
+- All: Fix regression causing exit through system tray not working.
+  ([#458](https://github.com/dynobo/normcap/issues/458))
+
+## v0.4.3 (2023-06-03)
+
+- All: Add command line flag `--background-mode` to start normcap minimized.
+  ([#439](https://github.com/dynobo/normcap/issues/439))
+- macOS: Improve dialog that is shown in case screenshot permissions are missing.
+- Windows: Fix upgrading with `msi`-installer might lead to error on startup.
+  ([#452](https://github.com/dynobo/normcap/issues/452))
+- Windows: Upgrading with `msi`-installer should not remove downloaded languages in
+  future versions anymore.
+
+## v0.4.2 (2023-05-21)
+
+- Fix quotes in detected text can result in wrong detection.
+  ([#446](https://github.com/dynobo/normcap/issues/446))
+- Update AppImage base image from Ubuntu 18.04 (deprected) to 20.04.
+
+## v0.4.1 (2023-05-01)
+
+- Enlarge settings button a bit to make it easier to spot.
+  ([#254](https://github.com/dynobo/normcap/issues/254))
+- Prevent running multiple instances and start capture in original instance instead.
+  ([#306](https://github.com/dynobo/normcap/issues/306))
+- Fix unintended re-capture if tray icon is disabled.
+  ([#254](https://github.com/dynobo/normcap/issues/254))
+- Fix occasional crashes after use of Language Manager.
+- Add experimental `--cli-mode` switch to print NormCap's detection to STDOUT and exit
+  immediately. This is useful if you want to use the detected text as input for other
+  programs or commands. E.g.:
+  ```sh
+  normcap --cli-mode | xargs -I {} firefox "http://duckduckgo.com/?q={}"`
+  ```
+
+## v0.4.0 (2023-01-29)
+
+- All: Remove support for Tesseract \< 5.0.
+- All: Faster startup if "Check for updates" is enabled.
+- All: Refactor icon handling. Fixes a bug in the AUR package.
+  ([#353](https://github.com/dynobo/normcap/issues/353))
+- All: Fix crash if tesseract data for English is missing.
+  ([#353](https://github.com/dynobo/normcap/issues/353))
+- Linux: Fix FlatPak crashes due to missing permissions
+  ([#320](https://github.com/dynobo/normcap/issues/320)).
+- Prebuilt packages: Add UI for downloading additional languages.
+- Prebuilt packages: Remove all default languages except English to reduce size.
+- Prebuilt packages (Windows): Switch to different tesseract binaries, which should work
+  more reliable across systems. Unfortunately, it also enlarges the file size a lot.
+  Would be great to [get your feedback](https://github.com/dynobo/normcap/discussions)
+  on this! ([#254](https://github.com/dynobo/normcap/issues/254))
+
+## v0.3.15 (2022-11-20)
+
+- All: Add possibility to capture by left-clicking (or double-clicking) the tray icon.
+  This also improves a bit the situation regarding
+  [#306](https://github.com/dynobo/normcap/issues/306).
+- All: Fix bug when running with Python 3.11
+  [#311](https://github.com/dynobo/normcap/issues/311).
+- Windows: Improve the msi-installer by doing a clean uninstallation that removes also
+  log-folder and tessdata folder.
+
+## v0.3.14 (2022-10-30)
+
+- All: Add `--version` command line flag to easily print NormCap version.
+- All: Slightly improved startup time.
+- Windows: [Debug information](https://dynobo.github.io/normcap/#faqs-debug) can be
+  printed on screen again. (No need for checking the log file anymore.)
+- Linux: Fix FlatPak crashing when gtk3-nocsd is enabled, e.g. in Unity DE
+  ([#190](https://github.com/dynobo/normcap/issues/190)).
+- Linux: Fix full screen view in Unity DE
+  ([#190](https://github.com/dynobo/normcap/issues/190)).
+- Linux: Fix failing notifications if detected text starts with certain characters.
+
+## v0.3.13 (2022-10-19)
+
+- All: Reduce interval for (optional) update check to 7 days instead on every run to
+  saves startup-time.
+- macOS: Check for required screen recording permissions and warn if missing.
+- macOS: Fix issue where NormCap process keeps running in background after exit.
+- macOS: Work around failing screen recording permissions after installation of new
+  NormCap version by resetting the permissions with every new NormCap version.
+
+## v0.3.12 (2022-09-15)
+
+- All: Change color of tray icon on successful copy to clipboard to improve usability in
+  case the notifications are turned off or not working.
+- All: Update dependencies.
+- Linux: Fix multi monitor support on Wayland.
+
+## v0.3.11 (2022-09-04)
+
+- All: Improve removal of superfluous spaces in some eastern languages
+  ([#158](https://github.com/dynobo/normcap/issues/158)).
+- Linux: Fix notification issues on some KDE distros
+  ([#260](https://github.com/dynobo/normcap/issues/260)). Thx,
+  [@OLoKo64](https://github.com/OLoKo64).
+
+## v0.3.10 (2022-09-03)
+
+- All: Ensure backwards compatibility for Pillow \< 9.2.0
+  ([#255](https://github.com/dynobo/normcap/issues/255)).
+- Linux: Option to add additional languages to FlatPak
+  ([#239](https://github.com/dynobo/normcap/issues/239)). Experimental, might not yet
+  work!
+
+## v0.3.9 (2022-08-28)
+
+- All: Make update check more robust.
+- Windows: Fix copy to clipboard ([#250](https://github.com/dynobo/normcap/issues/250)).
+- Windows: Write log files for debugging
+  ([see FAQs](https://dynobo.github.io/normcap/#faqs-windows-log)).
+- macOS: Use `pbcopy` for more reliable copy to clipboard.
+- Linux: Fix notifications not showing up in prebuilt packages on some systems.
+
+## v0.3.8 (2022-08-21)
+
+- All: Further reduced file size of prebuilt packages
+  ([#238](https://github.com/dynobo/normcap/issues/238)). Thx,
+  [@thecoder-001](https://github.com/thecoder-001)
+- Linux: Fix clipboard issues on Wayland by using
+  [wl-clipboard](https://github.com/bugaevc/wl-clipboard).
+  ([#237](https://github.com/dynobo/normcap/issues/237))
+- macOS: Indicate build architecture in filename (M1 is not supported!); Also add to
+  FAQs ([#242](https://github.com/dynobo/normcap/issues/242)).
+
+## v0.3.7 (2022-08-03)
+
+- Linux: Fix `TypeError` crash during detection of appropriate screenshot method
+  ([#235](https://github.com/dynobo/normcap/issues/235))
+
+## v0.3.6 (2022-08-01)
+
+- All: Hide UI while processing. Useful for larger sections of text or slower machines,
+  where processing can take a while.
+- All: Delay exit in case notification=on and tray=off to ensure notification is shown.
+- Linux: Latest NormCap is now always available on FlatHub
+  ([#147](https://github.com/dynobo/normcap/issues/147),
+  [#225](https://github.com/dynobo/normcap/issues/225)). Thx,
+  [@Tim453](https://github.com/Tim453).
+
+## v0.3.5 (2022-07-27)
+
+- All: Reduce the file size of prebuilt packages.
+- Windows: Fix bug causing a 5 seconds delay during recognition
+  [#218](https://github.com/dynobo/normcap/issues/218).
+- Docu: Add Python version required for installing package from PyPi
+  [#221](https://github.com/dynobo/normcap/issues/221).
+
+## v0.3.4 (2022-03-31)
+
+- All: Various speed improvements.
+- All: Smaller size by updating to PySide 6.3 without add-ons.
+- Linux: Avoid crash on denied screenshot on Wayland.
+- Docu: In README, complement dependencies for installing pip package. Thx,
+  [@thecoder-001](https://github.com/thecoder-001) &
+  [@faveoled](https://github.com/faveoled).
+- Docu: Fix broken link in website Thx, [@LGro](https://github.com/LGro).
+
+## v0.3.3 (2022-03-25)
+
+- All: Fixes screenshots not updated when capturing from tray menu
+  [#181](https://github.com/dynobo/normcap/issues/199).
+
+## v0.3.2 (2022-03-23)
+
+- macOS: Fixed crash in prebuilt DMG package
+  [#199](https://github.com/dynobo/normcap/issues/199).
+
+## v0.3.1 (2022-03-20)
+
+- All: Fix pasting to clipboard sometimes not working
+
+## v0.3.0 (2022-03-20)
+
+- All: Removed CLI options `-v, --verbose` and `-V, --very-verbose` in favor of the new
+  `-v, --verbosity` which accepts on of the options: `{error, warning, info, debug}`.
+- All: Update to PySide6 (Qt6) and Python 3.9
+- All: Add support for Tesseract 5 with better OCR
+  [#170](https://github.com/dynobo/normcap/issues/170)
+- All: Improve image processing for better detection accuracy, especially for bright
+  text on dark backgrounds.
+- Prebuilt packages: Switched to shipping "fast" language models to reduce package size.
+- Linux: Add support for Gnome Shell 41+ (using Screenshot Portal)
+  [#153](https://github.com/dynobo/normcap/issues/153)
+  [#157](https://github.com/dynobo/normcap/issues/157)
+- Linux: Fix issues with transparency / black window
+  [#154](https://github.com/dynobo/normcap/issues/154)
+  [#155](https://github.com/dynobo/normcap/issues/155)
+- Linux: Fix crash on non Gnome Shell systems
+  [#168](https://github.com/dynobo/normcap/issues/168)
+- macOS: Full screen border and selection
+  [#119](https://github.com/dynobo/normcap/issues/119)
+
+## v0.2.10 (2021-12-27)
+
+- All: Fix language settings not working if only a single language is selected
+- macOS: Fix crash at start of prebuilt package due to missing dependency
+
+## v0.2.9 (2021-12-26)
+
+- All: Mitigate superfluous spaces in Chinese languages
+  [#158](https://github.com/dynobo/normcap/issues/158)
+- Linux: Fix OCR not working on Gnome 41+ by using the official screenshot API
+  [#159](https://github.com/dynobo/normcap/issues/159)
+
+## v0.2.8 (2021-10-20)
+
+- Linux: Fix language option in `settings.conf` not human-readable
+  [#143](https://github.com/dynobo/normcap/issues/143)
+- Prebuilt packages: On Windows the MSI-installer will now upgrade existing versions
+  [#148](https://github.com/dynobo/normcap/issues/148)
+
+## v0.2.7 (2021-09-25)
+
+- Fixed NormCap error in case of disabled notifications
+  [#142](https://github.com/dynobo/normcap/issues/142)
+
+## v0.2.6 (2021-08-27)
+
+**Breaking changes:**
+
+- All: NormCap settings will be reset on upgrade (due to changes in the settings
+  system)!
+- Prebuilt packages: A different set of languages is shipped! `jpn`, `jpn_vert` & `fra`
+  got removed, but you can now add them yourself (Settings → "open data folder")
+
+**Other changes:**
+
+- All: Use native settings storage
+- All: Improve settings menu in case of many languages
+- All: Slightly better performance
+- Prebuilt packages: Allow extending with additional languages
+  [#137](https://github.com/dynobo/normcap/issues/137)
+  [#127](https://github.com/dynobo/normcap/issues/127)
+  [#104](https://github.com/dynobo/normcap/issues/104)
+- macOS: Fix missing `libpng` in package
+  [#128](https://github.com/dynobo/normcap/issues/128)
+- Linux: Fix AttributeError: 'MainWindow' object has no attribute 'macos_border_window'
+  [#139](https://github.com/dynobo/normcap/issues/139)
+  [#138](https://github.com/dynobo/normcap/pull/138)
+- Windows: Fix update check
+
+## v0.2.5 (2021-08-07)
+
+- Linux: Fix disappearing menu bar on gnome
+  [#121](https://github.com/dynobo/normcap/issues/121)
+- macOS: Fix update checking
+- macOS: Draw border above menubar & dock
+  [#119](https://github.com/dynobo/normcap/issues/119) (just cosmetic, both are still
+  not selectable)
+- All: Slightly better performance
+- All: More useful error message for issues with QT
+- All: Application can now be cancelled via `<ctrl>+c` in terminal
+- All: Removed switching modes via `<space>`-key. Use the menu instead.
+
+## v0.2.4 (2021-07-29)
+
+- All: Improve robustness of settings
+- Prebuilt packages: Add languages `jpn` and `jpn_vert`
+- macOS: Fix bug that prevented the selection of a region
+- macOS: Catch `ImportError` of `urllib` in case update check is enabled
+
+## v0.2.3 (2021-07-16)
+
+- Fix styling issues with settings menu
+
+## v0.2.2 (2021-07-15)
+
+- Bug fixes related to update checking
+- Small UI improvements
+
+## v0.2.1 (2021-07-13)
+
+- Add settings menu
+- Add check for updates on startup (experimental, needs opt-in)
+
+## v0.2.0 (2021-06-23)
+
+- (Almost) complete rewrite of NormCap (things might be different!)
+- Provide easy to use binary package releases
+- Better support for HiDPI and multi monitor setups
+- Switch from Tk to Qt as UI Framework
+- System tray support (experimental)
+
+## v0.1.11 (2021-04-04)
+
+- Switch to pyclip library for clipboard handling
+- Try a fix for macOS dummy window issue
+
+## v0.1.10 (2021-03-20)
+
+- Handle missing system dependencies for the notification more gracefully
+- Update versions of python package dependencies
+
+## v0.1.9 (2020-12-06)
+
+- Add installer for MS Windows to enable notification management
+- Fix crash caused by missing notification icon in certain setups
+
+## v0.1.8 (2020-11-17)
+
+- Removed experimental tray icon support introduced in v0.1.7 (has caused unexpected
+  issues).
+
+## v0.1.7 (2020-11-14)
+
+- Switch method to show full-screen Windows to fix
+  [Issue #88](https://github.com/dynobo/normcap/issues/88)
+- Introduce preview of [Tray Icon support](https://github.com/dynobo/normcap/issues/82).
+  It is not stable yet, but you can test it using the new `--tray` command line switch.
+
+## v0.1.6 (2020-11-01)
+
+- Implements [Issue #27](https://github.com/dynobo/normcap/issues/27): Show system
+  notification after OCR completed.
+
+## v0.1.5 (2020-10-31)
+
+- Fixes [Issue #81](https://github.com/dynobo/normcap/issues/81): Unhandled exception
+  when user selected no region
+- Related to the one above: Skip OCR if selected area is tiny (below 25 square pixels)
+- Updates dependencies which also now get pinned
+- Move away from pipenv, using plain setuptools and requirements.txt's instead.
+
+## v0.1.4 (2020-04-25)
+
+- Add fallback for Wayland DE on Linux, see
+  [Issue 76](https://github.com/dynobo/normcap/issues/76#issue-605722434)
+
+## v0.1.3 (2020-04-04)
+
+- Use the development version of PyInstaller for building Windows binaries to get
+  [the not yet released bugfix](https://github.com/pyinstaller/pyinstaller/commit/91481570517707fc70aa70dca9eb986c61eac35d)
+
+## v0.1.2 (2020-03-31)
+
+- Update Bleach Package to avoid potential vulnerability
+- Switched to standard tesseract train-data for Windows
+- Improve performance by skipping unnecessary tests
+
+## v0.1.1 (2020-01-17)
+
+- Update PyInstaller to avoid potential vulnerability
+
+## v0.1.0 (2019-12-23)
+
+- Publishing to PyPi
+- Add paragraph magic
+- Adjust color
+
+## v0.0.15 (2019-12-13)
+
+- Switched to simple semantic versioning
+- Prepared for publishing to PyPi
+
+## v0.1a1 (2019-12-09)
+
+- Switched to faster tesseract bindings
+- Windows build now includes tesseract
+- Automated build workflow
+
+## v0.1a0 (2019-09-17)
+
+**Please help to test and provide feedback!**
+
+Any feedback is useful, whether you find bugs or everything works for you. Thank you!
+
+- Initial working release
+- Multi-monitor support
+- Support Linux, Windows, Mac
+- Add Magics for
+  - Single Lines (unformatted text)
+  - Email addresses
+  - URLs.

@@ -47,6 +47,10 @@ class AudioEngine:
             self._vad_enabled = False
             print(f"[AudioEngine] VAD init failed: {e} — using standard mode")
 
+    def stop(self):
+        """Stop audio engine loops if any."""
+        pass
+
 
     def _on_vad_speech_end(self, audio_numpy):
         """
@@ -90,11 +94,7 @@ class AudioEngine:
             try:
                 indata = await self.jarvis.detection_queue.get()
 
-                with self.jarvis._speaking_lock:
-                    jarvis_speaking = self.jarvis._is_speaking
-
-                if jarvis_speaking:
-                    continue
+                # Allowed to detect clap/wake-word even when speaking (Barge-in)
 
                 # ── Clap Detection ────────────────────────────
                 if self.jarvis.clap_enabled and self.jarvis.detector:
@@ -103,7 +103,8 @@ class AudioEngine:
                         if self.jarvis.ui.muted:
                             self.jarvis.ui.root.after(0, self.jarvis.ui._toggle_mute)
                         else:
-                            self.jarvis.ui.write_log("SYS: Clap detected (Already active).")
+                            self.jarvis.interrupt_speaking()
+                            self.jarvis.ui.write_log("SYS: Barge-in triggered by clap.")
 
                 # ── Wake Word Detection ───────────────────────
                 if self.jarvis.wake_word_enabled and self.jarvis.wake_detector:
@@ -112,7 +113,8 @@ class AudioEngine:
                         if self.jarvis.ui.muted:
                             self.jarvis.ui.root.after(0, self.jarvis.ui._toggle_mute)
                         else:
-                            self.jarvis.ui.write_log("SYS: Wake word detected (Already active).")
+                            self.jarvis.interrupt_speaking()
+                            self.jarvis.ui.write_log("SYS: Barge-in triggered by wake word.")
 
                 # ── VAD: Feed audio to WebRTC VAD ─────────────
                 # This handles Whisper offline fallback only.
@@ -140,11 +142,8 @@ class AudioEngine:
                         self.jarvis.detection_queue.put_nowait, indata.copy()
                     )
 
-            # ── Route to Gemini Live send queue ───────────────
-            with self.jarvis._speaking_lock:
-                jarvis_speaking = self.jarvis._is_speaking
-
-            if not jarvis_speaking and not self.jarvis.ui.muted:
+            # ── Route to Gemini Live send queue (Full-Duplex) ─
+            if not self.jarvis.ui.muted:
                 data = indata.tobytes()
                 
                 # Extract RMS energy and pass to UI

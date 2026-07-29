@@ -1,9 +1,8 @@
 import json
 import re
 
-
 from core.ai_router import get_ai_router
-
+from core.config import get_gemini_client
 
 PLANNER_PROMPT = """You are the planning module of MARK XXV, a personal AI assistant.
 Your job: break any user goal into a sequence of steps using ONLY the tools listed below.
@@ -191,7 +190,7 @@ def create_plan(goal: str, context: str = "") -> dict:
     try:
         text = router.generate(
             prompt=user_input,
-            system_instruction=PLANNER_PROMPT
+            system=PLANNER_PROMPT
         )
         text     = text.strip()
         text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
@@ -206,7 +205,7 @@ def create_plan(goal: str, context: str = "") -> dict:
             print(f"[Planner] [WARNING] Multi-action goal detected with only 1 step. Forcing regeneration...")
             text = router.generate(
                 prompt=user_input,
-                system_instruction=PLANNER_PROMPT + "\n\nCRITICAL: The user wants multiple distinct actions. You MUST provide at least 2 steps. Do NOT combine searching and saving."
+                system=PLANNER_PROMPT + "\n\nCRITICAL: The user wants multiple distinct actions. You MUST provide at least 2 steps. Do NOT combine searching and saving."
             )
             text = text.strip()
             text = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()
@@ -227,7 +226,7 @@ def create_plan(goal: str, context: str = "") -> dict:
             critique_prompt = f"Goal: {goal}\nPlan: {json.dumps(plan, indent=2)}\nReview this plan. Is any step missing, wrong tool, or wrongly ordered? Return the plan unchanged if it is correct, or a corrected version (same JSON format) if not. ONLY return valid JSON."
             critique_text = router.generate(
                 prompt=critique_prompt,
-                system_instruction="You are a strict plan review module. Return ONLY valid JSON matching the exact original structure."
+                system="You are a strict plan review module. Return ONLY valid JSON matching the exact original structure."
             )
             critique_text = critique_text.strip()
             critique_text = re.sub(r"```(?:json)?", "", critique_text).strip().rstrip("`").strip()
@@ -317,7 +316,7 @@ Create a REVISED plan for the remaining work only. Do not repeat completed steps
         router = get_ai_router()
         text = router.generate(
             prompt=prompt,
-            system_instruction=PLANNER_PROMPT
+            system=PLANNER_PROMPT
         )
         text     = text.strip()
         text     = re.sub(r"```(?:json)?", "", text).strip().rstrip("`").strip()

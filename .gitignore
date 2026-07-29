@@ -27,3 +27,4 @@ config/browser_signal.json
 # Privacy Protection
 documents/
 desktop/
+jarvis/browser_profile/

@@ -157,7 +157,7 @@ def _ask_gemini(task: str) -> str:
             model="gemini-2.0-flash",
             contents=prompt
         )
-        command  = response.text.strip().strip("`").strip()
+        command  = (response.text or "").strip().strip("`").strip()
         if command.startswith("```"):
             lines   = command.split("\n")
             if len(lines) > 2:
@@ -168,79 +168,70 @@ def _ask_gemini(task: str) -> str:
     except Exception as e:
         return f"ERROR: {e}"
 
-def _run_silent(command: str, timeout: int = 20) -> str:
-    try:
-        platform = _get_platform()
-        if platform == "windows":
-            is_ps = command.strip().lower().startswith("powershell")
-            if is_ps:
-                cmd_inner = re.sub(r'^powershell\s+"?', '', command, flags=re.IGNORECASE).rstrip('"')
-                result = subprocess.run(
-                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd_inner],
-                    capture_output=True, text=True,
-                    encoding="utf-8", errors="replace", timeout=timeout,
-                    shell=False
-                )
-            else:
-                result = subprocess.run(
-                    ["cmd", "/c", command],
-                    capture_output=True, text=True,
-                    encoding="cp1252", errors="replace",
-                    timeout=timeout, cwd=str(Path.home()),
-                    shell=False
-                )
-        else:
-            # Unix-like: attempt to run without shell first if it's a simple command
-            args = shlex.split(command)
+import threading
+import time
+import os
+
+class TerminalSession:
+    def __init__(self):
+        self.process = subprocess.Popen(
+            ["cmd.exe"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            cwd=str(Path.home())
+        )
+        self.output_buffer = ""
+        self.lock = threading.Lock()
+        
+        self.reader_thread = threading.Thread(target=self._read_output, daemon=True)
+        self.reader_thread.start()
+        
+    def _read_output(self):
+        while True:
             try:
-                result = subprocess.run(
-                    args, capture_output=True, text=True,
-                    errors="replace", timeout=timeout,
-                    cwd=str(Path.home()), shell=False
-                )
-            except FileNotFoundError:
-                # Fallback to shell for builtins/complex pipes
-                shell = "/bin/zsh" if platform == "macos" else "/bin/bash"
-                result = subprocess.run(
-                    command, shell=True, executable=shell,
-                    capture_output=True, text=True,
-                    errors="replace", timeout=timeout,
-                    cwd=str(Path.home())
-                )
-
-        output = result.stdout.strip()
-        error  = result.stderr.strip()
-        if output:  return output[:2000]
-        if error:   return f"[stderr]: {error[:500]}"
-        return "Command executed with no output."
-
-    except subprocess.TimeoutExpired:
-        return f"Command timed out after {timeout}s."
-    except Exception as e:
-        return f"Execution error: {e}"
-
-
-def _run_visible(command: str) -> None:
-    try:
-        platform = _get_platform()
-        if platform == "windows":
-            subprocess.Popen(
-                ["cmd", "/k", command],
-                creationflags=subprocess.CREATE_NEW_CONSOLE,
-                shell=False
-            )
-        elif platform == "macos":
-            subprocess.Popen(["osascript", "-e",
-                f'tell application "Terminal" to do script "{command}"'])
-        else:
-            for term in ["gnome-terminal", "xterm", "konsole"]:
-                try:
-                    subprocess.Popen([term, "--", "bash", "-c", f"{command}; exec bash"])
+                char = self.process.stdout.read(1) if self.process.stdout else None
+                if not char:
                     break
-                except FileNotFoundError:
-                    continue
-    except Exception as e:
-        print(f"[CMD] [WARNING] Terminal open failed: {e}")
+                with self.lock:
+                    self.output_buffer += char
+                    # Keep buffer size manageable
+                    if len(self.output_buffer) > 20000:
+                        self.output_buffer = self.output_buffer[-20000:]
+            except Exception:
+                break
+                
+    def execute(self, command: str, wait_time: float = 2.0) -> str:
+        if self.process.poll() is not None:
+            return "Error: Terminal process died."
+            
+        with self.lock:
+            start_pos = len(self.output_buffer)
+            
+        try:
+            if self.process.stdin:
+                self.process.stdin.write(command + "\n")
+                self.process.stdin.flush()
+        except Exception as e:
+            return f"Failed to write to terminal: {e}"
+            
+        # Wait for output to settle
+        time.sleep(wait_time)
+        
+        with self.lock:
+            new_output = self.output_buffer[start_pos:]
+            return new_output.strip()
+
+_global_terminal = None
+
+def get_terminal():
+    global _global_terminal
+    if _global_terminal is None or _global_terminal.process.poll() is not None:
+        _global_terminal = TerminalSession()
+    return _global_terminal
 
 
 def cmd_control(
@@ -251,10 +242,9 @@ def cmd_control(
 ) -> str:
     task    = (parameters or {}).get("task", "").strip()
     command = (parameters or {}).get("command", "").strip()
-    visible = (parameters or {}).get("visible", True)
 
     if not task and not command:
-        return "Please describe what you want to do, sir."
+        return "Please describe what you want to do or provide a command/input."
 
     if not command:
         command = _find_hardcoded(task)
@@ -281,11 +271,8 @@ def cmd_control(
     if not safe:
         return f"Blocked for safety: {reason}"
 
-    if player:
-        player.write_log(f"[CMD] {command[:60]}")
-
     if any(x in command.lower() for x in ["notepad", "explorer", "start "]):
-        # Safely parse and run instead of shell=True
+        # Safely parse and run detached GUI commands
         if sys.platform == "win32":
             args = shlex.split(command, posix=False)
         else:
@@ -293,9 +280,16 @@ def cmd_control(
         subprocess.Popen(args, shell=False)
         return f"Opened: {command}"
 
-    if visible:
-        _run_visible(command)
-        output = _run_silent(command)
-        return f"Terminal opened.\n\nOutput:\n{output}"
-    else:
-        return _run_silent(command)
+    # Use persistent terminal for execution
+    term = get_terminal()
+    output = term.execute(command)
+    
+    # Log to JARVIS UI so user can see it
+    if player:
+        log_text = output[:500] + ("..." if len(output) > 500 else "")
+        player.write_log(f"> {command}\n{log_text}")
+
+    if not output:
+        output = "Command executed. (No immediate output, it may still be running or waiting for input)"
+
+    return f"Executed in persistent terminal.\n\nOutput:\n{output[:2000]}"

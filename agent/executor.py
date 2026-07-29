@@ -159,7 +159,9 @@ def _call_tool(tool: str, parameters: dict, speak: Callable | None) -> str:
         import inspect
         sig = inspect.signature(func)
         from typing import Any
-        kwargs: dict[str, Any] = {"parameters": parameters, "player": None}
+        kwargs: dict[str, Any] = {"parameters": parameters}
+        if "player" in sig.parameters:
+            kwargs["player"] = None
         if "speak" in sig.parameters:
             kwargs["speak"] = speak
             

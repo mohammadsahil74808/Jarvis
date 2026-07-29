@@ -317,6 +317,9 @@ def _handle_play(parameters: dict, player) -> str:
     if player:
         player.write_log(f"[YouTube] Direct Play: {query}")
 
+    from jarvis.browser.browser_adapter import get_browser_adapter
+    adapter = get_browser_adapter()
+
     try:
         # Use yt-dlp to find the first result's ID directly
         cmd = ["yt-dlp", f"ytsearch1:{query}", "--get-id", "--flat-playlist"]
@@ -326,10 +329,7 @@ def _handle_play(parameters: dict, player) -> str:
         if video_id and len(video_id) == 11:
             url = f"https://www.youtube.com/watch?v={video_id}"
             print(f"[YouTube] 🔗 Playing direct: {url}")
-            
-            from core.utils import open_browser
-            open_browser(url)
-            
+            adapter.open_website(url)
             return f"Playing the first result for {query} on YouTube, sir."
             
     except Exception as e:
@@ -337,14 +337,9 @@ def _handle_play(parameters: dict, player) -> str:
 
     # Fallback to search results page if yt-dlp fails
     print(f"[YouTube] 🔍 Falling back to search results page for: {query}")
-    open_browser()
     search_query = query.replace(" ", "+")
     url = f"https://www.youtube.com/results?search_query={search_query}"
-
-    pyautogui.hotkey("ctrl", "l")
-    time.sleep(0.3)
-    pyautogui.write(url, interval=0.02)
-    pyautogui.press("enter")
+    adapter.open_website(url)
     return f"Searching YouTube for: {query}"
 
 

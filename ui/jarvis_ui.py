@@ -55,6 +55,7 @@ class JarvisUI:
         self.root.configure(bg=C_BG)
         self.root.overrideredirect(True)
         self.root.attributes("-topmost", True)
+        self.current_persona = "jarvis"
         
         try:
             self.root.wm_attributes("-transparentcolor", C_BG)
@@ -157,6 +158,12 @@ class JarvisUI:
         
         self.menu = tk.Menu(self.root, tearoff=0, bg="#00111a", fg="#00d4ff", activebackground="#005577", activeforeground="#ffffff", borderwidth=0)
         self.menu.add_command(label="Type Box: Show", command=self.toggle_type_box)
+        
+        self.persona_menu = tk.Menu(self.menu, tearoff=0, bg="#00111a", fg="#00d4ff", activebackground="#005577", activeforeground="#ffffff", borderwidth=0)
+        self.persona_menu.add_command(label="J.A.R.V.I.S", command=lambda: self.set_theme("jarvis"))
+        self.persona_menu.add_command(label="F.R.I.D.A.Y", command=lambda: self.set_theme("friday"))
+        self.menu.add_cascade(label="Persona", menu=self.persona_menu)
+        
         self.menu.add_command(label="Settings", state="disabled")
         self.menu.add_command(label="Mute / Unmute", command=lambda: self.set_mute(not self.muted))
         self.menu.add_command(label="Restart", state="disabled")
@@ -183,6 +190,50 @@ class JarvisUI:
             self.target_color = self.color_map["MUTED"]
         else:
             self.target_color = self.color_map.get(state, self.color_map["ONLINE"])
+
+    def set_theme(self, persona: str):
+        self.current_persona = persona
+        if persona == "friday":
+            self.color_map.update({
+                "ONLINE": "#ff3300",
+                "LISTENING": "#ff6600",
+                "THINKING": "#ff0066",
+                "SPEAKING": "#ffcc99",
+            })
+            self.root.title("F.R.I.D.A.Y")
+            try:
+                self.menu.config(bg="#1a0a00", fg="#ff6600")
+                if hasattr(self, "term_text"):
+                    self.term_text.config(bg="#1a0a00", fg="#ff6600", insertbackground="#ff6600")
+                if hasattr(self, "term_frame"):
+                    self.term_frame.config(bg="#1a0a00", highlightbackground="#ff3300", highlightcolor="#ff6600")
+                if hasattr(self, "type_entry"):
+                    self.type_entry.config(bg="#1a0a00", fg="#ff6600", insertbackground="#ff6600")
+                if hasattr(self, "type_frame"):
+                    self.type_frame.config(bg="#1a0a00", highlightbackground="#ff3300", highlightcolor="#ff6600")
+            except Exception:
+                pass
+        else:
+            self.color_map.update({
+                "ONLINE": "#0088ff",
+                "LISTENING": "#00ffff",
+                "THINKING": "#aa00ff",
+                "SPEAKING": "#e0ffff",
+            })
+            self.root.title("J.A.R.V.I.S")
+            try:
+                self.menu.config(bg="#00111a", fg="#00d4ff")
+                if hasattr(self, "term_text"):
+                    self.term_text.config(bg="#000d14", fg="#00ffff", insertbackground="#00ffff")
+                if hasattr(self, "term_frame"):
+                    self.term_frame.config(bg="#00111a", highlightbackground="#0088ff", highlightcolor="#00ffff")
+                if hasattr(self, "type_entry"):
+                    self.type_entry.config(bg="#00111a", fg="#00ffff", insertbackground="#00ffff")
+                if hasattr(self, "type_frame"):
+                    self.type_frame.config(bg="#00111a", highlightbackground="#0088ff", highlightcolor="#00ffff")
+            except Exception:
+                pass
+        self.set_state(self._jarvis_state)
 
     def start_speaking(self): self.set_state("SPEAKING")
     def stop_speaking(self): self.set_state("ONLINE")
@@ -418,11 +469,23 @@ class JarvisUI:
             col = _blend_to_black(self.current_color, alpha)
             c.create_oval(CX-r, CY-r, CX+r, CY+r, outline=col, width=2)
             
-        arcs = [
-            (1.0, 3, 140, 40, self.base_angles[0]),
-            (1.05, 2, 80, 40, self.base_angles[1]),
-            (1.12, 1, 40, 80, self.base_angles[2])
-        ]
+        is_friday = getattr(self, "current_persona", "jarvis") == "friday"
+        
+        arcs = []
+        if is_friday:
+            # Friday has sharper, faster looking arcs with different gaps
+            arcs = [
+                (1.0, 2, 90, 30, self.base_angles[0]),
+                (1.08, 3, 40, 20, self.base_angles[1] * -1.5),
+                (1.15, 1, 15, 15, self.base_angles[2] * 2.0)
+            ]
+        else:
+            arcs = [
+                (1.0, 3, 140, 40, self.base_angles[0]),
+                (1.05, 2, 80, 40, self.base_angles[1]),
+                (1.12, 1, 40, 80, self.base_angles[2])
+            ]
+            
         arc_col = _blend_to_black(self.current_color, 0.9)
         for r_mult, width, extent, gap, angle in arcs:
             r = base_r * r_mult
@@ -436,10 +499,19 @@ class JarvisUI:
         eye_w = 7 * self.eye_scale_w
         eye_h = 16 * max(0.1, self.eye_open) * self.eye_scale_h
         eye_spacing = 16
+        
+        if is_friday:
+            # Friday has sharper, narrower eyes
+            eye_w = 5 * self.eye_scale_w
+            eye_h = 18 * max(0.1, self.eye_open) * self.eye_scale_h
+            
         ex = CX + self.eye_look_x
         ey = CY + self.eye_look_y
         
         eye_color = "#ffffff"
+        if is_friday:
+            eye_color = "#ffeecc" # Slight warm tint for Friday
+            
         if self._jarvis_state == "ERROR": eye_color = "#ffdddd"
         elif self.muted: eye_color = "#ffcccc"
         

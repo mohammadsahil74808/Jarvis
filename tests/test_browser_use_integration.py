@@ -5,7 +5,7 @@ import unittest
 from jarvis.browser.browser_state import BrowserState, TabInfo
 from jarvis.browser.browser_context import BrowserContextManager
 from jarvis.browser.browser_manager import BrowserManager
-from jarvis.browser.browser_adapter import BrowserUseAdapter, get_browser_adapter
+from jarvis.browser.browser_adapter import get_browser_adapter
 
 
 class TestBrowserUseStateAndContext(unittest.TestCase):
@@ -45,7 +45,8 @@ class TestBrowserManagerLifecycle(unittest.TestCase):
 class TestBrowserAdapterFacade(unittest.TestCase):
     def test_adapter_instance(self):
         adapter = get_browser_adapter()
-        self.assertIsInstance(adapter, BrowserUseAdapter)
+        from jarvis.browser.browser_controller import BrowserController
+        self.assertIsInstance(adapter, BrowserController)
         status = adapter.get_status()
         self.assertEqual(status["browser_engine"], "Firefox")
         self.assertIn("active_url", status)

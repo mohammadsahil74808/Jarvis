@@ -274,7 +274,7 @@ class FreeAIRouter:
             ],
             temperature=0.2,
             max_tokens=max_tokens,
-            timeout=10.0,
+            timeout=5.0,
         )
         return resp.choices[0].message.content
 
@@ -301,7 +301,7 @@ class FreeAIRouter:
             "stream":      False,
         }
         try:
-            r = requests.post(url, headers=headers, json=payload, timeout=10)
+            r = requests.post(url, headers=headers, json=payload, timeout=5)
         except requests.exceptions.RequestException as e:
             raise AINetworkError(str(e))
             
@@ -351,7 +351,7 @@ class FreeAIRouter:
             "max_tokens": max_tokens,
         }
         try:
-            r = requests.post(url, headers=headers, json=payload, timeout=10)
+            r = requests.post(url, headers=headers, json=payload, timeout=5)
         except requests.exceptions.RequestException as e:
             raise AINetworkError(str(e))
             
@@ -387,7 +387,7 @@ class FreeAIRouter:
             "stream":     False,
         }
         try:
-            r = requests.post(url, headers=headers, json=payload, timeout=10)
+            r = requests.post(url, headers=headers, json=payload, timeout=5)
         except requests.exceptions.RequestException as e:
             raise AINetworkError(str(e))
             
@@ -419,7 +419,7 @@ class FreeAIRouter:
             ],
         }
         try:
-            r = requests.post(url, json=payload, timeout=15)
+            r = requests.post(url, json=payload, timeout=7)
         except requests.exceptions.RequestException as e:
             raise AINetworkError(str(e))
             

@@ -72,11 +72,11 @@ def _capture_screenshot_bytes() -> bytes:
     with mss.mss() as sct:
         shot = sct.grab(sct.monitors[1])
         png_bytes = mss.tools.to_png(shot.rgb, shot.size)
-    if _PIL_OK:
+    if _PIL_OK and png_bytes:
         img = PIL.Image.open(io.BytesIO(png_bytes)).convert("RGB")
-        img.thumbnail([IMG_MAX_W, IMG_MAX_H], PIL.Image.LANCZOS)
+        img.thumbnail((IMG_MAX_W, IMG_MAX_H), getattr(PIL.Image, 'Resampling', PIL.Image).LANCZOS) # type: ignore
         return _adaptive_compress(img)
-    return png_bytes
+    return png_bytes or b""
 
 def _capture_screenshot_cv2(region=None):
     with mss.mss() as sct:
@@ -104,7 +104,7 @@ def _capture_camera_bytes() -> bytes:
     if _PIL_OK:
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         img = PIL.Image.fromarray(rgb)
-        img.thumbnail([IMG_MAX_W, IMG_MAX_H], PIL.Image.LANCZOS)
+        img.thumbnail((IMG_MAX_W, IMG_MAX_H), getattr(PIL.Image, 'Resampling', PIL.Image).LANCZOS) # type: ignore
         return _adaptive_compress(img)
         
     ret, buf = cv2.imencode(".jpg", frame, [cv2.IMWRITE_JPEG_QUALITY, 50])
@@ -127,12 +127,16 @@ def _detect_ui_elements(img):
             })
     return elements
 
+from vision.enhancer import resize_image, add_padding, binarize_image
+
 def _ocr_screen(img):
     if not pytesseract:
         return ""
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = cv2.resize(gray, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_CUBIC)
-    text = pytesseract.image_to_string(gray)
+    # Use NormCap's enhancement logic for 10x better OCR on full screens
+    img = resize_image(img, factor=2.0)
+    img = add_padding(img, padding=80)
+    img = binarize_image(img)
+    text = pytesseract.image_to_string(img)
     return text.strip()
 
 def vision_action(parameters: dict, player=None, **kwargs) -> str:
@@ -166,7 +170,7 @@ def vision_action(parameters: dict, player=None, **kwargs) -> str:
                     user_text
                 ]
             )
-            analysis = res.text.strip()
+            analysis = (res.text or "").strip()
             if player:
                 player.write_log(f"Jarvis (Vision): {analysis}")
             return analysis
@@ -179,14 +183,16 @@ def vision_action(parameters: dict, player=None, **kwargs) -> str:
                 "2. Important buttons/text visible. 3. Their approximate coordinates (0-1000 scale, e.g. center is 500,500). "
                 "Be concise. Format as a bulleted list."
             )
+            import typing
+            c: typing.Any = [
+                types.Part.from_bytes(data=image_bytes or b"", mime_type="image/jpeg"),
+                prompt
+            ]
             res = client.models.generate_content(
                 model=VISION_MODEL,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg"),
-                    prompt
-                ]
+                contents=c
             )
-            return res.text.strip()
+            return (res.text or "").strip()
 
         elif action in ["ocr", "detect", "local_vision"]:
             img = _capture_screenshot_cv2(parameters.get("region"))

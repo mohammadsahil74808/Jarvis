@@ -419,6 +419,21 @@ TOOL_DECLARATIONS = [
         }
     },
     {
+        "name": "forget_memory",
+        "description": "Deletes a specific memory from the user's long-term memory. Use when the user explicitly asks JARVIS to forget something or says that a fact is no longer true.",
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "category": {
+                    "type": "STRING",
+                    "description": "The category of the memory (identity, preferences, projects, patterns, relationships, wishes, notes)"
+                },
+                "key": {"type": "STRING", "description": "The short snake_case key to delete"}
+            },
+            "required": ["category", "key"]
+        }
+    },
+    {
         "name": "news_report",
         "description": "Fetches the latest real-time news headlines. Support categories like world, india, tech, sports, etc.",
         "parameters": {

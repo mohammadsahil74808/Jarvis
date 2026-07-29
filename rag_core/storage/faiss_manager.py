@@ -37,7 +37,7 @@ class FAISSManager:
     def _get_index_path(self, namespace: str) -> Path:
         return self.faiss_dir / f"{namespace}.faiss"
 
-    def get_index(self, namespace: str) -> faiss.IndexIDMap:
+    def get_index(self, namespace: str) -> faiss.Index:
         with self._lock:
             if namespace in self._indexes:
                 return self._indexes[namespace]
@@ -53,7 +53,8 @@ class FAISSManager:
             
             # Create new index
             # FlatL2 is robust for most small/medium usages
-            base_index = faiss.IndexFlatL2(self.dim)
+            dim = int(self.dim) if isinstance(self.dim, (int, float, str)) else 768
+            base_index = faiss.IndexFlatL2(dim)
             index = faiss.IndexIDMap(base_index)
             self._indexes[namespace] = index
             return index
@@ -73,7 +74,7 @@ class FAISSManager:
             return
         with self._lock:
             index = self.get_index(namespace)
-            id_selector = faiss.IDSelectorBatch(ids)
+            id_selector = faiss.IDSelectorBatch(np.array(ids, dtype=np.int64))
             index.remove_ids(id_selector)
             self.dirty_namespaces.add(namespace)
 

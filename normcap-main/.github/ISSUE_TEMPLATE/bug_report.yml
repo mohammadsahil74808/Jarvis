@@ -1,0 +1,54 @@
+name: Bug Report
+description: File a bug report.
+labels: ["bug", "triage"]
+body:
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      placeholder: Tell us what you experienced and what you would have expected.
+    validations:
+      required: true
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install NormCap?
+      options:
+        - Unknown
+        - MSI installer (Windows)
+        - DMG installer (macOS)
+        - DMG ARM64 installer (macOS, M1)
+        - AppImage (Linux)
+        - FlatPak (Linux)
+        - AUR (Linux)
+        - Python Package (pip install)
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating System + Version?
+      placeholder: e.g. Windows 11, macOS 13.3, Ubuntu 23.04
+  - type: input
+    id: linux-environment
+    attributes:
+      label: "[Linux only] Display Server (DS) + Desktop environment (DE)?"
+      placeholder: "e.g. DS: Xorg/Wayland, DE: Gnome/KDE Plasma/Xfce/Unity"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Debug log output?*
+      render: shell
+  - type: markdown
+    attributes:
+      value: |
+        \* How to generate debug log output:
+        1. Open a terminal/command prompt.
+        2. Run the command according to your NormCap installation method:
+           - Python package: `normcap -v debug`
+           - MSI installer: `%LOCALAPPDATA%\Programs\NormCap\NormCap.exe -v debug`
+           - DMG installer: `/Applications/NormCap.app/Contents/MacOS/NormCap -v debug`
+           - AppImage: `./NormCap-{version}-x86_64.AppImage -v debug`
+           - Flatpak: `flatpak run --command=normcap com.github.dynobo.normcap -v debug`
+           - AUR: `normcap -v debug`
+        3. Reproduce the bug and exit NormCap.
+        4. Copy all the text that was printed to the terminal and paste it into the form
+           above.

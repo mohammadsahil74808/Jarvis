@@ -1,0 +1,15 @@
+<!DOCTYPE RCC>
+<!-- compile with:
+pyside6-rcc normcap/resources/icons/resources.qrc -o normcap/gui/resources.py && sed -i '1i # ruff: noqa' normcap/gui/resources.py
+-->
+<RCC version="1.0">
+    <qresource prefix="/">
+        <file alias="normcap">normcap.png</file>
+        <file alias="settings">settings.png</file>
+        <file alias="tray">tray.png</file>
+        <file alias="tray_done">tray_done.png</file>
+        <file alias="parse">parse.png</file>
+        <file alias="raw">raw.png</file>
+        <file alias="notification">notification.png</file>
+    </qresource>
+</RCC>

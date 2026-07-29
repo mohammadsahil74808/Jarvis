@@ -1,6 +1,6 @@
 import numpy as np
 from rank_bm25 import BM25Okapi
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import os
 import pickle
@@ -39,7 +39,7 @@ class HybridRetriever:
             
         self.dirty_namespaces.add(namespace)
 
-    def save_bm25(self, namespace: str = None):
+    def save_bm25(self, namespace: Optional[str] = None):
         """Saves BM25 index to disk. If namespace is None, saves all dirty namespaces."""
         namespaces_to_save = [namespace] if namespace else list(self.dirty_namespaces)
         for ns in namespaces_to_save:

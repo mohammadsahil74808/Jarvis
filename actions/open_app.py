@@ -210,7 +210,7 @@ def open_app(
         return f"Unsupported OS: {system}"
 
     normalized = _normalize(app_name)
-    print(f"[open_app] 🚀 Launching: {app_name} → {normalized} ({system})")
+    print(f"[open_app] Launching: {app_name} -> {normalized} ({system})")
 
     if player:
         player.write_log(f"[open_app] {app_name}")

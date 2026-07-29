@@ -51,8 +51,9 @@ def invalidate_config_cache():
     _client = None
 
 _client = None
+_current_key_index = 0
 
-def get_gemini_client():
+def get_gemini_client(persona="jarvis"):
     """Returns a singleton instance of the Gemini Client."""
     global _client
     if _client is None:
@@ -61,9 +62,28 @@ def get_gemini_client():
         )
     return _client
 
-def get_api_key() -> str:
-    """Helper to retrieve the Gemini API key."""
-    return get_config().get("gemini_api_key", "")
+def get_api_key(persona="jarvis") -> str:
+    """Helper to retrieve the Gemini API key based on current rotation index."""
+    config = get_config()
+    keys = []
+    if "gemini_api_key" in config and config["gemini_api_key"]:
+        keys.append(config["gemini_api_key"])
+    if "gemini_friday_api_key" in config and config["gemini_friday_api_key"]:
+        keys.append(config["gemini_friday_api_key"])
+        
+    if not keys:
+        return ""
+        
+    global _current_key_index
+    idx = _current_key_index % len(keys)
+    return keys[idx]
+
+def rotate_api_key():
+    """Switches to the next API key in the list and resets the client."""
+    global _current_key_index, _client
+    _current_key_index += 1
+    _client = None
+    print(f"[Config] Rotated Gemini API key. Now using key index {get_api_key()[:8]}...")
 
 def get_groq_api_key() -> str:
     """Helper to retrieve the Groq API key."""
