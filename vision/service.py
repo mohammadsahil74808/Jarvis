@@ -236,8 +236,8 @@ class VisionService:
                     mtime = path.stat().st_mtime
                     if newest is None or mtime > newest[0]:
                         newest = (mtime, path)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to stat {path}: {e}")
                 if scanned >= 1500:
                     break
         if newest:

@@ -12,7 +12,6 @@ import hashlib
 import io
 import threading
 import time
-from typing import Any
 
 import cv2
 import mss
@@ -86,7 +85,7 @@ class CaptureEngine:
 
                 arr = np.array(shot)
                 bgr = cv2.cvtColor(arr, cv2.COLOR_BGRA2BGR)
-            except Exception as e:
+            except Exception:
                 # Fallback to PIL ImageGrab or synthetic frame if OS graphics context is restricted
                 try:
                     import PIL.ImageGrab
@@ -141,7 +140,8 @@ class CaptureEngine:
                         shot = sct.grab(sct.monitors[idx])
                     except Exception:
                         shot = sct.grab(sct.monitors[0])
-                return mss.tools.to_png(shot.rgb, shot.size)
+                result = mss.tools.to_png(shot.rgb, shot.size)
+                return result if result is not None else b""
             except Exception:
                 bgr = self.capture_frame(monitor_index, region)
                 ret, buf = cv2.imencode(".png", bgr)
@@ -159,7 +159,7 @@ class CaptureEngine:
         if _PIL_OK:
             rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
             img = PIL.Image.fromarray(rgb)
-            img.thumbnail([max_w, max_h], PIL.Image.LANCZOS)
+            img.thumbnail((max_w, max_h), PIL.Image.Resampling.LANCZOS)
             for q in qualities:
                 buf = io.BytesIO()
                 img.save(buf, format="JPEG", quality=q, optimize=True)
