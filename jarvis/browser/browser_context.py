@@ -6,12 +6,10 @@ Detects real system Firefox user profiles from FIREFOX_PROFILE_PATH or system pr
 
 from __future__ import annotations
 
-import configparser
 import os
 import sys
-from datetime import datetime
 from pathlib import Path
-from typing import Optional, Tuple, List, Set
+from typing import Optional, Tuple
 
 from core.config import get_base_dir
 
@@ -67,6 +65,24 @@ class BrowserContextManager:
         print(f"[FIREFOX PROFILE] Using isolated automation profile: {isolated_dir}")
         return isolated_dir, "jarvis-isolated"
 
+    def _kill_orphaned_firefox(self, profile_path: Path) -> None:
+        """Kills any firefox processes running the isolated profile to release the lock."""
+        try:
+            import psutil
+            target_path_str = str(profile_path).lower()
+            for proc in psutil.process_iter(['name', 'cmdline']):
+                try:
+                    if proc.info['name'] and 'firefox' in proc.info['name'].lower():
+                        cmdline = proc.info.get('cmdline') or []
+                        # Check if this firefox instance is using our specific profile
+                        if any(target_path_str in str(arg).lower() for arg in cmdline):
+                            print(f"[FIREFOX PROFILE] Killing orphaned firefox process (PID: {proc.pid}) holding profile {profile_path}")
+                            proc.kill()
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+        except ImportError:
+            print("[FIREFOX PROFILE] psutil not installed, cannot kill orphaned processes.")
+
     def is_profile_locked(self, profile_path: Path) -> Tuple[bool, str]:
         """
         Fast and explicit check to determine if the Firefox profile is locked
@@ -82,8 +98,28 @@ class BrowserContextManager:
                     with open(lf, "a"):
                         pass
                 except (PermissionError, OSError) as e:
-                    reason = f"Lock file '{lf.name}' is exclusively locked by active Firefox process ({e})"
-                    print(f"[FIREFOX PROFILE LOCK DETECTED] {reason}")
-                    return True, reason
+                    # If this is our isolated profile, try to kill the orphaned process
+                    if "jarvis-isolated" in self.detect_firefox_profile()[1] and "browser_profile" in str(profile_path):
+                        print(f"[FIREFOX PROFILE LOCK DETECTED] Lock file '{lf.name}' is exclusively locked. Attempting to kill orphaned process...")
+                        self._kill_orphaned_firefox(profile_path)
+                        import time
+                        time.sleep(1) # Give OS time to release lock
+                        
+                        # Try again
+                        if not lf.exists():
+                            continue
+                        try:
+                            with open(lf, "a"):
+                                pass
+                            print(f"[FIREFOX PROFILE] Orphaned process killed and lock released successfully.")
+                            continue # Lock released!
+                        except (PermissionError, OSError) as e2:
+                            reason = f"Lock file '{lf.name}' remains locked even after kill attempt ({e2})"
+                            print(f"[FIREFOX PROFILE LOCK ERROR] {reason}")
+                            return True, reason
+                    else:
+                        reason = f"Lock file '{lf.name}' is exclusively locked by active Firefox process ({e})"
+                        print(f"[FIREFOX PROFILE LOCK DETECTED] {reason}")
+                        return True, reason
 
         return False, "Profile is unlocked"
