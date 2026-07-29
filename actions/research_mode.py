@@ -3,7 +3,6 @@ from bs4 import BeautifulSoup
 from newspaper import Article
 from concurrent.futures import ThreadPoolExecutor
 
-# Try to import DDGS exactly like web_search.py
 def _ddg_search(query: str, max_results: int = 5) -> list:
     try:
         from ddgs import DDGS
@@ -11,16 +10,28 @@ def _ddg_search(query: str, max_results: int = 5) -> list:
         try:
             from duckduckgo_search import DDGS
         except ImportError:
-            return []
+            DDGS = None
     
     results = []
-    try:
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=max_results):
-                url = r.get("href") or r.get("link")
-                if url: results.append(url)
-    except Exception as e:
-        print(f"[ResearchMode] DDG search error: {e}")
+    if DDGS:
+        try:
+            with DDGS() as ddgs:
+                for r in ddgs.text(query, max_results=max_results):
+                    url = r.get("href") or r.get("link")
+                    if url: results.append(url)
+        except Exception as e:
+            print(f"[ResearchMode] DDG search error: {e}")
+            
+    if not results:
+        print(f"[ResearchMode] DDG failed or returned empty. Falling back to googlesearch.")
+        try:
+            from googlesearch import search
+            results = list(search(query, num_results=max_results))
+        except ImportError:
+            print("[ResearchMode] googlesearch-python not installed. Cannot fallback.")
+        except Exception as e:
+            print(f"[ResearchMode] Google search error: {e}")
+            
     return results
 
 def extract_article(url: str):
