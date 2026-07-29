@@ -71,7 +71,7 @@
 
 ### 2. Installation & Setup
 
-Open **PowerShell** or **CMD** in your project directory:
+Open **PowerShell** or **CMD** in your project directory :
 
 ```powershell
 # 1. Clone the repository
