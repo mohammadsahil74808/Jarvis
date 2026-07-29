@@ -2,6 +2,7 @@
 
 import asyncio
 import traceback
+import importlib
 from typing import Any
 
 # We'll use lazy imports for genai and other heavy modules

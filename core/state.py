@@ -35,6 +35,12 @@ class JarvisState:
             plan_file = BASE_DIR / "memory" / "active_plan.json"
             if plan_file.exists():
                 self.active_plan = json.loads(plan_file.read_text(encoding="utf-8"))
+            
+            persona_file = BASE_DIR / "memory" / "active_persona.txt"
+            if persona_file.exists():
+                saved_persona = persona_file.read_text(encoding="utf-8").strip().lower()
+                if saved_persona in ["jarvis", "friday"]:
+                    self.active_persona = saved_persona
         except Exception:
             self.active_plan = None
 
