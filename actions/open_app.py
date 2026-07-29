@@ -15,8 +15,8 @@ except ImportError:
 
 _APP_ALIASES = {
     "whatsapp":           {"Windows": "WhatsApp",               "Darwin": "WhatsApp",            "Linux": "whatsapp"},
-    "chrome":             {"Windows": "msedge",                 "Darwin": "Microsoft Edge",      "Linux": "microsoft-edge"},
-    "google chrome":      {"Windows": "msedge",                 "Darwin": "Microsoft Edge",      "Linux": "microsoft-edge"},
+    "chrome":             {"Windows": "chrome",                 "Darwin": "Microsoft Edge",      "Linux": "microsoft-edge"},
+    "google chrome":      {"Windows": "chrome",                 "Darwin": "Microsoft Edge",      "Linux": "microsoft-edge"},
     "firefox":            {"Windows": "firefox",                "Darwin": "Firefox",             "Linux": "firefox"},
     "spotify":            {"Windows": "Spotify",                "Darwin": "Spotify",             "Linux": "spotify"},
     "vscode":             {"Windows": "code",                   "Darwin": "Visual Studio Code",  "Linux": "code"},
