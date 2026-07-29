@@ -9,7 +9,7 @@ def retry(max_attempts=3, delay=1, backoff=2, exceptions=(Exception,)):
             while attempts < max_attempts:
                 try:
                     return func(*args, **kwargs)
-                except exceptions as e:
+                except exceptions:
                     attempts += 1
                     if attempts == max_attempts:
                         raise
@@ -27,7 +27,7 @@ def async_retry(max_attempts=3, delay=1, backoff=2, exceptions=(Exception,)):
             while attempts < max_attempts:
                 try:
                     return await func(*args, **kwargs)
-                except exceptions as e:
+                except exceptions:
                     attempts += 1
                     if attempts == max_attempts:
                         raise
@@ -51,7 +51,7 @@ def open_browser(url: str) -> bool:
         else:
             subprocess.Popen(["microsoft-edge", url])
             return True
-    except Exception as e:
+    except Exception:
         webbrowser.open(url)
         return True
 

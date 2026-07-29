@@ -8,7 +8,6 @@ Enforces real Firefox persistent profile usage, session reuse, and clear profile
 
 from __future__ import annotations
 
-from typing import Any
 from jarvis.browser.browser_adapter import get_browser_adapter
 
 

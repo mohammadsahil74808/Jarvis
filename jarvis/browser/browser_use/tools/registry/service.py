@@ -393,7 +393,7 @@ class Registry(Generic[Context]):
 			# Call with params and unpacked special context
 			try:
 				return await action.function(params=validated_params, **special_context)
-			except Exception as e:
+			except Exception:
 				raise
 
 		except BrowserError as e:

@@ -170,7 +170,6 @@ def _ask_gemini(task: str) -> str:
 
 import threading
 import time
-import os
 
 class TerminalSession:
     def __init__(self):

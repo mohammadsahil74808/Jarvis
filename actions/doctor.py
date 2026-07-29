@@ -6,12 +6,10 @@ Runs comprehensive diagnostics across API keys, dependencies, audio, git, and pa
 """
 from __future__ import annotations
 
-import os
 import sys
 import platform
 import subprocess
-from pathlib import Path
-from typing import Dict, Any
+from typing import Any
 
 from core.config import get_api_key, get_groq_api_key, BASE_DIR
 from core.path_scope import WorkspacePathScope

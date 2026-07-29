@@ -233,7 +233,7 @@ class ChatAnthropicBedrock(ChatAWSBedrock):
 						# Parse the tool input as the structured output
 						try:
 							return ChatInvokeCompletion(completion=output_format.model_validate(content_block.input), usage=usage)
-						except Exception as e:
+						except Exception:
 							# If validation fails, try to fix common model output issues
 							_input = content_block.input
 							if isinstance(_input, str):

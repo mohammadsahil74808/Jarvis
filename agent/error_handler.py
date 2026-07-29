@@ -137,7 +137,6 @@ def generate_fix(step: dict, error: str, fix_suggestion: str) -> dict:
 
     Returns a modified step dict.
     """
-    from google.genai import types
     client = get_gemini_client()
 
     prompt = f"""A task step failed. Generate a replacement step.

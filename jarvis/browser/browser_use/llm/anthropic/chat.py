@@ -407,7 +407,7 @@ class ChatAnthropic(BaseChatModel):
 								stop_reason=response.stop_reason,
 								stop_details=self._get_stop_details(response),
 							)
-						except Exception as e:
+						except Exception:
 							# If validation fails, try to fix common model output issues
 							_input = content_block.input
 							if isinstance(_input, str):

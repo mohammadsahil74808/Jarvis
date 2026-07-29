@@ -13,7 +13,7 @@ import PyPDF2
 from docx import Document
 
 from core.config import (
-    BASE_DIR, get_desktop_path, get_downloads_path,
+    get_desktop_path, get_downloads_path,
     get_documents_path, get_gemini_client
 )
 

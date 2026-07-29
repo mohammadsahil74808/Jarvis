@@ -13,7 +13,7 @@ Düzeltmeler:
   - Projeleri, favori şeyleri, arkadaşları daha iyi yakalar
 """
 
-import json, os, re, difflib
+import json, re, difflib
 from datetime import datetime
 from threading import RLock
 

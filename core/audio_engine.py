@@ -9,8 +9,6 @@
 # ══════════════════════════════════════════════════════════════
 
 import asyncio
-import threading
-import traceback
 from core.config import (
     CHANNELS, CHUNK_SIZE, SEND_SAMPLE_RATE, RECEIVE_SAMPLE_RATE
 )

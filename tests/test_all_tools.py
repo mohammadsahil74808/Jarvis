@@ -1,8 +1,8 @@
 import sys
-import os
 import asyncio
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch, AsyncMock
 from pathlib import Path
+import pytest
 
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -90,51 +90,41 @@ DUMMY_ARGS = {
     "switch_persona": {"target": "friday"}
 }
 
-async def run_tests():
+@pytest.fixture
+def executor():
     jarvis = MockJarvis()
-    executor = ToolExecutor(jarvis)
+    return ToolExecutor(jarvis)
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("tool_def", TOOL_DECLARATIONS, ids=[t["name"] for t in TOOL_DECLARATIONS])
+@patch("agent.tool_executor.asyncio.get_running_loop")
+async def test_tool_execution(mock_loop, executor, tool_def):
+    name = tool_def["name"]
+    args = DUMMY_ARGS.get(name, {})
     
-    passed = 0
-    failed = []
+    mock_fc = MagicMock()
+    mock_fc.id = "call_123"
+    mock_fc.name = name
+    mock_fc.args = args
     
-    print("=" * 50)
-    print("Starting Comprehensive Tool Tests...")
-    print("=" * 50)
+    # Patch the ask_verification to avoid blocking Windows Message Box
+    f = asyncio.Future()
+    f.set_result(6)
+    mock_loop.return_value.run_in_executor.return_value = f # IDYES
     
-    for tool_def in TOOL_DECLARATIONS:
-        name = tool_def["name"]
-        args = DUMMY_ARGS.get(name, {})
-        
-        mock_fc = MagicMock()
-        mock_fc.id = "call_123"
-        mock_fc.name = name
-        mock_fc.args = args
-        
-        print(f"Testing {name:25s}...", end=" ")
+    # Directly mock the standard executor to avoid side effects or real GUI interaction
+    with patch.object(executor, '_execute_standard_tool', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_save_memory', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_forget_memory', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_manage_plan', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_browser_agent', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_query_knowledge_base', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_research_mode', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_shutdown_system', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_switch_persona', new_callable=AsyncMock, return_value="Success"), \
+         patch.object(executor, '_handle_generate_image', new_callable=AsyncMock, return_value="Success"):
         
         try:
-            # We wrap it in a timeout because some agents block on tasks
             await asyncio.wait_for(executor.execute(mock_fc), timeout=3.0)
-            print("[\033[92mPASS\033[0m]")
-            passed += 1
         except asyncio.TimeoutError:
-            print("[\033[93mTIMEOUT/PASS\033[0m]")
-            passed += 1
-        except Exception as e:
-            print("[\033[91mFAIL\033[0m]")
-            import traceback
-            failed.append((name, str(e), traceback.format_exc()))
-            
-    print("=" * 50)
-    print(f"Tests Passed: {passed}/{len(TOOL_DECLARATIONS)}")
-    print(f"Tests Failed: {len(failed)}")
-    print("=" * 50)
-    
-    if failed:
-        print("\n--- FAILURE DETAILS ---")
-        for name, err, tb in failed:
-            print(f"\nTool: {name}\nError: {err}\nTraceback:\n{tb}")
-            print("-" * 50)
-
-if __name__ == "__main__":
-    asyncio.run(run_tests())
+            pass

@@ -1,7 +1,7 @@
 import sys
-import os
 import asyncio
 from pathlib import Path
+import pytest
 
 # Add project root to sys.path
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,85 +31,50 @@ class MockUI:
     def get_vision_context(self): return ""
     def capture_vision(self): return None
 
-async def run_brain_test():
-    print("=" * 50)
-    print("Initializing E2E Brain Test...")
-    
-    # Instantiate Jarvis to borrow its configuration building logic
+@pytest.fixture(scope="module")
+def jarvis_config():
     jarvis = JarvisLive(MockUI())
-    config = jarvis._build_config()
-    
-    client = get_gemini_client("jarvis")
-    
-    passed = 0
-    failed = []
-    
-    print("Connecting to live Gemini model...")
-    print("=" * 50)
-    
-    for prompt, expected_tool in TEST_CASES:
-        print(f"Test Prompt: '{prompt}'")
-        print(f"Expecting Tool: {expected_tool}")
-        
-        async with client.aio.live.connect(model=LIVE_MODEL, config=config) as session:
-            # Send text to Gemini
-            await session.send_client_content(
-                turns={"parts": [{"text": prompt}]},
-                turn_complete=True
-            )
-            
-            # Wait for response
-            got_tool = None
-            ai_text = []
-            timeout = 10.0
-            
-            try:
-                async with asyncio.timeout(timeout):
-                    async for msg in session.receive():
-                        if msg.server_content and msg.server_content.model_turn:
-                            for p in msg.server_content.model_turn.parts:
-                                if p.text: ai_text.append(p.text)
-                        
-                        if msg.tool_call:
-                            # Gemini decided to call a tool!
-                            got_tool = msg.tool_call.function_calls[0].name
-                            
-                            # We must respond to the tool call to keep the session alive
-                            await session.send_tool_response(
-                                function_responses=[{
-                                    "id": msg.tool_call.function_calls[0].id,
-                                    "name": got_tool,
-                                    "response": {"result": "Dummy success"}
-                                }]
-                            )
-                            break
-                        elif msg.server_content and msg.server_content.turn_complete:
-                            # Model responded with just text and finished the turn
-                            break
-                            
-            except asyncio.TimeoutError:
-                print("[\033[93mTIMEOUT\033[0m] Model did not respond in time.")
-                
-            if got_tool == expected_tool:
-                print(f"Result: [\033[92mPASS\033[0m] AI correctly chose '{got_tool}'")
-                passed += 1
-            else:
-                print(f"Result: [\033[91mFAIL\033[0m] AI chose '{got_tool}' instead of '{expected_tool}'")
-                if ai_text:
-                    print(f"AI Text Response: {''.join(ai_text).strip()}")
-                failed.append((prompt, expected_tool, got_tool))
-                
-            print("-" * 50)
-            await asyncio.sleep(1) # Breathe before next request
-            
-    print("=" * 50)
-    print(f"Brain Tests Passed: {passed}/{len(TEST_CASES)}")
-    print("=" * 50)
-    
-    if failed:
-        print("FAILURES:")
-        for prompt, exp, got in failed:
-            print(f"- Prompt '{prompt}' failed. Expected {exp}, got {got}")
+    return jarvis._build_config()
 
-if __name__ == "__main__":
-    asyncio.run(run_brain_test())
+@pytest.fixture(scope="module")
+def gemini_client():
+    return get_gemini_client("jarvis")
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("prompt,expected_tool", TEST_CASES, ids=[t[1] for t in TEST_CASES])
+async def test_brain_tool_routing(jarvis_config, gemini_client, prompt, expected_tool):
+    """
+    E2E Brain Test: Sends a natural language prompt to Gemini and asserts 
+    that it chooses the correct tool from JARVIS's toolset.
+    """
+    async with gemini_client.aio.live.connect(model=LIVE_MODEL, config=jarvis_config) as session:
+        # Send text to Gemini
+        await session.send_client_content(
+            turns={"parts": [{"text": prompt}]},
+            turn_complete=True
+        )
+        
+        got_tool = None
+        timeout = 25.0
+        
+        try:
+            async with asyncio.timeout(timeout):
+                async for msg in session.receive():
+                    if msg.tool_call:
+                        got_tool = msg.tool_call.function_calls[0].name
+                        # We must respond to the tool call to keep the session alive
+                        await session.send_tool_response(
+                            function_responses=[{
+                                "id": msg.tool_call.function_calls[0].id,
+                                "name": got_tool,
+                                "response": {"result": "Dummy success"}
+                            }]
+                        )
+                        break
+                    elif msg.server_content and msg.server_content.turn_complete:
+                        # Model responded with just text and finished the turn
+                        break
+        except asyncio.TimeoutError:
+            pytest.fail("Model did not respond in time.")
+            
+        assert got_tool == expected_tool, f"AI chose '{got_tool}' instead of '{expected_tool}'"

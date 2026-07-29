@@ -1,8 +1,6 @@
 import re
 import time
 import subprocess
-import webbrowser
-import urllib.parse
 from datetime import datetime
 
 

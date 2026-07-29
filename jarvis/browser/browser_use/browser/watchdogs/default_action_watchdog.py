@@ -507,7 +507,7 @@ class DefaultActionWatchdog(BaseWatchdog):
 
 			# Note: We don't clear cached state here - let multi_act handle DOM change detection
 			# by explicitly rebuilding and comparing when needed
-		except Exception as e:
+		except Exception:
 			raise
 
 	async def on_ScrollEvent(self, event: ScrollEvent) -> None:
@@ -565,7 +565,7 @@ class DefaultActionWatchdog(BaseWatchdog):
 			# Log success
 			self.logger.debug(f'📜 Scrolled {event.direction} by {event.amount} pixels')
 			return None
-		except Exception as e:
+		except Exception:
 			raise
 
 	# ========== Implementation Methods ==========
@@ -2394,7 +2394,7 @@ class DefaultActionWatchdog(BaseWatchdog):
 			# Navigation is handled by BrowserSession via events
 
 			self.logger.info(f'🔙 Navigated back to {entries[current_index - 1]["url"]}')
-		except Exception as e:
+		except Exception:
 			raise
 
 	async def on_GoForwardEvent(self, event: GoForwardEvent) -> None:
@@ -2422,7 +2422,7 @@ class DefaultActionWatchdog(BaseWatchdog):
 			# Navigation is handled by BrowserSession via events
 
 			self.logger.info(f'🔜 Navigated forward to {entries[current_index + 1]["url"]}')
-		except Exception as e:
+		except Exception:
 			raise
 
 	async def on_RefreshEvent(self, event: RefreshEvent) -> None:
@@ -2440,7 +2440,7 @@ class DefaultActionWatchdog(BaseWatchdog):
 			# Navigation is handled by BrowserSession via events
 
 			self.logger.info('🔄 Target refreshed')
-		except Exception as e:
+		except Exception:
 			raise
 
 	@observe_debug(ignore_input=True, ignore_output=True, name='wait_event_handler')
@@ -2455,7 +2455,7 @@ class DefaultActionWatchdog(BaseWatchdog):
 				self.logger.info(f'🕒 Waiting for {actual_seconds} seconds')
 
 			await asyncio.sleep(actual_seconds)
-		except Exception as e:
+		except Exception:
 			raise
 
 	async def _dispatch_key_event(self, cdp_session, event_type: str, key: str, modifiers: int = 0) -> None:
@@ -2674,7 +2674,7 @@ class DefaultActionWatchdog(BaseWatchdog):
 			# and rebuild explicitly. We still wait briefly for potential navigation.
 			if 'enter' in event.keys.lower() or 'return' in event.keys.lower():
 				await asyncio.sleep(0.1)
-		except Exception as e:
+		except Exception:
 			raise
 
 	async def on_UploadFileEvent(self, event: UploadFileEvent) -> None:
@@ -2712,7 +2712,7 @@ class DefaultActionWatchdog(BaseWatchdog):
 			)
 
 			self.logger.info(f'📎 Uploaded file {event.file_path} to element {index_for_logging}')
-		except Exception as e:
+		except Exception:
 			raise
 
 	async def on_ScrollToTextEvent(self, event: ScrollToTextEvent) -> None:

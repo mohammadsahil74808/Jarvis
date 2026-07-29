@@ -96,7 +96,7 @@ class CloudSync:
 					)
 		except httpx.TimeoutException:
 			logger.debug(f'Event send timed out after 10 seconds: {event}')
-		except httpx.ConnectError as e:
+		except httpx.ConnectError:
 			# logger.warning(f'⚠️ Failed to connect to cloud service at {self.base_url}: {e}')
 			pass
 		except httpx.HTTPError as e:

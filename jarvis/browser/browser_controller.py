@@ -7,10 +7,9 @@ Includes step-by-step debug logging and deadlock protection.
 
 from __future__ import annotations
 
-import asyncio
 import traceback
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Dict
 
 from bs4 import BeautifulSoup
 from core.config import get_api_key, get_groq_api_key

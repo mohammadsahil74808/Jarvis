@@ -6,7 +6,7 @@ Ported and enhanced from claw-code cost_tracker.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 import threading
 from typing import Dict, Any
 

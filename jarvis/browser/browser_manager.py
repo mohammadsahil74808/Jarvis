@@ -11,14 +11,13 @@ and step-by-step debug logging.
 from __future__ import annotations
 
 import asyncio
-import os
 import sys
 import threading
 import traceback
 from pathlib import Path
 from typing import Any, Coroutine, TypeVar
 
-from core.config import get_api_key, get_base_dir, get_groq_api_key
+from core.config import get_base_dir
 from playwright.async_api import async_playwright
 
 from .browser_context import BrowserContextManager
