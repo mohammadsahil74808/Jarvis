@@ -94,7 +94,7 @@ def _launch_windows(app_name: str) -> bool:
         time.sleep(3.0)
         return True
     except Exception as e:
-        print(f"[open_app] ⚠️ Windows launch failed: {e}")
+        print(f"[open_app] Windows launch failed: {e}")
         return False
 
 def _launch_macos(app_name: str) -> bool:
@@ -232,5 +232,5 @@ def open_app(
         )
 
     except Exception as e:
-        print(f"[open_app] ❌ {e}")
+        print(f"[open_app] Error: {e}")
         return f"Failed to open {app_name}, sir. Error: {e}. Try searching for it or using 'cmd_control'."

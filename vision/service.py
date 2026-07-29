@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import logging
 import importlib.util
 import os
 import re
@@ -9,6 +10,8 @@ import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Callable
+
+logger = logging.getLogger(__name__)
 
 from .context import ScreenContext
 from .context_store import update_screen_context
@@ -236,8 +239,8 @@ class VisionService:
                     mtime = path.stat().st_mtime
                     if newest is None or mtime > newest[0]:
                         newest = (mtime, path)
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to stat {path}: {e}")
                 if scanned >= 1500:
                     break
         if newest:

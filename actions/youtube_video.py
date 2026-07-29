@@ -462,7 +462,7 @@ def youtube_video(
     if player:
         player.write_log(f"[YouTube] Action: {action}")
 
-    print(f"[YouTube] ▶️ Action: {action}  Params: {params}")
+    print(f"[YouTube] Action: {action}  Params: {params}")
 
     handler = _ACTION_MAP.get(action)
     if handler is None:
