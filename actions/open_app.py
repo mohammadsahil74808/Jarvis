@@ -83,49 +83,49 @@ def _is_running(app_name: str) -> bool:
 
 
 def _launch_windows(app_name: str) -> bool:
-    try:
-        import pyautogui
-        pyautogui.PAUSE = 0.1
-        pyautogui.press("win")
-        time.sleep(0.6)
-        pyautogui.write(app_name, interval=0.05)
-        time.sleep(0.8)
-        pyautogui.press("enter")
-        time.sleep(3.0)
-        return True
-    except Exception as e:
-        print(f"[open_app] Windows launch failed: {e}")
-        return False
+    import threading
+    def _run():
+        try:
+            import pyautogui
+            import time
+            pyautogui.PAUSE = 0.1
+            pyautogui.press("win")
+            time.sleep(0.2)
+            pyautogui.write(app_name, interval=0.05)
+            time.sleep(0.4)
+            pyautogui.press("enter")
+        except Exception as e:
+            print(f"[open_app] Windows launch failed: {e}")
+    threading.Thread(target=_run, daemon=True).start()
+    return True
 
 def _launch_macos(app_name: str) -> bool:
     try:
-        result = subprocess.run(["open", "-a", app_name], capture_output=True, timeout=8)
-        if result.returncode == 0:
-            time.sleep(1.0)
-            return True
-    except Exception:
-        pass
-
-    try:
-        result = subprocess.run(["open", "-a", f"{app_name}.app"], capture_output=True, timeout=8)
-        if result.returncode == 0:
-            time.sleep(1.0)
-            return True
-    except Exception:
-        pass
-
-    try:
-        import pyautogui
-        pyautogui.hotkey("command", "space")
-        time.sleep(0.6)
-        pyautogui.write(app_name, interval=0.05)
-        time.sleep(0.8)
-        pyautogui.press("enter")
-        time.sleep(1.5)
+        subprocess.Popen(["open", "-a", app_name])
         return True
-    except Exception as e:
-        print(f"[open_app] ⚠️ macOS Spotlight failed: {e}")
-        return False
+    except Exception:
+        pass
+
+    try:
+        subprocess.Popen(["open", "-a", f"{app_name}.app"])
+        return True
+    except Exception:
+        pass
+
+    import threading
+    def _run_mac():
+        try:
+            import pyautogui
+            import time
+            pyautogui.hotkey("command", "space")
+            time.sleep(0.4)
+            pyautogui.write(app_name, interval=0.05)
+            time.sleep(0.4)
+            pyautogui.press("enter")
+        except Exception as e:
+            print(f"[open_app] macOS Spotlight failed: {e}")
+    threading.Thread(target=_run_mac, daemon=True).start()
+    return True
 
 
 
@@ -138,13 +138,12 @@ def _launch_linux(app_name: str) -> bool:
     if binary:
         try:
             subprocess.Popen([binary], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            time.sleep(1.0)
             return True
         except Exception:
             pass
 
     try:
-        subprocess.run(["xdg-open", app_name], capture_output=True, timeout=5)
+        subprocess.Popen(["xdg-open", app_name])
         return True
     except Exception:
         pass

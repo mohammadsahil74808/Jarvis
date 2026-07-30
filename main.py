@@ -566,7 +566,7 @@ class JarvisLive:
             system_instruction_str = system_instruction_str[-3500000:]
             
         _genai, _types = _lazy_genai()
-        voice_name = "Aoede" if persona == "friday" else "Charon"
+        voice_name = "Kore" if persona == "friday" else "Charon"
         config_obj = _types.LiveConnectConfig(
             response_modalities=["AUDIO"],
             output_audio_transcription={},

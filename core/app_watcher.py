@@ -10,7 +10,7 @@ WATCHED_APPS = {
 }
 
 class AppWatcher:
-    def __init__(self, callback=None, interval: int = 15):
+    def __init__(self, callback=None, interval: int = 30):
         self.callback  = callback
         self.interval  = interval
         self.running   = True

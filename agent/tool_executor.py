@@ -26,6 +26,9 @@ class ToolExecutor:
     def __init__(self, jarvis):
         self.jarvis = jarvis
         
+        from concurrent.futures import ThreadPoolExecutor
+        self._pool = ThreadPoolExecutor(max_workers=64, thread_name_prefix="JarvisToolPool")
+        
         # Fallback suggestions map
         self.FALLBACK_SUGGESTIONS = {
             "browser_control": "Sir, browser action failed. Maybe try 'computer_control' or 'cmd_control' as a fallback?",
@@ -101,7 +104,7 @@ class ToolExecutor:
                 text = f"JARVIS wants to execute a high-risk command:\n\nTool: {name}\nDetails: {args}\n\nDo you want to allow this action?"
                 return ctypes.windll.user32.MessageBoxW(0, text, title, 4 | 32 | 262144)
                 
-            response = await loop.run_in_executor(None, ask_verification)
+            response = await loop.run_in_executor(self._pool, ask_verification)
             if response != 6:  # IDYES
                 _, types = _get_genai()
                 if not self.jarvis.ui.muted:
@@ -280,7 +283,7 @@ class ToolExecutor:
     async def _handle_browser_agent(self, fc, args, loop):
         try:
             from actions.browser_control import browser_control
-            result = await loop.run_in_executor(None, browser_control, args)
+            result = await loop.run_in_executor(self._pool, browser_control, args)
         except Exception as e:
             result = f"Browser Agent failed: {e}"
         
@@ -294,7 +297,7 @@ class ToolExecutor:
     async def _handle_generate_image(self, fc, args, loop):
         try:
             from actions.image_generator import generate_image
-            result = await loop.run_in_executor(None, generate_image, args, self.jarvis)
+            result = await loop.run_in_executor(self._pool, generate_image, args, self.jarvis)
         except Exception as e:
             result = f"Image Generation failed: {e}"
         if not self.jarvis.ui.muted:
@@ -310,7 +313,7 @@ class ToolExecutor:
                 self.jarvis.rag_ready.wait(timeout=15.0)
             from rag_core import get_rag_engine
             engine = get_rag_engine()
-            result = await loop.run_in_executor(None, lambda: engine.query(query, namespaces=namespaces))
+            result = await loop.run_in_executor(self._pool, lambda: engine.query(query, namespaces=namespaces))
         except Exception as e:
             result = f"RAG Query failed: {e}"
         if not self.jarvis.ui.muted:
@@ -321,7 +324,7 @@ class ToolExecutor:
     async def _handle_research_mode(self, fc, args, loop):
         try:
             from actions.research_mode import research_mode
-            result = await loop.run_in_executor(None, research_mode, args)
+            result = await loop.run_in_executor(self._pool, research_mode, args)
         except Exception as e:
             result = f"Research Mode failed: {e}"
         if not self.jarvis.ui.muted:
@@ -430,7 +433,7 @@ class ToolExecutor:
                                 engine.scaffold(proj, plan)
                                 engine.pub_get(proj)
                                 return engine.run_on_device(proj, plan)
-                            result = await loop.run_in_executor(None, _build_from_tmpl)
+                            result = await loop.run_in_executor(self._pool, _build_from_tmpl)
                             result = f"Template '{tmpl_name}' built!\n{result}"
                         else:
                             result = f"Template '{tmpl_name}' nahi mili.\n\n{list_app_templates()}"
@@ -509,7 +512,7 @@ class ToolExecutor:
                         def _run_sync():
                             return func(**kwargs)
                             
-                        r = await loop.run_in_executor(None, _run_sync)
+                        r = await loop.run_in_executor(self._pool, _run_sync)
                         result = r or "Done."
                         break
                     else:

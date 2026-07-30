@@ -195,22 +195,22 @@ class JarvisUI:
         self.current_persona = persona
         if persona == "friday":
             self.color_map.update({
-                "ONLINE": "#ff3300",
-                "LISTENING": "#ff6600",
-                "THINKING": "#ff0066",
-                "SPEAKING": "#ffcc99",
+                "ONLINE": "#ffaa00",
+                "LISTENING": "#ffcc00",
+                "THINKING": "#ff8800",
+                "SPEAKING": "#ffff99",
             })
             self.root.title("F.R.I.D.A.Y")
             try:
-                self.menu.config(bg="#1a0a00", fg="#ff6600")
+                self.menu.config(bg="#1a1400", fg="#ffaa00")
                 if hasattr(self, "term_text"):
-                    self.term_text.config(bg="#1a0a00", fg="#ff6600", insertbackground="#ff6600")
+                    self.term_text.config(bg="#1a1400", fg="#ffaa00", insertbackground="#ffaa00")
                 if hasattr(self, "term_frame"):
-                    self.term_frame.config(bg="#1a0a00", highlightbackground="#ff3300", highlightcolor="#ff6600")
+                    self.term_frame.config(bg="#1a1400", highlightbackground="#ffaa00", highlightcolor="#ffcc00")
                 if hasattr(self, "type_entry"):
-                    self.type_entry.config(bg="#1a0a00", fg="#ff6600", insertbackground="#ff6600")
+                    self.type_entry.config(bg="#1a1400", fg="#ffaa00", insertbackground="#ffaa00")
                 if hasattr(self, "type_frame"):
-                    self.type_frame.config(bg="#1a0a00", highlightbackground="#ff3300", highlightcolor="#ff6600")
+                    self.type_frame.config(bg="#1a1400", highlightbackground="#ffaa00", highlightcolor="#ffcc00")
             except Exception:
                 pass
         else:

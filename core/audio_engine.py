@@ -166,6 +166,7 @@ class AudioEngine:
                     channels=CHANNELS,
                     dtype="int16",
                     blocksize=CHUNK_SIZE,
+                    latency="low",
                     callback=callback,
                 ):
                     print("[AudioEngine] Mic stream open")

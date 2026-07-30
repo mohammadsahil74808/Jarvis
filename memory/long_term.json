@@ -31,8 +31,8 @@
       "updated": "2026-04-20"
     },
     "favorite_color": {
-      "value": "pizza",
-      "updated": "2026-07-29"
+      "value": "Pizza",
+      "updated": "2026-07-30"
     },
     "guitar_practice_interest": {
       "value": "Expressed interest in practicing guitar after a long time",
@@ -49,6 +49,10 @@
     "phone": {
       "value": "OnePlus Nord CE 2R",
       "updated": "2026-07-28"
+    },
+    "avoid_shop_visits": {
+      "value": "Prefers automation and efficiency, wants to avoid repeated physical visits",
+      "updated": "2026-07-30"
     }
   },
   "projects": {
