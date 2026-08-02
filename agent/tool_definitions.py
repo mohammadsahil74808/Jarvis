@@ -390,12 +390,9 @@ TOOL_DECLARATIONS = [
     {
         "name": "save_memory",
         "description": (
-            "Save an important personal fact about the user to long-term memory. "
-            "Call this silently whenever the user reveals something worth remembering: "
-            "name, age, city, job, preferences, hobbies, relationships, projects, or future plans. "
-            "Do NOT call for: weather, reminders, searches, or one-time commands. "
-            "Do NOT announce that you are saving — just call it silently. "
-            "Values must be in English regardless of the conversation language."
+            "Save an important enduring fact about the user or project to persistent SQLite memory. "
+            "Call silently whenever the user reveals something worth remembering or instructs to remember. "
+            "Do NOT call for sensitive secrets (passwords, PINs, cards, API keys), weather, or transient tasks."
         ),
         "parameters": {
             "type": "OBJECT",
@@ -403,30 +400,48 @@ TOOL_DECLARATIONS = [
                 "category": {
                     "type": "STRING",
                     "description": (
-                        "identity — name, age, birthday, city, job, language, nationality | "
-                        "preferences — favorite food/color/music/film/game/sport, hobbies | "
-                        "projects — active projects, goals, things being built | "
-                        "patterns — recurring habits, routines, schedule, behavior patterns | "
-                        "relationships — friends, family, partner, colleagues | "
-                        "wishes — future plans, things to buy, travel dreams | "
-                        "notes — anything else worth remembering"
+                        "user_preference — favorites, communication styles, formatting choices, routines | "
+                        "project_context — ongoing coding architecture, repositories, tech stacks | "
+                        "important_fact — identity, explicit rules, personal truths | "
+                        "task_context — current instructions, multi-step task goals"
                     )
                 },
-                "key":   {"type": "STRING", "description": "Short snake_case key (e.g. name, favorite_food, sister_name)"},
-                "value": {"type": "STRING", "description": "Concise value in English (e.g. Fatih, pizza, older sister)"},
+                "key":   {"type": "STRING", "description": "Short snake_case identifier (e.g., name, favorite_editor, mcp_setup)"},
+                "value": {"type": "STRING", "description": "Concise factual value (e.g., Sahil, VS Code, SQLite MCP server configured)"},
             },
             "required": ["category", "key", "value"]
         }
     },
     {
+        "name": "retrieve_memory",
+        "description": (
+            "Search and retrieve stored persistent memories relevant to a user's question, project, or topic. "
+            "Use when answering questions about prior instructions, user preferences, or past project contexts."
+        ),
+        "parameters": {
+            "type": "OBJECT",
+            "properties": {
+                "query": {
+                    "type": "STRING",
+                    "description": "Keywords or topic to search for in saved memories (e.g., 'GitHub account', 'browser', 'preference')"
+                },
+                "category": {
+                    "type": "STRING",
+                    "description": "Optional category filter: user_preference, project_context, important_fact, task_context"
+                }
+            },
+            "required": ["query"]
+        }
+    },
+    {
         "name": "forget_memory",
-        "description": "Deletes a specific memory from the user's long-term memory. Use when the user explicitly asks JARVIS to forget something or says that a fact is no longer true.",
+        "description": "Deletes a specific memory from persistent SQLite storage when asked to forget or when a fact is outdated.",
         "parameters": {
             "type": "OBJECT",
             "properties": {
                 "category": {
                     "type": "STRING",
-                    "description": "The category of the memory (identity, preferences, projects, patterns, relationships, wishes, notes)"
+                    "description": "The category of the memory (user_preference, project_context, important_fact, task_context)"
                 },
                 "key": {"type": "STRING", "description": "The short snake_case key to delete"}
             },

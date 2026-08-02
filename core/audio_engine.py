@@ -26,7 +26,17 @@ class AudioEngine:
         # If not, falls back to the original behavior (no change for user).
         self._vad = None
         self._vad_enabled = False
+        self._last_speech_ts = None
         self._try_init_vad()
+
+    # ─────────────────────────────────────────────────────────
+    @staticmethod
+    def _safe_put(queue, item):
+        """put_nowait that silently drops frames when the queue is full."""
+        try:
+            queue.put_nowait(item)
+        except asyncio.QueueFull:
+            pass  # Drop stale audio frame — normal for real-time streaming
 
     # ─────────────────────────────────────────────────────────
     def _try_init_vad(self):
@@ -137,13 +147,25 @@ class AudioEngine:
             if self.jarvis.clap_enabled or self.jarvis.wake_word_enabled:
                 if self._loop is not None:
                     self._loop.call_soon_threadsafe(
-                        self.jarvis.detection_queue.put_nowait, indata.copy()
+                        self._safe_put, self.jarvis.detection_queue, indata.copy()
                     )
 
             # ── Route to Gemini Live send queue (Full-Duplex) ─
             if not self.jarvis.ui.muted:
                 data = indata.tobytes()
                 
+                # Optional Latency Debug: track speech start
+                import os
+                if os.environ.get("JARVIS_LATENCY_DEBUG"):
+                    try:
+                        import time, numpy as np
+                        rms_val = np.sqrt(np.mean(np.square(indata.astype(np.float32))))
+                        if rms_val > 500 and getattr(self, "_last_speech_ts", None) is None:
+                            self._last_speech_ts = time.time()
+                            print(f"[LATENCY] speech_start={self._last_speech_ts:.3f}")
+                    except Exception:
+                        pass
+
                 # Extract RMS energy and pass to UI
                 if hasattr(self.jarvis.ui, "set_mic_energy"):
                     try:
@@ -155,7 +177,7 @@ class AudioEngine:
                 
                 if self._loop is not None:
                     self._loop.call_soon_threadsafe(
-                        self.jarvis.out_queue.put_nowait,
+                        self._safe_put, self.jarvis.out_queue,
                         {"data": data, "mime_type": "audio/pcm"}
                     )
 
@@ -205,6 +227,14 @@ class AudioEngine:
                     speaking_timeout_task.cancel()
 
                 self.jarvis.set_speaking(True)
+
+                # Optional Latency Debug: track mic-to-first-audio delta
+                import os
+                if os.environ.get("JARVIS_LATENCY_DEBUG") and getattr(self, "_last_speech_ts", None):
+                    import time
+                    delta = time.time() - self._last_speech_ts
+                    print(f"[LATENCY] mic_to_first_audio_out delta={delta:.3f}s")
+                    self._last_speech_ts = None
 
                 if hasattr(self.jarvis.ui, "set_speaker_energy"):
                     try:

@@ -39,6 +39,10 @@ class ToolExecutor:
         }
 
     async def execute(self, fc) -> Any:
+        import os, time
+        _debug_latency = bool(os.environ.get("JARVIS_LATENCY_DEBUG"))
+        _t0 = time.time() if _debug_latency else 0.0
+
         name = fc.name
         # Re-route hallucinated names
         if name in ["file_controller", "file_brain"]:
@@ -120,6 +124,9 @@ class ToolExecutor:
             
         if name == "forget_memory":
             return await self._handle_forget_memory(fc, args)
+            
+        if name == "retrieve_memory":
+            return await self._handle_retrieve_memory(fc, args)
         
         if name == "manage_plan":
             return await self._handle_manage_plan(fc, args)
@@ -147,6 +154,17 @@ class ToolExecutor:
         
         if not self.jarvis.ui.muted:
             self.jarvis.ui.set_state("LISTENING")
+
+        if _debug_latency:
+            print(f"[LATENCY] tool={name} took {time.time() - _t0:.3f}s")
+
+        # Truncate oversized tool results to prevent Gemini Live 1007 WebSocket crash
+        MAX_TOOL_RESULT = 25000
+        result_str = str(result)
+        if len(result_str) > MAX_TOOL_RESULT:
+            result_str = result_str[:MAX_TOOL_RESULT] + "\n\n[OUTPUT TRUNCATED — result too large for live session. Ask the user to narrow the scope.]"
+            print(f"[JARVIS] [WARN] Tool result for '{name}' was truncated from {len(str(result))} to {MAX_TOOL_RESULT} chars")
+            result = result_str
 
         print(f"[JARVIS] Tool Result: {name} -> {str(result)[:80]}")
         
@@ -176,7 +194,7 @@ class ToolExecutor:
             self.jarvis.state.update_session("last_action", args.get("action", "analyze"))
 
     async def _handle_save_memory(self, fc, args):
-        category = args.get("category", "notes")
+        category = args.get("category", "task_context")
         key      = args.get("key", "")
         value    = args.get("value", "")
         if key and value:
@@ -194,7 +212,7 @@ class ToolExecutor:
         )
 
     async def _handle_forget_memory(self, fc, args):
-        category = args.get("category", "notes")
+        category = args.get("category")
         key      = args.get("key", "")
         if key:
             from memory.memory_manager import forget_memory
@@ -210,6 +228,22 @@ class ToolExecutor:
         return types.FunctionResponse(
             id=fc.id, name=fc.name,
             response={"result": result}
+        )
+
+    async def _handle_retrieve_memory(self, fc, args):
+        query = args.get("query", "")
+        category = args.get("category")
+        from memory.memory_manager import retrieve_relevant_memories
+        results = retrieve_relevant_memories(query=query, category=category, limit=5)
+        print(f"[Memory] [RETRIEVE] retrieve_memory: query='{query}' category='{category}' -> found {len(results)} items")
+        
+        if not self.jarvis.ui.muted:
+            self.jarvis.ui.set_state("LISTENING")
+            
+        _, types = _get_genai()
+        return types.FunctionResponse(
+            id=fc.id, name=fc.name,
+            response={"memories": results}
         )
 
     async def _handle_manage_plan(self, fc, args):
@@ -516,6 +550,20 @@ class ToolExecutor:
                         result = r or "Done."
                         break
                     else:
+                        try:
+                            from mcp_client.manager import get_mcp_manager, execute_mcp_tool
+                            mgr = get_mcp_manager()
+                            is_mcp = False
+                            if mgr._gemini_tools_cache:
+                                if any(t["name"] == name for t in mgr._gemini_tools_cache):
+                                    is_mcp = True
+                            
+                            if is_mcp:
+                                result = await execute_mcp_tool(name, args)
+                                break
+                        except ImportError:
+                            pass
+                        
                         result = f"Unknown tool: {name}"
                         break
 

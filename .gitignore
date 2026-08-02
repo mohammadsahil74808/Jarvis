@@ -23,8 +23,26 @@ memory/*.json
 memory/*.db
 memory/*.faiss
 config/browser_signal.json
+config/drive_*.json
+config/*client_secret*.json
+config/*credentials*.json
+*.token
 
 # Privacy Protection
 documents/
 desktop/
 jarvis/browser_profile/
+
+# MCP & Node Dependencies
+node_modules/
+.playwright-mcp/
+
+# Runtime RAG indexes & Databases
+.jarvis/
+data/
+*.db-shm
+*.db-wal
+memory/faiss_indexes/
+memory/browser_sessions/
+memory/emotional_patterns.json
+memory/reminders.json

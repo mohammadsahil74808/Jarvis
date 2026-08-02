@@ -26,12 +26,23 @@
 from __future__ import annotations
 import logging
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 import urllib.parse
 from typing import Optional
 import time
 from core.config import get_config, get_api_key
 
 logger = logging.getLogger("FreeAIRouter")
+
+_session = requests.Session()
+_adapter = HTTPAdapter(
+    pool_connections=10,
+    pool_maxsize=20,
+    max_retries=Retry(total=2, backoff_factor=0.3, status_forcelist=[502, 503, 504]),
+)
+_session.mount("https://", _adapter)
+_session.mount("http://", _adapter)
 
 class AIAuthError(Exception): pass
 class AIRateLimitError(Exception): pass
@@ -301,7 +312,7 @@ class FreeAIRouter:
             "stream":      False,
         }
         try:
-            r = requests.post(url, headers=headers, json=payload, timeout=5)
+            r = _session.post(url, headers=headers, json=payload, timeout=5)
         except requests.exceptions.RequestException as e:
             raise AINetworkError(str(e))
             
@@ -351,7 +362,7 @@ class FreeAIRouter:
             "max_tokens": max_tokens,
         }
         try:
-            r = requests.post(url, headers=headers, json=payload, timeout=5)
+            r = _session.post(url, headers=headers, json=payload, timeout=5)
         except requests.exceptions.RequestException as e:
             raise AINetworkError(str(e))
             
@@ -387,7 +398,7 @@ class FreeAIRouter:
             "stream":     False,
         }
         try:
-            r = requests.post(url, headers=headers, json=payload, timeout=5)
+            r = _session.post(url, headers=headers, json=payload, timeout=5)
         except requests.exceptions.RequestException as e:
             raise AINetworkError(str(e))
             
@@ -419,7 +430,7 @@ class FreeAIRouter:
             ],
         }
         try:
-            r = requests.post(url, json=payload, timeout=7)
+            r = _session.post(url, json=payload, timeout=7)
         except requests.exceptions.RequestException as e:
             raise AINetworkError(str(e))
             
@@ -482,7 +493,7 @@ class FreeAIRouter:
         url     = (f"https://image.pollinations.ai/prompt/{encoded}"
                    f"?width={width}&height={height}&nologo=true")
 
-        r = requests.get(url, timeout=60, stream=True)
+        r = _session.get(url, timeout=60, stream=True)
         if r.status_code != 200:
             return None
 
@@ -506,7 +517,7 @@ class FreeAIRouter:
         headers = {
             "Authorization": f"Bearer {self._config['huggingface_api_key']}",
         }
-        r = requests.post(url, headers=headers,
+        r = _session.post(url, headers=headers,
                           json={"inputs": prompt}, timeout=120)
         if r.status_code != 200:
             return None

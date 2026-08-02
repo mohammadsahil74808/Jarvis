@@ -79,7 +79,8 @@ class StateMonitor:
             
         try:
             # Connect to a reliable host
-            socket.create_connection(("8.8.8.8", 53), timeout=2)
+            with socket.create_connection(("8.8.8.8", 53), timeout=2):
+                pass
             self._internet_cache = True
         except OSError:
             self._internet_cache = False

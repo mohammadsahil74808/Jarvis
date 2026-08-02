@@ -1,0 +1,393 @@
+import asyncio
+import json
+import os
+import urllib.request
+from pathlib import Path
+from typing import Dict, Any, List
+
+from mcp_client.client import MCPClient
+
+def convert_to_gemini_schema(schema: Any) -> Any:
+    """Recursively converts JSON Schema to Gemini Schema format and strips all unsupported keywords.
+    
+    Gemini function declarations accept only a strict subset of JSON Schema:
+      type, description, properties, required, items, enum, anyOf, format, nullable
+    All other JSON Schema keywords must be removed to prevent Pydantic validation errors.
+    """
+    if not schema:
+        return None
+    if not isinstance(schema, dict):
+        return schema
+
+    # Complete set of keywords NOT supported by Gemini's function declaration schema
+    STRIP_KEYS = {
+        "$schema", "$id", "$ref", "$defs", "$comment", "$anchor",
+        "additionalProperties", "additional_properties",
+        "unevaluatedProperties", "unevaluatedItems",
+        "patternProperties", "propertyNames",
+        "title", "default", "examples", "example",
+        "if", "then", "else",
+        "allOf", "oneOf", "not",
+        "contains", "minContains", "maxContains",
+        "prefixItems",
+        "dependentSchemas", "dependentRequired", "dependencies",
+        "minProperties", "maxProperties",
+        "contentEncoding", "contentMediaType", "contentSchema",
+        "readOnly", "writeOnly", "deprecated",
+    }
+
+    new_schema: Dict[str, Any] = {}
+    for k, v in schema.items():
+        if k in STRIP_KEYS:
+            continue
+        if k == "type" and isinstance(v, str):
+            new_schema[k] = v.upper()
+        elif isinstance(v, dict):
+            new_schema[k] = convert_to_gemini_schema(v)
+        elif isinstance(v, list):
+            new_schema[k] = [
+                convert_to_gemini_schema(item) if isinstance(item, dict) else item
+                for item in v
+            ]
+        else:
+            new_schema[k] = v
+
+    # Validate that all 'required' keys actually exist in 'properties'
+    if "required" in new_schema and isinstance(new_schema["required"], list):
+        props = new_schema.get("properties", {})
+        valid_required = []
+        for req in new_schema["required"]:
+            if req in props:
+                valid_required.append(req)
+            else:
+                print(f"[MCP WARNING] Removed undefined required property: '{req}'")
+        if valid_required:
+            new_schema["required"] = valid_required
+        else:
+            del new_schema["required"]
+
+    return new_schema
+
+class MCPManager:
+    """Manager to handle reading config and orchestrating MCP clients."""
+    
+    def __init__(self, config_path: str):
+        self.config_path = config_path
+        self.config = self._load_config()
+        self.clients: Dict[str, MCPClient] = {}
+        self._gemini_tools_cache = []
+        self._github_username_cache = None
+        self._event_listeners = []
+        self._tool_to_server: Dict[str, str] = {}
+
+    def add_event_listener(self, callback):
+        """Register a callback for MCP tool lifecycle events: (event_type, tool_name, data)."""
+        if callback not in self._event_listeners:
+            self._event_listeners.append(callback)
+
+    def _emit_event(self, event_type: str, tool_name: str, data: dict):
+        for cb in self._event_listeners:
+            try:
+                cb(event_type, tool_name, data)
+            except Exception as e:
+                print(f"[MCP EVENT BRIDGE] Listener error: {e}")
+
+    def _load_config(self):
+        with open(self.config_path, "r") as f:
+            return json.load(f)
+
+    async def init_client(self, server_name: str) -> MCPClient:
+        """Initialize and connect a client for the given server name."""
+        if server_name in self.clients:
+            return self.clients[server_name]
+            
+        server_config = self.config.get("mcpServers", {}).get(server_name)
+        if not server_config:
+            raise ValueError(f"Server '{server_name}' not found in config.")
+        
+        command = server_config.get("command")
+        args = server_config.get("args", [])
+        env = server_config.get("env")
+        
+        if server_name == "sqlite":
+            db_path = args[-1] if args else "C:\\Projects\\Jarvis\\data\\jarvis.db"
+            db_dir = os.path.dirname(os.path.abspath(db_path))
+            os.makedirs(db_dir, exist_ok=True)
+        
+        tag = f"MCP {server_name.upper().replace('_', ' ')}"
+        if server_name == "google_drive":
+            print(f"[{tag}] Starting...")
+        else:
+            print(f"[{tag}] Starting {server_name} MCP...")
+            
+        client = MCPClient()
+        if server_config.get("transport") == "http":
+            url = server_config.get("url")
+            headers = {}
+            if server_name == "google_drive":
+                try:
+                    from mcp_client.google_auth import get_google_drive_token
+                    token = get_google_drive_token()
+                    headers["Authorization"] = f"Bearer {token}"
+                except Exception as e:
+                    print(f"[{tag}] Authentication failed: {e}")
+                    raise
+            await client.connect_http(url, headers=headers)
+            print(f"[{tag}] Connected")
+            if server_name == "google_drive" and "Authorization" in headers:
+                print(f"[{tag}] Authenticated")
+        else:
+            await client.connect(command, args, env=env)
+            print(f"[{tag}] Connected")
+            
+        if server_name == "sqlite":
+            db_path = args[-1] if args else "C:\\Projects\\Jarvis\\data\\jarvis.db"
+            print(f"[{tag}] Database: {db_path}")
+        self.clients[server_name] = client
+        return client
+        
+    def _resolve_github_username(self) -> str:
+        """Dynamically resolve the authenticated GitHub username via API."""
+        if self._github_username_cache is not None:
+            return self._github_username_cache
+            
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:
+            pass
+            
+        token = os.environ.get("GITHUB_PERSONAL_ACCESS_TOKEN") or os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN")
+        if not token:
+            server_config = self.config.get("mcpServers", {}).get("github", {})
+            token = server_config.get("env", {}).get("GITHUB_PERSONAL_ACCESS_TOKEN")
+            
+        if not token:
+            print("[MCP GITHUB ERROR] GITHUB_PERSONAL_ACCESS_TOKEN is missing from environment!")
+            print("[MCP GITHUB ERROR] Please set $env:GITHUB_PERSONAL_ACCESS_TOKEN in PowerShell or add it to c:\\Projects\\Jarvis\\.env")
+            self._github_username_cache = ""
+            return ""
+            
+        try:
+            req = urllib.request.Request("https://api.github.com/user")
+            req.add_header("Authorization", f"Bearer {token}")
+            req.add_header("User-Agent", "JARVIS-MCP-Client")
+            with urllib.request.urlopen(req) as response:
+                data = json.loads(response.read().decode())
+                username = data.get("login", "")
+                self._github_username_cache = username
+                if username:
+                    print(f"[MCP GITHUB] Authenticated user: {username}")
+                return username
+        except Exception as e:
+            print(f"[MCP GITHUB] Warning: Failed to resolve GitHub username: {e}")
+            self._github_username_cache = ""
+            return ""
+        
+    async def get_all_gemini_tools(self, close_after: bool = True) -> List[Dict[str, Any]]:
+        """Fetch tools from all configured servers and convert them to Gemini format."""
+        if self._gemini_tools_cache:
+            return self._gemini_tools_cache
+            
+        gemini_tools = []
+        for server_name in self.config.get("mcpServers", {}):
+            tag = f"MCP {server_name.upper().replace('_', ' ')}"
+            try:
+                client = await self.init_client(server_name)
+                tools = await client.get_tools()
+                
+                github_username = ""
+                if server_name == "github":
+                    github_username = self._resolve_github_username()
+                    
+                server_tool_count = 0
+                for tool in tools:
+                    self._tool_to_server[tool.name] = server_name
+                    desc = tool.description or f"MCP tool {tool.name}"
+                    
+                    if server_name == "github" and github_username:
+                        context = (
+                            f"[CRITICAL GITHUB IDENTITY RULE: The user's name is Sahil, BUT their GitHub username is NOT 'Sahil'. "
+                            f"The authenticated GitHub account username is '{github_username}'. "
+                            f"When the user refers to 'my repositories', 'my repos', 'my issues', 'my PRs', or 'my commits', "
+                            f"you MUST use '{github_username}' for 'owner' or 'user:{github_username}' in search queries. "
+                            f"Do NOT use 'user:Sahil' or owner 'Sahil' unless the user explicitly asks for a GitHub user named Sahil.] "
+                        )
+                        desc = context + desc
+                        
+                    gemini_tool = {
+                        "name": tool.name,
+                        "description": desc,
+                    }
+                    if hasattr(tool, "inputSchema") and tool.inputSchema:
+                        gemini_params = convert_to_gemini_schema(tool.inputSchema)
+                        if server_name == "github" and github_username and isinstance(gemini_params, dict):
+                            props = gemini_params.get("properties", {})
+                            if "query" in props and isinstance(props["query"], dict):
+                                props["query"]["description"] = (
+                                    f"Search query (GitHub search syntax). For 'my repos', set query to 'user:{github_username}'. "
+                                    f"Do NOT use 'user:Sahil' unless user explicitly asks for GitHub user 'Sahil'."
+                                )
+                            if "owner" in props and isinstance(props["owner"], dict):
+                                props["owner"]["description"] = (
+                                    f"Repository owner. For 'my repository', set owner to '{github_username}'. "
+                                    f"Do NOT use 'Sahil' unless user explicitly asks for GitHub user 'Sahil'."
+                                )
+                        gemini_tool["parameters"] = gemini_params
+                    gemini_tools.append(gemini_tool)
+                    server_tool_count += 1
+                    
+                print(f"[{tag}] Discovered {server_tool_count} tools")
+                if close_after:
+                    await client.cleanup()
+                    self.clients.pop(server_name, None)
+            except Exception as e:
+                if server_name == "playwright":
+                    print(f"[MCP PLAYWRIGHT] WARNING: Failed to start Playwright MCP — JARVIS will continue without browser control.")
+                    print(f"[MCP PLAYWRIGHT] Error: {e}")
+                elif server_name == "sqlite":
+                    print(f"[MCP SQLITE] WARNING: Failed to start SQLite MCP — JARVIS will continue without SQLite database tools.")
+                    print(f"[MCP SQLITE] Error: {e}")
+                elif server_name == "google_drive":
+                    print(f"[MCP GOOGLE DRIVE] WARNING: Failed to start Google Drive MCP — JARVIS will continue without Google Drive tools.")
+                    print(f"[MCP GOOGLE DRIVE] Error: {e}")
+                else:
+                    print(f"[MCP] Error loading tools from {server_name}: {e}")
+                
+        self._gemini_tools_cache = gemini_tools
+        return gemini_tools
+        
+    async def execute_tool(self, tool_name: str, arguments: dict) -> str:
+        """Execute a tool by searching across connected clients."""
+        target_servers = []
+        if tool_name in self._tool_to_server:
+            target_servers = [self._tool_to_server[tool_name]]
+        else:
+            target_servers = list(self.config.get("mcpServers", {}).keys())
+
+        for server_name in target_servers:
+            client = None
+            try:
+                client = await self.init_client(server_name)
+                tools = await client.get_tools()
+            except Exception:
+                continue  # Skip servers that cannot be initialized
+
+            if any(t.name == tool_name for t in tools):
+                if tool_name == "search_files" and server_name == "filesystem" and "query" in arguments and "path" not in arguments:
+                    continue  # Discard filesystem match in favor of Google Drive search_files when using 'query'
+                try:
+                    if server_name == "github":
+                        auth_user = self._resolve_github_username()
+                        if auth_user:
+                            # 1. Sanitize 'owner' parameter if it refers to Sahil/me/my/self/empty
+                            if "owner" in arguments:
+                                o = str(arguments["owner"]).strip()
+                                if o.lower() in ("sahil", "me", "my", "self", "authenticated", ""):
+                                    arguments["owner"] = auth_user
+
+                            # 2. Sanitize 'query' parameter in search tools if it refers to user:Sahil
+                            if "query" in arguments and isinstance(arguments["query"], str):
+                                q = arguments["query"].strip()
+                                import re
+                                if re.search(r'\b(user|owner):\s*sahil\b', q, re.IGNORECASE):
+                                    q = re.sub(r'\b(user|owner):\s*sahil\b', f'\\1:{auth_user}', q, flags=re.IGNORECASE)
+                                    arguments["query"] = q
+                                elif q.lower() in ("sahil", "me", "my", "my repos", "my repositories"):
+                                    arguments["query"] = f"user:{auth_user}"
+
+                    print(f"[JARVIS] Tool: {tool_name}")
+                    print(f"[JARVIS] [TOOL] {tool_name} {arguments}")
+                    self._emit_event("mcp_tool_started", tool_name, {"arguments": arguments, "server": server_name})
+                    result = await client.execute_tool(tool_name, arguments)
+                    
+                    if server_name != "google_drive":
+                        await client.cleanup()
+                        self.clients.pop(server_name, None)
+
+                    if result.isError:
+                        err_text = f"Error from MCP {server_name}: {result.content}"
+                        self._emit_event("mcp_tool_error", tool_name, {"error": err_text, "server": server_name})
+                        return err_text
+                    
+                    # Extract text content
+                    text_parts = []
+                    for content in result.content:
+                        if content.type == "text":
+                            text_parts.append(content.text)
+                    out_text = "\n".join(text_parts) if text_parts else "Done (No output)."
+                    
+                    # Truncate oversized MCP results to prevent Gemini Live WebSocket crash
+                    MCP_MAX_RESULT = 25000
+                    if len(out_text) > MCP_MAX_RESULT:
+                        print(f"[MCP] [WARN] Tool '{tool_name}' result truncated: {len(out_text)} -> {MCP_MAX_RESULT} chars")
+                        out_text = out_text[:MCP_MAX_RESULT] + "\n\n[OUTPUT TRUNCATED - result too large. Ask the user to narrow the scope.]"
+                    
+                    self._emit_event("mcp_tool_result", tool_name, {"result": out_text, "server": server_name})
+                    return out_text
+                except Exception as e:
+                    print(f"Error executing tool {tool_name} on MCP server {server_name}: {e}")
+                    if client and server_name != "google_drive":
+                        await client.cleanup()
+                        self.clients.pop(server_name, None)
+                    self._emit_event("mcp_tool_error", tool_name, {"error": str(e), "server": server_name})
+                    return f"Error executing tool {tool_name}: {e}"
+                
+        err_msg = f"Unknown MCP tool: {tool_name}"
+        self._emit_event("mcp_tool_error", tool_name, {"error": err_msg, "server": "unknown"})
+        return err_msg
+
+    async def cleanup(self):
+        """Cleanup all clients."""
+        for client in self.clients.values():
+            try:
+                await client.cleanup()
+            except BaseException:
+                pass
+        self.clients.clear()
+
+# Global manager instance for JARVIS integration
+_global_manager = None
+
+def get_mcp_manager() -> MCPManager:
+    global _global_manager
+    if _global_manager is None:
+        config_file = Path(__file__).parent / "config.json"
+        _global_manager = MCPManager(str(config_file))
+    return _global_manager
+
+async def setup_mcp_integration():
+    """Initializes connections and returns the list of Gemini-formatted tools."""
+    manager = get_mcp_manager()
+    return await manager.get_all_gemini_tools()
+
+async def execute_mcp_tool(name: str, arguments: dict) -> str:
+    """Executes an MCP tool."""
+    manager = get_mcp_manager()
+    return await manager.execute_tool(name, arguments)
+
+async def test_filesystem_server():
+    """Test the filesystem MCP server by connecting and running list_directory."""
+    print("Initializing filesystem MCP server...")
+    try:
+        tools = await setup_mcp_integration()
+        print(f"Discovered {len(tools)} tools.")
+        for tool in tools:
+            print(f"- {tool['name']}: {tool.get('description', '')}")
+            
+        test_dir = "C:\\Projects\\Jarvis"
+        print(f"\nTesting list_allowed_directories (or list_directory) for {test_dir}...")
+        
+        res = await execute_mcp_tool("list_allowed_directories", {})
+        print(f"Result for list_allowed_directories: {res}")
+            
+        res = await execute_mcp_tool("list_directory", {"path": test_dir})
+        print(f"Result for list_directory: {res}")
+            
+    finally:
+        print("\nCleaning up connections...")
+        await get_mcp_manager().cleanup()
+        print("Done.")
+
+if __name__ == "__main__":
+    asyncio.run(test_filesystem_server())

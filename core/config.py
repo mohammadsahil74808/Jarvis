@@ -83,7 +83,7 @@ def rotate_api_key():
     global _current_key_index, _client
     _current_key_index += 1
     _client = None
-    print(f"[Config] Rotated Gemini API key. Now using key index {get_api_key()[:8]}...")
+    print(f"[Config] Rotated Gemini API key to index {_current_key_index}")
 
 def get_groq_api_key() -> str:
     """Helper to retrieve the Groq API key."""

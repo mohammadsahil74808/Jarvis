@@ -184,6 +184,9 @@ class TaskQueue:
             with self._lock:
                 if task.cancel_flag.is_set():
                     task.status = TaskStatus.CANCELLED
+                elif isinstance(result, str) and any(fail_word in result.lower() for fail_word in ["task failed", "task aborted", "code error", "quota exceeded"]):
+                    task.status = TaskStatus.FAILED
+                    task.error  = result
                 else:
                     task.status = TaskStatus.COMPLETED
                     task.result = result

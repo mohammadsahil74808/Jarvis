@@ -30,20 +30,53 @@ class DebouncedIndexer:
             print(f"[DebouncedIndexer] Error indexing {filepath}: {e}")
 
 class RAGFileHandler(FileSystemEventHandler):
+    # Directories and file patterns that should never trigger RAG ingestion
+    IGNORE_DIRS = {
+        "__pycache__", ".git", ".ruff_cache", ".pytest_cache",
+        ".playwright-mcp", "node_modules", "dist", "build",
+        ".mypy_cache", ".tox", "__pypackages__", ".venv", "venv",
+        ".eggs", "*.egg-info",
+    }
+    IGNORE_EXTENSIONS = {
+        ".pyc", ".pyo", ".pyd", ".log", ".coverage",
+        ".sqlite-journal", ".db-journal", ".tmp", ".bak",
+        ".swp", ".swo",
+    }
+    IGNORE_FILENAMES = {
+        ".env", ".DS_Store", "Thumbs.db", "desktop.ini",
+    }
+
     def __init__(self, indexer: DebouncedIndexer, engine):
         self.indexer = indexer
         self.engine = engine
 
+    @classmethod
+    def _should_ignore(cls, path: str) -> bool:
+        """Return True if this path should NOT trigger ingestion."""
+        import os
+        parts = path.replace("\\", "/").split("/")
+        # Check if any directory component matches an ignore pattern
+        for part in parts:
+            if part in cls.IGNORE_DIRS:
+                return True
+        basename = os.path.basename(path)
+        if basename in cls.IGNORE_FILENAMES:
+            return True
+        _, ext = os.path.splitext(basename)
+        if ext.lower() in cls.IGNORE_EXTENSIONS:
+            return True
+        return False
+
     def on_modified(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self._should_ignore(event.src_path):
             self.indexer.trigger(event.src_path)
             
     def on_created(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self._should_ignore(event.src_path):
             self.indexer.trigger(event.src_path)
             
     def on_deleted(self, event):
-        if not event.is_directory:
+        if not event.is_directory and not self._should_ignore(event.src_path):
             # We can skip debouncing for deletion as it's immediate and final
             self.engine.auto_remove_file(event.src_path)
 

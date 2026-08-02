@@ -66,6 +66,17 @@ def analyze_error(
             "user_message": str
         }
     """
+    err_lower = error.lower()
+    if "429" in err_lower or "quota" in err_lower or "resource_exhausted" in err_lower or "resourceexhausted" in err_lower:
+        print("[ErrorHandler] [CRITICAL] 429 Resource Exhausted / Quota error detected — aborting immediately without calling LLM.")
+        return {
+            "decision":       ErrorDecision.ABORT,
+            "reason":         "Daily API quota exceeded or 429 rate limit hit.",
+            "fix_suggestion": "Wait for quota reset or switch API keys.",
+            "max_retries":    0,
+            "user_message":   "API quota exceeded, task paused, sir."
+        }
+
     if attempt >= max_attempts:
         print(f"[ErrorHandler] [WARNING] Max attempts reached for step {step.get('step')} -- forcing replan")
         return {

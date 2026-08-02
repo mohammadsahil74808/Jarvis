@@ -14,6 +14,7 @@ from concurrent.futures import ThreadPoolExecutor
 import sys
 import socket
 import traceback
+import time
 
 from ui import JarvisUI
 from core.config import (
@@ -267,6 +268,29 @@ class JarvisLive:
     def _background_lazy_init(self):
         config = _get_config()
 
+        def _staggered_start(fn, delay):
+            def runner():
+                if delay > 0:
+                    time.sleep(delay)
+                fn()
+            threading.Thread(target=runner, daemon=True).start()
+
+        import os
+        if os.environ.get("JARVIS_LATENCY_DEBUG"):
+            def _log_startup_metrics():
+                try:
+                    import psutil, time
+                    p = psutil.Process()
+                    t0 = time.time()
+                    while time.time() - t0 < 30:
+                        time.sleep(1.0)
+                        cpu = p.cpu_percent(interval=None)
+                        rss = p.memory_info().rss / 1e6
+                        print(f"[LATENCY] startup t={time.time()-t0:.1f}s CPU={cpu:.1f}% RAM={rss:.1f}MB")
+                except Exception as e:
+                    print(f"[LATENCY] Startup metric error: {e}")
+            threading.Thread(target=_log_startup_metrics, daemon=True, name="LatencyDebugStartup").start()
+
         def _load_whisper():
             try:
                 print("[JARVIS] Loading Faster-Whisper base.en model in background...")
@@ -284,7 +308,6 @@ class JarvisLive:
             except Exception as e:
                 print(f"[JARVIS] Faster-Whisper load failed: {e}")
                 self.whisper_model = None
-        threading.Thread(target=_load_whisper, daemon=True).start()
 
         def _load_predictive():
             try:
@@ -296,7 +319,32 @@ class JarvisLive:
                 self.predictive_engine.set_mode(config.get("predictive_mode", True))
             except Exception as e:
                 print(f"[JARVIS] Predictive: {e}")
-        threading.Thread(target=_load_predictive, daemon=True).start()
+
+        def _preload_memory():
+            try:
+                from memory.memory_manager import load_memory, format_memory_for_prompt
+                self._preloaded_memory = format_memory_for_prompt(load_memory())
+            except Exception as e:
+                print(f"[JARVIS] Memory preload: {e}")
+
+        def _load_vision_service():
+            from vision.service import VisionService
+            try:
+                self.vision_service = VisionService(config, on_context=self._on_screen_context)
+                self.vision_service.start()
+                self.ui.write_log("SYS: Persistent vision context active.")
+            except Exception as e:
+                print(f"[JARVIS] Vision Service: {e}")
+
+        def _load_rag_core():
+            try:
+                from rag_core import get_rag_engine
+                engine = get_rag_engine()
+                engine.start_background_jobs()
+                print("[JARVIS] RAG Core initialized and Watchdog started.")
+                self.rag_ready.set()
+            except Exception as e:
+                print(f"[JARVIS] RAG Core Init Error: {e}")
 
         def _load_proactive():
             try:
@@ -307,15 +355,17 @@ class JarvisLive:
                 self.ui.write_log("SYS: Intelligence module active.")
             except Exception as e:
                 print(f"[JARVIS] Proactive: {e}")
-        threading.Thread(target=_load_proactive, daemon=True).start()
 
-        def _preload_memory():
+        def _load_mcp():
             try:
-                from memory.memory_manager import load_memory, format_memory_for_prompt
-                self._preloaded_memory = format_memory_for_prompt(load_memory())
+                print("[JARVIS] Initializing MCP Client Integration...")
+                from mcp_client.manager import setup_mcp_integration
+                import asyncio
+                mcp_tools = asyncio.run(setup_mcp_integration())
+                if mcp_tools:
+                    print(f"[JARVIS] Loaded {len(mcp_tools)} MCP tools into background MCP Manager.")
             except Exception as e:
-                print(f"[JARVIS] Memory preload: {e}")
-        threading.Thread(target=_preload_memory, daemon=True).start()
+                print(f"[JARVIS] MCP Init Error: {e}")
 
         # ── Unified Background Scheduler ──
         def _shared_scheduler_loop():
@@ -357,28 +407,17 @@ class JarvisLive:
                     except Exception:
                         pass
 
-        threading.Thread(target=_shared_scheduler_loop, daemon=True).start()
-
-        def _load_vision_service():
-            from vision.service import VisionService
-            try:
-                self.vision_service = VisionService(config, on_context=self._on_screen_context)
-                self.vision_service.start()
-                self.ui.write_log("SYS: Persistent vision context active.")
-            except Exception as e:
-                print(f"[JARVIS] Vision Service: {e}")
-        threading.Thread(target=_load_vision_service, daemon=True).start()
-
-        def _load_rag_core():
-            try:
-                from rag_core import get_rag_engine
-                engine = get_rag_engine()
-                engine.start_background_jobs()
-                print("[JARVIS] RAG Core initialized and Watchdog started.")
-                self.rag_ready.set()
-            except Exception as e:
-                print(f"[JARVIS] RAG Core Init Error: {e}")
-        threading.Thread(target=_load_rag_core, daemon=True).start()
+        # ── Staggered background loading to prevent CPU/RAM spike at startup ──
+        _staggered_start(_load_whisper, 0.0)
+        _staggered_start(_load_predictive, 0.5)
+        _staggered_start(_preload_memory, 1.0)
+        _staggered_start(_load_rag_core, 1.5)
+        _staggered_start(_load_vision_service, 2.0)
+        _staggered_start(_load_proactive, 2.5)
+        _staggered_start(_load_mcp, 3.0)
+        
+        # Start shared scheduler loop in background
+        threading.Thread(target=_shared_scheduler_loop, daemon=True, name="SharedScheduler").start()
 
     def _on_screen_context(self, context):
         try:
@@ -597,6 +636,9 @@ class JarvisLive:
             while True:
                 async for response in self.session.receive():
 
+                    if hasattr(response, "text") and response.text:
+                        pass # Text consumed via server_content transcription
+
                     if response.data:
                         self.audio_in_queue.put_nowait(response.data)
 
@@ -638,8 +680,7 @@ class JarvisLive:
                             if full_in:
                                 self.memory_executor.submit(
                                     _update_memory_async, self, full_in, full_out)
-                                self.memory_executor.submit(
-                                    _index_conversation_async, self, full_in, full_out)
+                                # Automatic blind conversation indexing disabled per persistent memory design
                                 caring = self.proactive_engine.process_interaction(full_in) if self.proactive_engine else None
                                 if caring:
                                     self.ui.root.after(2000,
@@ -771,6 +812,9 @@ class JarvisLive:
                     retry_delay = 0
                 else:
                     print(f"[JARVIS] Connection error: {e}")
+                    if hasattr(e, "exceptions"):
+                        for idx, sub_err in enumerate(e.exceptions, 1):
+                            print(f"[JARVIS]   Sub-exception {idx}: {type(sub_err).__name__}: {sub_err}")
                     self.ui.write_log(
                         f"SYS: Connection lost. Reconnecting in {retry_delay}s...")
                     retry_delay = min(retry_delay * 2, 30)

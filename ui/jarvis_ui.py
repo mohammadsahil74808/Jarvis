@@ -8,6 +8,13 @@ try:
 except Exception:
     API_FILE = Path("config/api_keys.json")
 
+try:
+    from ui.mcp_hud import MCPResultHUD
+    from mcp_client.manager import get_mcp_manager
+except Exception:
+    MCPResultHUD = None
+    get_mcp_manager = None
+
 C_BG = "#000000"
 
 @lru_cache(maxsize=512)
@@ -170,6 +177,23 @@ class JarvisUI:
         self.menu.add_command(label="Exit", command=self._exit_app)
         
         self._animate()
+        
+        self.mcp_hud = MCPResultHUD(self.root) if MCPResultHUD else None
+        if self.mcp_hud and get_mcp_manager:
+            try:
+                get_mcp_manager().add_event_listener(self._on_mcp_event)
+            except Exception as e:
+                print(f"[JARVIS UI] Failed to hook MCP event listener: {e}")
+
+    def _on_mcp_event(self, event_type: str, tool_name: str, data: dict):
+        if not self.mcp_hud:
+            return
+        if event_type == "mcp_tool_started":
+            self.root.after(0, lambda: self.mcp_hud.show_loading(tool_name, data.get("arguments", {})))
+        elif event_type == "mcp_tool_result":
+            self.root.after(0, lambda: self.mcp_hud.show_result(tool_name, str(data.get("result", ""))))
+        elif event_type == "mcp_tool_error":
+            self.root.after(0, lambda: self.mcp_hud.show_error(tool_name, str(data.get("error", ""))))
 
     def _api_keys_exist(self): return API_FILE.exists()
     
@@ -234,6 +258,8 @@ class JarvisUI:
             except Exception:
                 pass
         self.set_state(self._jarvis_state)
+        if hasattr(self, "mcp_hud") and self.mcp_hud:
+            self.mcp_hud.set_theme(persona)
 
     def start_speaking(self): self.set_state("SPEAKING")
     def stop_speaking(self): self.set_state("ONLINE")

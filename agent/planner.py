@@ -12,6 +12,8 @@ ABSOLUTE RULES:
 - NEVER reference previous step results in parameters. Every step is independent.
 - RULE: If the user request contains multiple actions (e.g., 'research AND save', 'find AND open', 'calculate AND list'), you MUST create separate steps for EACH action. Combining them into one step is NOT allowed.
 - RULE: DO NOT include "and save to file" logic inside a web_search query. web_search is ONLY for searching. saving is a SEPARATE step using file_controller.
+- TOOL ROUTING RULE: When the user asks about GitHub repositories, issues, pull requests, commits, or user profiles, DO NOT use web_search. Prefer GitHub MCP / dev_agent tools.
+- TOOL ROUTING RULE: Prefer the most authoritative available tool for the requested resource (e.g., file_controller/file_manager for local files, cmd_control for system commands, browser_control for web interaction).
 - Max 5 steps. Use the minimum steps needed.
 
 AVAILABLE TOOLS AND THEIR PARAMETERS:

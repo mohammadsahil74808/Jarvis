@@ -337,8 +337,10 @@ class AgentExecutor:
                 contents=prompt
             )
             summary  = (response.text or "").strip()
-            if speak: speak(summary)
-            return summary
-        except Exception:
+            if summary and speak: speak(summary)
+            return summary or fallback
+        except Exception as e:
+            if "429" in str(e) or "quota" in str(e).lower():
+                print(f"[Executor] Quota limit on summary generation: {e}")
             if speak: speak(fallback)
             return fallback

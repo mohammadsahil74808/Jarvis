@@ -5,6 +5,10 @@
 
 
 
+import warnings
+warnings.simplefilter("ignore")
+warnings.showwarning = lambda *args, **kwargs: None
+
 from core.config import get_gemini_client
 
 
@@ -37,23 +41,39 @@ def _gemini_search(query: str) -> str:
 
 
 def _ddg_search(query: str, max_results: int = 6) -> list:
+    DDGSClass = None
+    import importlib
     try:
-        from ddgs import DDGS
+        ddgs_mod = importlib.import_module("ddgs")
+        DDGSClass = getattr(ddgs_mod, "DDGS")
     except ImportError:
         try:
-            from duckduckgo_search import DDGS
+            ddgs_mod = importlib.import_module("duckduckgo_search")
+            DDGSClass = getattr(ddgs_mod, "DDGS")
         except ImportError:
             return []
     
     results = []
     try:
-        with DDGS() as ddgs:
-            for r in ddgs.text(query, max_results=max_results):
-                results.append({
-                    "title":   r.get("title", ""),
-                    "snippet": r.get("body", ""),
-                    "url":     r.get("href", ""),
-                })
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            # Try context manager first, fallback to direct instance
+            try:
+                with DDGSClass() as ddgs:
+                    for r in ddgs.text(query, max_results=max_results):
+                        results.append({
+                            "title":   r.get("title", ""),
+                            "snippet": r.get("body", ""),
+                            "url":     r.get("href", ""),
+                        })
+            except TypeError:
+                ddgs = DDGSClass()
+                for r in ddgs.text(query, max_results=max_results):
+                    results.append({
+                        "title":   r.get("title", ""),
+                        "snippet": r.get("body", ""),
+                        "url":     r.get("href", ""),
+                    })
     except Exception as e:
         print(f"[WebSearch] [WARNING] DDG error: {e}")
     return results
