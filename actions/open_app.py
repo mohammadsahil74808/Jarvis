@@ -199,6 +199,12 @@ def open_app(
 
     if action == "close":
         if close_app_by_name(app_name):
+            if any(k in app_name.lower() for k in ["chrome", "browser"]):
+                try:
+                    from jarvis.browser.browser_manager import BrowserManager
+                    BrowserManager.get_instance().force_reset_connection()
+                except Exception:
+                    pass
             return f"Closed {app_name} successfully, sir."
         return f"I couldn't find an active process for {app_name} to close, sir."
 
@@ -213,6 +219,15 @@ def open_app(
 
     if player:
         player.write_log(f"[open_app] {app_name}")
+
+    if any(k in normalized.lower() or k in app_name.lower() for k in ["chrome", "browser"]):
+        print(f"[open_app] Intercepting browser launch to guarantee single-instance Chrome CDP debugging session...")
+        try:
+            from jarvis.browser.browser_context import ensure_chrome_running_with_cdp
+            ensure_chrome_running_with_cdp()
+            return f"Opened Google Chrome successfully with existing sessions ready, sir."
+        except Exception as e:
+            print(f"[open_app] Error initiating Chrome CDP session: {e}")
 
     try:
         success = launcher(normalized)

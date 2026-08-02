@@ -97,54 +97,84 @@ class MCPManager:
             return json.load(f)
 
     async def init_client(self, server_name: str) -> MCPClient:
-        """Initialize and connect a client for the given server name."""
+        """Initialize and connect a resilient client for the given server name."""
+        tag = f"MCP {server_name.upper().replace('_', ' ')}"
         if server_name in self.clients:
-            return self.clients[server_name]
+            c = self.clients[server_name]
+            if getattr(c, "_is_stdio", False) and (not c._worker_task or c._worker_task.done()):
+                print(f"[{tag}] Stale or disconnected worker detected for {server_name}. Cleaning up before reconnecting...")
+                await c.cleanup()
+                self.clients.pop(server_name, None)
+            else:
+                return self.clients[server_name]
             
         server_config = self.config.get("mcpServers", {}).get(server_name)
         if not server_config:
             raise ValueError(f"Server '{server_name}' not found in config.")
         
         command = server_config.get("command")
-        args = server_config.get("args", [])
+        args = list(server_config.get("args", []))
         env = server_config.get("env")
         
         if server_name == "sqlite":
             db_path = args[-1] if args else "C:\\Projects\\Jarvis\\data\\jarvis.db"
             db_dir = os.path.dirname(os.path.abspath(db_path))
             os.makedirs(db_dir, exist_ok=True)
+        elif server_name == "playwright":
+            try:
+                from jarvis.browser.browser_context import get_chrome_automation_config
+                cfg = get_chrome_automation_config()
+                if cfg.get("cdp_endpoint"):
+                    for conflicting_flag in ("--browser", "--user-data-dir", "--executable-path"):
+                        while conflicting_flag in args:
+                            idx = args.index(conflicting_flag)
+                            del args[idx:idx+2]
+                    if "--cdp-endpoint" not in args:
+                        args.extend(["--cdp-endpoint", cfg["cdp_endpoint"]])
+                else:
+                    if cfg.get("executable_path") and "--executable-path" not in args:
+                        args.extend(["--executable-path", cfg["executable_path"]])
+                    if cfg.get("user_data_dir") and "--user-data-dir" not in args:
+                        args.extend(["--user-data-dir", cfg["user_data_dir"]])
+            except Exception as e:
+                print(f"[MCP PLAYWRIGHT WARNING] Failed to resolve Google Chrome configuration: {e}")
         
-        tag = f"MCP {server_name.upper().replace('_', ' ')}"
         if server_name == "google_drive":
             print(f"[{tag}] Starting...")
         else:
             print(f"[{tag}] Starting {server_name} MCP...")
             
         client = MCPClient()
-        if server_config.get("transport") == "http":
-            url = server_config.get("url")
-            headers = {}
-            if server_name == "google_drive":
-                try:
-                    from mcp_client.google_auth import get_google_drive_token
-                    token = get_google_drive_token()
-                    headers["Authorization"] = f"Bearer {token}"
-                except Exception as e:
-                    print(f"[{tag}] Authentication failed: {e}")
-                    raise
-            await client.connect_http(url, headers=headers)
-            print(f"[{tag}] Connected")
-            if server_name == "google_drive" and "Authorization" in headers:
-                print(f"[{tag}] Authenticated")
-        else:
-            await client.connect(command, args, env=env)
-            print(f"[{tag}] Connected")
-            
-        if server_name == "sqlite":
-            db_path = args[-1] if args else "C:\\Projects\\Jarvis\\data\\jarvis.db"
-            print(f"[{tag}] Database: {db_path}")
-        self.clients[server_name] = client
-        return client
+        try:
+            if server_config.get("transport") == "http":
+                url = server_config.get("url")
+                headers = {}
+                if server_name == "google_drive":
+                    try:
+                        from mcp_client.google_auth import get_google_drive_token
+                        token = get_google_drive_token()
+                        headers["Authorization"] = f"Bearer {token}"
+                    except Exception as e:
+                        print(f"[{tag}] Authentication failed: {e}")
+                        raise
+                await client.connect_http(url, headers=headers)
+                print(f"[{tag}] Connected")
+                if server_name == "google_drive" and "Authorization" in headers:
+                    print(f"[{tag}] Authenticated")
+            else:
+                await client.connect(command, args, env=env)
+                print(f"[{tag}] Connected")
+                
+            if server_name == "sqlite":
+                db_path = args[-1] if args else "C:\\Projects\\Jarvis\\data\\jarvis.db"
+                print(f"[{tag}] Database: {db_path}")
+            self.clients[server_name] = client
+            return client
+        except Exception as e:
+            await client.cleanup()
+            self.clients.pop(server_name, None)
+            print(f"[{tag}] Startup failed: {e}")
+            raise
         
     def _resolve_github_username(self) -> str:
         """Dynamically resolve the authenticated GitHub username via API."""
@@ -184,7 +214,7 @@ class MCPManager:
             self._github_username_cache = ""
             return ""
         
-    async def get_all_gemini_tools(self, close_after: bool = True) -> List[Dict[str, Any]]:
+    async def get_all_gemini_tools(self, close_after: bool = False) -> List[Dict[str, Any]]:
         """Fetch tools from all configured servers and convert them to Gemini format."""
         if self._gemini_tools_cache:
             return self._gemini_tools_cache
@@ -300,10 +330,6 @@ class MCPManager:
                     print(f"[JARVIS] [TOOL] {tool_name} {arguments}")
                     self._emit_event("mcp_tool_started", tool_name, {"arguments": arguments, "server": server_name})
                     result = await client.execute_tool(tool_name, arguments)
-                    
-                    if server_name != "google_drive":
-                        await client.cleanup()
-                        self.clients.pop(server_name, None)
 
                     if result.isError:
                         err_text = f"Error from MCP {server_name}: {result.content}"

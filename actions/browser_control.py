@@ -2,8 +2,8 @@
 """
 Direct JARVIS action connecting Browser Use engine.
 Allows JARVIS main loop, ToolExecutor, and Voice Assistant to directly trigger
-Playwright browser automation and autonomous Agent tasks in Firefox.
-Enforces real Firefox persistent profile usage, session reuse, and clear profile lock reporting.
+Playwright browser automation and autonomous Agent tasks in Google Chrome.
+Enforces real Google Chrome usage, DevTools Protocol session reuse, and clear profile lock reporting.
 """
 
 from __future__ import annotations
@@ -21,27 +21,27 @@ def browser_control(parameters: dict, **kwargs) -> str:
     action = str(params.get("action", "open_website")).lower().strip()
 
     print(f"\n[BROWSER_CONTROL] Entered action: '{action}' | Params: {params}")
-    print(f"[BROWSER_MANAGER] Accessing persistent Firefox context adapter...")
+    print(f"[BROWSER_MANAGER] Accessing persistent Google Chrome context adapter...")
     adapter = get_browser_adapter()
 
     try:
         if action == "open_website" or action == "go_to":
             url = str(params.get("url") or "https://google.com")
-            print(f"[FIREFOX] Opening URL: {url}")
+            print(f"[CHROME] Opening URL: {url}")
             res = adapter.open_website(url)
             print(f"[TASK COMPLETED] Result: {res}")
             return res
 
         elif action == "search_web" or action == "search":
             query = str(params.get("query") or "")
-            print(f"[FIREFOX] Searching web for: '{query}'")
+            print(f"[CHROME] Searching web for: '{query}'")
             res = adapter.search_web(query)
             print(f"[TASK COMPLETED] Result: {res}")
             return res
 
         elif action == "click_element" or action == "click":
             target = str(params.get("target") or params.get("selector") or params.get("text") or params.get("description") or "")
-            print(f"[FIREFOX] Clicking element: '{target}'")
+            print(f"[CHROME] Clicking element: '{target}'")
             res = adapter.click_element(target)
             print(f"[TASK COMPLETED] Result: {res}")
             return res
@@ -49,43 +49,43 @@ def browser_control(parameters: dict, **kwargs) -> str:
         elif action == "type_text" or action == "type" or action == "smart_type":
             target = str(params.get("target") or params.get("selector") or params.get("description") or "")
             text = str(params.get("text") or "")
-            print(f"[FIREFOX] Typing text into '{target}'")
+            print(f"[CHROME] Typing text into '{target}'")
             res = adapter.type_text(target, text)
             print(f"[TASK COMPLETED] Result: {res}")
             return res
 
         elif action == "fill_form":
             fields = params.get("fields") or {}
-            print(f"[FIREFOX] Filling form fields: {fields}")
+            print(f"[CHROME] Filling form fields: {fields}")
             res = adapter.fill_form(fields)
             print(f"[TASK COMPLETED] Result: {res}")
             return res
 
         elif action == "extract_data" or action == "get_text":
             query = str(params.get("query") or "main text content")
-            print(f"[FIREFOX] Extracting page data for query: '{query}'")
+            print(f"[CHROME] Extracting page data for query: '{query}'")
             res = adapter.extract_data(query)
             print(f"[TASK COMPLETED] Extracted data length: {len(res)} chars")
             return res
 
         elif action == "download_file":
             url = str(params.get("url") or "")
-            print(f"[FIREFOX] Downloading file from: {url}")
+            print(f"[CHROME] Downloading file from: {url}")
             res = adapter.download_file(url)
             print(f"[TASK COMPLETED] Result: {res}")
             return res
 
         elif action == "navigate":
             nav_action = str(params.get("action") or "reload")
-            print(f"[FIREFOX] Navigating ({nav_action})")
+            print(f"[CHROME] Navigating ({nav_action})")
             res = adapter.navigate(nav_action)
             print(f"[TASK COMPLETED] Result: {res}")
             return res
 
         elif action == "capture_page":
             png_bytes = adapter.capture_page()
-            print(f"[FIREFOX] Page snapshot captured: {len(png_bytes)} bytes")
-            return f"Captured webpage snapshot in Firefox ({len(png_bytes)} bytes)"
+            print(f"[CHROME] Page snapshot captured: {len(png_bytes)} bytes")
+            return f"Captured webpage snapshot in Google Chrome ({len(png_bytes)} bytes)"
 
         elif action == "perform_task" or action == "autonomous_task":
             task_desc = str(params.get("task_description") or params.get("task") or params.get("text") or params.get("query") or "")
@@ -96,13 +96,13 @@ def browser_control(parameters: dict, **kwargs) -> str:
 
         elif action == "get_status":
             status = adapter.get_status()
-            print(f"[FIREFOX STATUS] {status}")
-            return f"Firefox persistent status: {status}"
+            print(f"[CHROME STATUS] {status}")
+            return f"Google Chrome status: {status}"
 
         elif action == "scroll":
             direction = str(params.get("direction", "down"))
             amount = int(params.get("amount", 500))
-            print(f"[FIREFOX] Scrolling {direction} by {amount}")
+            print(f"[CHROME] Scrolling {direction} by {amount}")
             res = adapter.scroll(direction, amount)
             print(f"[TASK COMPLETED] Result: {res}")
             return res

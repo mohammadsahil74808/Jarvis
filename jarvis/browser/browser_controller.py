@@ -1,7 +1,7 @@
 # jarvis/browser/browser_controller.py
 """
 High-level controller bridging JARVIS tool actions with Playwright and Upstream Browser Use primitives.
-Supports Firefox automation using persistent real user profile, VisionService screen awareness fusion, and state tracking.
+Supports Google Chrome automation using persistent real user profile and DevTools attachment, VisionService screen awareness fusion, and state tracking.
 Includes step-by-step debug logging and deadlock protection.
 """
 
@@ -35,14 +35,60 @@ class BrowserController:
     def get_status(self) -> dict:
         """Returns the current browser status."""
         return {
-            "browser_engine": "Firefox",
+            "browser_engine": "Google Chrome",
             "active_url": self.state.active_tab_url if hasattr(self.state, "active_tab_url") else ""
         }
 
+    def _run_with_recovery(self, action_func, timeout: float = 90.0):
+        """Executes an async browser action with automatic retry recovery if a TargetClosedError occurs."""
+        try:
+            return self.manager.run_async(action_func(), timeout=timeout)
+        except Exception as e:
+            err_str = str(e).lower()
+            if any(term in err_str for term in ["closed", "target", "disconnect", "connection", "stale"]):
+                print(f"[LIFECYCLE RECOVERY] Stale connection detected ({e}). Resetting browser state and retrying...")
+                if hasattr(self.manager, "force_reset_connection"):
+                    self.manager.force_reset_connection()
+                return self.manager.run_async(action_func(), timeout=timeout)
+            raise
+
     def open_website(self, url: str) -> str:
-        """Navigates current active Firefox tab to the specified URL."""
+        """Navigates current active Google Chrome tab to the specified URL."""
         if not url.startswith(("http://", "https://")):
             url = f"https://{url}"
+
+        from jarvis.browser.browser_context import check_chrome_cdp_endpoint, find_real_chrome_executable
+        import psutil, subprocess, os, webbrowser
+
+        cdp_active = check_chrome_cdp_endpoint(9222)
+        chrome_running = False
+        if psutil:
+            try:
+                for p in psutil.process_iter(["name"]):
+                    name = (p.info.get("name") or "").lower()
+                    if "chrome" in name and "chromedriver" not in name:
+                        chrome_running = True
+                        break
+            except Exception:
+                pass
+
+        if not cdp_active and chrome_running:
+            print(f"[CHROME AUTOMATION] Opening '{url}' directly inside running normal Chrome session via IPC (zero killing)...")
+            exe_path = find_real_chrome_executable()
+            try:
+                if exe_path and os.path.exists(str(exe_path)):
+                    subprocess.Popen([str(exe_path), url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+                else:
+                    webbrowser.open(url)
+            except Exception as e:
+                print(f"[CHROME AUTOMATION WARNING] IPC launch failed: {e}, falling back to webbrowser...")
+                webbrowser.open(url)
+
+            title = f"Webpage ({url})"
+            self.state.update_active_tab(url, title)
+            self.state.log_action("open_website", {"url": url}, title)
+            self.state.save_persistent_state()
+            return f"Successfully opened {url} in Google Chrome"
 
         async def _action():
             try:
@@ -64,14 +110,14 @@ class BrowserController:
                 traceback.print_exc()
                 raise
 
-        title, current_url = self.manager.run_async(_action(), timeout=90.0)
+        title, current_url = self._run_with_recovery(_action, timeout=90.0)
         self.state.update_active_tab(current_url, title)
         self.state.log_action("open_website", {"url": url}, title)
         self.state.save_persistent_state()
-        return f"Successfully opened {current_url} — '{title}' in Firefox"
+        return f"Successfully opened {current_url} — '{title}' in Google Chrome"
 
     def search_web(self, query: str) -> str:
-        """Executes a Google search in Firefox."""
+        """Executes a Google search in Google Chrome."""
         search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
         res = self.open_website(search_url)
         self.state.log_action("search_web", {"query": query}, res)
@@ -96,7 +142,7 @@ class BrowserController:
                 traceback.print_exc()
                 raise
 
-        title = self.manager.run_async(_action())
+        title = self._run_with_recovery(_action)
         self.state.log_action("click_element", {"target": target}, title)
         return f"Clicked '{target}' on page '{title}'"
 
@@ -119,7 +165,7 @@ class BrowserController:
                 traceback.print_exc()
                 raise
 
-        title = self.manager.run_async(_action())
+        title = self._run_with_recovery(_action)
         self.state.log_action("type_text", {"target": target, "text": text}, title)
         return f"Typed text into '{target}' on page '{title}'"
 
@@ -141,7 +187,7 @@ class BrowserController:
             ctx = get_screen_context()
             win_title = str(getattr(ctx, "window_title", "") or "")
             ocr_txt = str(getattr(ctx, "ocr_text", "") or "")
-            if ctx and ("Firefox" in win_title or "Mozilla" in win_title):
+            if ctx and ("Chrome" in win_title or "Google" in win_title):
                 if len(ocr_txt) > 100:
                     return f"Extracted via Screen Vision ({win_title}):\n{ocr_txt[:1200]}"
         except Exception:
@@ -160,7 +206,7 @@ class BrowserController:
                 traceback.print_exc()
                 raise
 
-        content, title, url = self.manager.run_async(_action())
+        content, title, url = self._run_with_recovery(_action)
         soup = BeautifulSoup(content, "html.parser")
         text = soup.get_text(separator=" ", strip=True)
         summary = f"Extracted from '{title}' ({url}):\n{text[:1500]}"
@@ -187,7 +233,7 @@ class BrowserController:
                 raise
 
         try:
-            saved_file = self.manager.run_async(_action())
+            saved_file = self._run_with_recovery(_action)
             return f"Successfully downloaded file to: {saved_file}"
         except Exception as e:
             return f"Download initiated/processed for {url}: {e}"
@@ -211,12 +257,12 @@ class BrowserController:
                 traceback.print_exc()
                 raise
 
-        title, url = self.manager.run_async(_action())
+        title, url = self._run_with_recovery(_action)
         self.state.update_active_tab(url, title)
         return f"Navigated ({action}) — '{title}' ({url})"
 
     def capture_page(self) -> bytes:
-        """Captures current active Firefox page screenshot as PNG bytes."""
+        """Captures current active Google Chrome page screenshot as PNG bytes."""
 
         async def _action():
             try:
@@ -228,7 +274,7 @@ class BrowserController:
                 traceback.print_exc()
                 raise
 
-        png_bytes = self.manager.run_async(_action())
+        png_bytes = self._run_with_recovery(_action)
         self.state.last_screenshot_bytes = png_bytes
         return png_bytes
 
@@ -275,7 +321,7 @@ class BrowserController:
                 raise
 
         try:
-            result = self.manager.run_async(_run_agent(), timeout=180.0)
+            result = self._run_with_recovery(_run_agent, timeout=180.0)
             return f"Autonomous Task Finished: {result}"
         except Exception as e:
             return f"Autonomous task status: {e}"
@@ -290,7 +336,7 @@ class BrowserController:
             return f"Scrolled {direction} by {amount}px"
 
         try:
-            res = self.manager.run_async(_action())
+            res = self._run_with_recovery(_action)
             self.state.log_action("scroll", {"direction": direction, "amount": amount}, res)
             return res
         except Exception as e:
@@ -308,7 +354,7 @@ class BrowserController:
             return "\n".join(tabs_info) if tabs_info else "No open tabs found."
 
         try:
-            return self.manager.run_async(_action())
+            return self._run_with_recovery(_action)
         except Exception as e:
             return f"Failed to list tabs: {e}"
 
@@ -326,7 +372,7 @@ class BrowserController:
             return f"Tab index {index} out of bounds (open tabs: {len(pages)})"
 
         try:
-            res = self.manager.run_async(_action())
+            res = self._run_with_recovery(_action)
             self.state.log_action("switch_tab", {"index": index}, res)
             return res
         except Exception as e:
@@ -345,7 +391,7 @@ class BrowserController:
             return f"Closed tab: '{title}'"
 
         try:
-            res = self.manager.run_async(_action())
+            res = self._run_with_recovery(_action)
             self.state.log_action("close_tab", {"index": index}, res)
             return res
         except Exception as e:
@@ -360,7 +406,7 @@ class BrowserController:
             return str(result)
 
         try:
-            res = self.manager.run_async(_action())
+            res = self._run_with_recovery(_action)
             self.state.log_action("execute_js", {"script": script[:50]}, res)
             return f"JS Result: {res}"
         except Exception as e:

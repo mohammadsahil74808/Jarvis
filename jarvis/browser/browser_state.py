@@ -25,7 +25,7 @@ class TabInfo:
 
 @dataclass
 class BrowserState:
-    """Encapsulates the current operational state of the Firefox browser."""
+    """Encapsulates the current operational state of the Google Chrome browser."""
 
     active_url: str = ""
     active_title: str = ""
