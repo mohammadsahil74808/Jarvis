@@ -9,7 +9,10 @@ from __future__ import annotations
 
 import traceback
 from pathlib import Path
-from typing import Dict
+from typing import Any, Dict, List, Optional
+
+from bs4 import BeautifulSoup
+from core.config import get_api_key, get_groq_api_key
 
 from .browser_context import BrowserContextManager
 from .browser_manager import BrowserManager
@@ -78,8 +81,8 @@ class BrowserController:
             print(f"[CHROME AUTOMATION] Opening '{url}' directly inside running normal Chrome session via IPC (zero killing)...")
             exe_path = find_real_chrome_executable()
             try:
-                if exe_path and os.path.exists(str(exe_path)):
-                    subprocess.Popen([str(exe_path), url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
+                if exe_path and os.path.exists(exe_path):
+                    subprocess.Popen([exe_path, url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, close_fds=True)
                 else:
                     webbrowser.open(url)
             except Exception as e:
@@ -218,7 +221,7 @@ class BrowserController:
         match = resolve_search_result_target(target, results) if results else None
 
         if not results or not match:
-            target_clean = str(target).strip()
+            target_clean = target.strip()
             err_msg = f"Search result #{target_clean} is not available because Google results could not be inspected."
             print(f"[SEARCH SELECTION ERROR] {err_msg}")
             return f"Error: {err_msg} DO NOT guess a URL, DO NOT convert the search query into a website URL, and DO NOT perform another go_to or search as a fallback. Report this exact error message to the user immediately without trying any alternatives."
@@ -340,7 +343,6 @@ class BrowserController:
                 raise
 
         content, title, url = self._run_with_recovery(_action)
-        from bs4 import BeautifulSoup
         soup = BeautifulSoup(content, "html.parser")
         text = soup.get_text(separator=" ", strip=True)
         summary = f"Extracted from '{title}' ({url}):\n{text[:1500]}"
@@ -419,7 +421,6 @@ class BrowserController:
         async def _run_agent():
             try:
                 browser, context = await self.manager.async_get_or_create_browser()
-                from core.config import get_api_key, get_groq_api_key
                 gemini_key = get_api_key()
                 groq_key = get_groq_api_key()
 
@@ -554,3 +555,4 @@ class BrowserController:
     def go_forward(self) -> str:
         """Navigates to next page in history."""
         return self.navigate("forward")
+

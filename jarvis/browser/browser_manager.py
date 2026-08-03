@@ -15,9 +15,11 @@ import sys
 import threading
 import traceback
 from pathlib import Path
-from typing import Any, Coroutine, TypeVar
+from typing import Any, Coroutine, Dict, List, Optional, Tuple, TypeVar, Union
 
 from core.config import get_base_dir
+from playwright.async_api import async_playwright
+
 from .browser_context import BrowserContextManager, find_real_chrome_executable, get_chrome_automation_config
 
 # Ensure jarvis/browser is in sys.path so browser_use package resolves cleanly
@@ -54,17 +56,17 @@ class BrowserManager:
     and safe persistent profile fallback without temporary blank browsers.
     """
 
-    _instance: BrowserManager | None = None
+    _instance: Optional[BrowserManager] = None
     _lock = threading.RLock()
 
     def __init__(self) -> None:
-        self._loop: asyncio.AbstractEventLoop | None = None
-        self._thread: threading.Thread | None = None
+        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._thread: Optional[threading.Thread] = None
         self._playwright_instance: Any = None
         self._persistent_context: Any = None
-        self._context_wrapper: PersistentBrowserContextWrapper | None = None
+        self._context_wrapper: Optional[PersistentBrowserContextWrapper] = None
         self._active_page: Any = None
-        self._detected_profile_path: Path | None = None
+        self._detected_profile_path: Optional[Path] = None
         self._context_mgr = BrowserContextManager()
         self._is_running = False
 
@@ -116,7 +118,7 @@ class BrowserManager:
         future = asyncio.run_coroutine_threadsafe(coro, self._loop)
         return future.result(timeout=timeout)
 
-    async def async_get_or_create_browser(self, headful: bool = True) -> tuple[Any, Any]:
+    async def async_get_or_create_browser(self, headful: bool = True) -> Tuple[Any, Any]:
         """
         Async coroutine to get or initialize Google Chrome connection via DevTools Protocol or persistent user data.
         Can be safely called and awaited directly from inside coroutines running on JarvisBrowserLoop.
@@ -126,9 +128,9 @@ class BrowserManager:
                 if hasattr(self._persistent_context, "browser") and self._persistent_context.browser:
                     if not self._persistent_context.browser.is_connected():
                         raise RuntimeError("CDP Browser connection is closed or disconnected")
-                pages = self._persistent_context.pages
-                print(f"[CHROME AUTOMATION] Reusing existing Chrome instance")
-                print(f"[CHROME AUTOMATION] Browser connection healthy")
+                _pages: List[Any] = getattr(self._persistent_context, "pages", [])
+                print("[CHROME AUTOMATION] Reusing existing Chrome instance")
+                print("[CHROME AUTOMATION] Browser connection healthy")
                 return self, self._context_wrapper
             except Exception as e:
                 print(f"[LIFECYCLE RECOVERY] Stale or closed browser context detected ({e}). Automatically reconnecting...")
@@ -167,7 +169,6 @@ class BrowserManager:
         print("[STEP 2] Launching Playwright driver...")
         try:
             if self._playwright_instance is None:
-                from playwright.async_api import async_playwright
                 self._playwright_instance = await async_playwright().start()
             print("[STEP 2 DONE] Playwright driver ready.")
         except Exception as e:
@@ -182,7 +183,7 @@ class BrowserManager:
             try:
                 browser_cdp = await self._playwright_instance.chromium.connect_over_cdp(cdp_url)
                 context = browser_cdp.contexts[0] if browser_cdp.contexts else await browser_cdp.new_context()
-                print(f"[STEP 3 DONE] Successfully attached to live Google Chrome session via DevTools Protocol!")
+                print("[STEP 3 DONE] Successfully attached to live Google Chrome session via DevTools Protocol!")
                 self._persistent_context = context
             except Exception as e:
                 err_str = str(e)
@@ -193,24 +194,25 @@ class BrowserManager:
             print(f"[STEP 3] Launching persistent Google Chrome context at '{profile_path}'...")
             downloads_dir = self._context_mgr.get_downloads_path()
             try:
-                launch_kwargs = {
+                args_list: List[str] = []
+                if config.get("enable_debugging"):
+                    args_list.append("--remote-debugging-port=9222")
+
+                launch_kwargs: Dict[str, Any] = {
                     "user_data_dir": str(profile_path),
                     "headless": not headful,
                     "accept_downloads": True,
                     "downloads_path": downloads_dir,
-                    "args": []
                 }
+                if args_list:
+                    launch_kwargs["args"] = args_list
+
                 real_exe = config.get("executable_path") or find_real_chrome_executable()
                 if real_exe:
                     print(f"[STEP 3] Using real Google Chrome executable: {real_exe}")
                     launch_kwargs["executable_path"] = real_exe
                 else:
                     print("[STEP 3] No real Google Chrome executable found; Playwright default Chromium will be used.")
-
-                if config.get("enable_debugging"):
-                    launch_kwargs["args"].append("--remote-debugging-port=9222")
-                if not launch_kwargs["args"]:
-                    del launch_kwargs["args"]
 
                 context = await self._playwright_instance.chromium.launch_persistent_context(**launch_kwargs)
                 print("[STEP 3 DONE] Persistent Google Chrome browser context launched successfully.")
@@ -220,28 +222,20 @@ class BrowserManager:
                 print(f"[STEP 3 ERROR] launch_persistent_context failed: {err_str}")
                 traceback.print_exc()
                 if "locked" in err_str.lower() or "busy" in err_str.lower() or "process" in err_str.lower():
-                    print(f"[CHROME PROFILE LOCKED] Profile at '{profile_path}' is locked by another running Chrome process. Falling back to non-conflicting automation session...")
-                    try:
-                        fallback_dir = Path(profile_path).parent / "Chrome_DevTools_Session"
-                        fallback_dir.mkdir(parents=True, exist_ok=True)
-                        launch_kwargs["user_data_dir"] = str(fallback_dir)
-                        context = await self._playwright_instance.chromium.launch_persistent_context(**launch_kwargs)
-                        print("[STEP 3 DONE] Persistent non-conflicting Chrome browser context launched successfully.")
-                        self._persistent_context = context
-                    except Exception as fallback_err:
-                        warning_msg = (
-                            f"\n[CHROME PROFILE LOCKED WARNING] Failed to open profile at '{profile_path}' and fallback failed: {fallback_err}\n"
-                            f"Playwright error: {err_str}\n"
-                            f"Please ensure Google Chrome is closed or running with --remote-debugging-port=9222 and try again."
-                        )
-                        print(warning_msg)
-                        raise RuntimeError(warning_msg) from e
-                else:
-                    raise
+                    warning_msg = (
+                        f"\n[CHROME PROFILE LOCKED WARNING] Failed to open profile at '{profile_path}'.\n"
+                        f"Playwright error: {err_str}\n"
+                        f"Please ensure Google Chrome is closed or running with --remote-debugging-port=9222 and try again."
+                    )
+                    print(warning_msg)
+                    raise RuntimeError(warning_msg) from e
+                raise
 
         # STEP 4: Wrap context
         print("[STEP 4] Creating context wrapper...")
         try:
+            if self._persistent_context is None:
+                raise RuntimeError("Persistent browser context failed to initialize.")
             self._context_wrapper = PersistentBrowserContextWrapper(self._persistent_context, self)
             print("[STEP 4 DONE] Persistent context wrapper created.")
         except Exception as e:
@@ -252,10 +246,12 @@ class BrowserManager:
         # STEP 5: First page creation / reuse
         print("[STEP 5] Accessing/creating primary active page...")
         try:
-            if self._persistent_context.pages:
-                self._active_page = self._persistent_context.pages[0]
+            ctx: Any = self._persistent_context
+            pages_list: List[Any] = getattr(ctx, "pages", [])
+            if pages_list:
+                self._active_page = pages_list[0]
             else:
-                self._active_page = await self._persistent_context.new_page()
+                self._active_page = await ctx.new_page()
             print(f"[STEP 5 DONE] Active primary page acquired: {self._active_page}")
         except Exception as e:
             print(f"[STEP 5 ERROR] Primary page acquisition failed: {e}")
@@ -265,7 +261,7 @@ class BrowserManager:
         print(f"[BROWSER_MANAGER] Google Chrome context initialized successfully with mode/profile: {profile_path}")
         return self, self._context_wrapper
 
-    def get_or_create_browser(self, headful: bool = True) -> tuple[Any, Any]:
+    def get_or_create_browser(self, headful: bool = True) -> Tuple[Any, Any]:
         """
         Gets or initializes singleton Google Chrome connection using real user profile or DevTools attachment.
         Safely detects whether called from inside or outside the event loop.
@@ -304,9 +300,11 @@ class BrowserManager:
         if self._active_page is not None:
             return self._active_page
 
-        if self._persistent_context:
+        if self._persistent_context is not None:
             try:
-                pages = [p for p in self._persistent_context.pages if not p.is_closed()]
+                ctx: Any = self._persistent_context
+                raw_pages: List[Any] = getattr(ctx, "pages", [])
+                pages = [p for p in raw_pages if not p.is_closed()]
                 if pages:
                     for p in pages:
                         url = p.url or ""
@@ -318,8 +316,8 @@ class BrowserManager:
                     print(f"[BROWSER_MANAGER] Reusing primary open tab (URL: '{self._active_page.url}')")
                     return self._active_page
                 else:
-                    self._active_page = await self._persistent_context.new_page()
-                    print(f"[BROWSER_MANAGER] Opened new tab in existing Google Chrome browser session.")
+                    self._active_page = await ctx.new_page()
+                    print("[BROWSER_MANAGER] Opened new tab in existing Google Chrome browser session.")
                     return self._active_page
             except Exception as e:
                 print(f"[LIFECYCLE ERROR] Failed to access open pages: {e}")
@@ -357,7 +355,7 @@ class BrowserManager:
                 self._loop.call_soon_threadsafe(self._loop.stop)
                 self._is_running = False
 
-    def get_browser_use_modules(self) -> tuple[Any, Any, Any, Any]:
+    def get_browser_use_modules(self) -> Tuple[Any, Any, Any, Any]:
         """Loads and returns browser_use modules dynamically."""
         import importlib
         agent_service = importlib.import_module("browser_use.agent.service")

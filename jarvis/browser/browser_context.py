@@ -20,8 +20,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from core.config import get_base_dir
 
+psutil: Any = None
 try:
-    import psutil
+    import psutil as _psutil
+    psutil = _psutil
 except ImportError:
     psutil = None
 
@@ -51,7 +53,7 @@ def find_real_chrome_executable() -> Optional[str]:
     # 2. Check shutil.which / where.exe
     which_exe = shutil.which("chrome") or shutil.which("chrome.exe")
     if which_exe and os.path.exists(which_exe):
-        candidates.append(str(which_exe))
+        candidates.append(which_exe)
 
     # 3. Check standard Windows Program Files and LocalAppData paths
     prog_files = os.environ.get("ProgramFiles", r"C:\Program Files")
@@ -128,7 +130,7 @@ def check_chrome_cdp_endpoint(default_port: int = 9222) -> Optional[str]:
         pass
 
     # Inspect running Chrome processes for custom --remote-debugging-port flags
-    if psutil:
+    if psutil is not None:
         try:
             for proc in psutil.process_iter(["name", "cmdline"]):
                 name = (proc.info.get("name") or "").lower()
@@ -166,7 +168,7 @@ def check_chrome_cdp_endpoint(default_port: int = 9222) -> Optional[str]:
     return None
 
 
-def ensure_chrome_running_with_cdp(default_port: int = 9222) -> str:
+def ensure_chrome_running_with_cdp(default_port: int = 9222) -> Optional[str]:
     """
     Authoritative helper that guarantees real Google Chrome is running with DevTools Protocol active
     using the normal User Data profile, without ever creating separate automation profiles.
@@ -177,45 +179,40 @@ def ensure_chrome_running_with_cdp(default_port: int = 9222) -> str:
     if exe_path:
         print(f"[CHROME EXECUTABLE] Using real Chrome: {exe_path}")
     else:
-        print(f"[CHROME EXECUTABLE WARNING] Using default Chrome path fallback.")
+        print("[CHROME EXECUTABLE WARNING] Using default Chrome path fallback.")
 
     if real_user_data:
         print(f"[CHROME USER DATA] Using normal Chrome User Data: {real_user_data}")
-        print(f"[CHROME PROFILE] Using normal/default Chrome profile")
+        print("[CHROME PROFILE] Using normal/default Chrome profile")
 
     # 1. Check if already running with CDP accessible
     cdp_url = check_chrome_cdp_endpoint(default_port)
     if cdp_url:
-        print(f"[CHROME DEBUG] Connected to Chrome debugging endpoint")
-        print(f"[CHROME AUTOMATION] Reusing existing Chrome instance")
-        print(f"[CHROME AUTOMATION] Browser connection healthy")
+        print("[CHROME DEBUG] Connected to Chrome debugging endpoint")
+        print("[CHROME AUTOMATION] Reusing existing Chrome instance")
+        print("[CHROME AUTOMATION] Browser connection healthy")
         return cdp_url
 
     # 2. If Chrome is running without CDP enabled, NEVER terminate the user's active browser session!
     chrome_running_without_cdp = False
-    if psutil:
+    if psutil is not None:
         try:
             for proc in psutil.process_iter(["name"]):
                 name = (proc.info.get("name") or "").lower()
                 if "chrome" in name and "chromedriver" not in name:
                     chrome_running_without_cdp = True
-                    print(f"[CHROME AUTOMATION] Reusing existing Chrome instance without terminating user session")
-                    print(f"[CHROME AUTOMATION] Browser connection healthy")
-                    break
+                    print("[CHROME AUTOMATION] Reusing existing Chrome instance without terminating user session")
+                    print("[CHROME AUTOMATION] Browser connection healthy")
+                    return None
         except Exception as e:
             print(f"[CHROME AUTOMATION WARNING] Error inspecting existing processes: {e}")
 
-    # 3. Launch real Chrome with debugging port enabled without conflicting with active profile lock
+    # 3. Launch real Chrome with normal user data and debugging port enabled
     port = get_free_port(default_port)
-    print(f"[CHROME AUTOMATION] Starting Chrome with debugging enabled on port {port}")
+    print("[CHROME AUTOMATION] Starting Chrome with debugging enabled")
 
     effective_user_data = str(real_user_data) if real_user_data else ""
-    if chrome_running_without_cdp and real_user_data:
-        # Avoid lock contention with active user browser session by launching CDP session in a non-conflicting profile
-        dev_session_dir = Path(real_user_data).parent / "Chrome_DevTools_Session"
-        dev_session_dir.mkdir(parents=True, exist_ok=True)
-        effective_user_data = str(dev_session_dir)
-    elif real_user_data and os.name == "nt":
+    if real_user_data and os.name == "nt":
         # Chrome 120+ rejects DevTools connections if --user-data-dir is the exact default installation path.
         # Create a transparent NTFS Directory Junction to the exact same real User Data directory to allow DevTools while preserving real sessions and logins.
         junction_dir = Path(real_user_data).parent / "User_Data_DevTools"
@@ -228,7 +225,7 @@ def ensure_chrome_running_with_cdp(default_port: int = 9222) -> str:
             print(f"[CHROME AUTOMATION WARNING] Could not create DevTools junction: {e}")
 
     cmd = [
-        str(exe_path or "chrome.exe"),
+        exe_path or "chrome.exe",
         f"--user-data-dir={effective_user_data}" if effective_user_data else "",
         f"--remote-debugging-port={port}",
         "--remote-allow-origins=*",
@@ -253,13 +250,13 @@ def ensure_chrome_running_with_cdp(default_port: int = 9222) -> str:
     while time.time() - start_t < 6.0:
         cdp_url = check_chrome_cdp_endpoint(port)
         if cdp_url:
-            print(f"[CHROME DEBUG] Connected to Chrome debugging endpoint")
-            print(f"[CHROME AUTOMATION] Browser connection healthy")
+            print("[CHROME DEBUG] Connected to Chrome debugging endpoint")
+            print("[CHROME AUTOMATION] Browser connection healthy")
             return cdp_url
         time.sleep(0.25)
 
     fallback_endpoint = f"http://127.0.0.1:{port}"
-    print(f"[CHROME AUTOMATION] Browser connection healthy")
+    print("[CHROME AUTOMATION] Browser connection healthy")
     return fallback_endpoint
 
 
@@ -273,7 +270,7 @@ def get_chrome_automation_config() -> Dict[str, Any]:
     real_user_data = find_real_chrome_user_data()
 
     return {
-        "executable_path": str(exe_path) if exe_path else None,
+        "executable_path": exe_path,
         "user_data_dir": str(real_user_data) if real_user_data else None,
         "cdp_endpoint": cdp_endpoint,
         "is_fallback": False,
