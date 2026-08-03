@@ -174,8 +174,9 @@ class ToolExecutor:
         if not self.jarvis.ui.muted:
             self.jarvis.ui.set_state("LISTENING")
 
-        if _debug_latency:
-            print(f"[LATENCY] tool={name} took {time.time() - _t0:.3f}s")
+        if getattr(self, "_debug_latency", False):
+            t0_val = getattr(self, "_t0", time.time())
+            print(f"[LATENCY] tool={name} took {time.time() - t0_val:.3f}s")
 
         # Truncate oversized tool results to prevent Gemini Live 1007 WebSocket crash
         MAX_TOOL_RESULT = 25000
