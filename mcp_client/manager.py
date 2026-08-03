@@ -142,7 +142,7 @@ class MCPManager:
             os.makedirs(db_dir, exist_ok=True)
         elif server_name == "playwright":
             try:
-                from jarvis.browser.browser_context import get_chrome_automation_config
+                from jarvis.browser.browser_context import get_chrome_automation_config, get_jarvis_dedicated_profile_dir
                 cfg = get_chrome_automation_config()
                 if cfg.get("cdp_endpoint"):
                     for conflicting_flag in ("--browser", "--user-data-dir", "--executable-path"):
@@ -154,8 +154,9 @@ class MCPManager:
                 else:
                     if cfg.get("executable_path") and "--executable-path" not in args:
                         args.extend(["--executable-path", cfg["executable_path"]])
-                    if cfg.get("user_data_dir") and "--user-data-dir" not in args:
-                        args.extend(["--user-data-dir", cfg["user_data_dir"]])
+                    jarvis_prof = str(get_jarvis_dedicated_profile_dir())
+                    if "--user-data-dir" not in args:
+                        args.extend(["--user-data-dir", jarvis_prof])
             except Exception as e:
                 print(f"[MCP PLAYWRIGHT WARNING] Failed to resolve Google Chrome configuration: {e}")
         
@@ -360,16 +361,17 @@ class MCPManager:
                         )
                         sec_mgr = get_filesystem_security_manager()
                         risk_level, prompt_msg, path_summary = sec_mgr.evaluate_operation(tool_name, arguments)
+                        safe_prompt = prompt_msg or f"Security prompt for '{tool_name}' on '{path_summary}'"
 
                         if risk_level == RISK_BLOCKED:
                             print(f"[SECURITY BLOCK] Prevented execution of '{tool_name}' on '{path_summary}'")
-                            self._emit_event("mcp_tool_error", tool_name, {"error": prompt_msg, "server": server_name})
-                            return prompt_msg
+                            self._emit_event("mcp_tool_error", tool_name, {"error": safe_prompt, "server": server_name})
+                            return safe_prompt
 
                         if risk_level == RISK_CONFIRMATION_REQUIRED:
                             user_confirmed = arguments.get("user_confirmed") or arguments.get("confirmed") or False
                             if not user_confirmed:
-                                sec_mgr.set_pending_confirmation(tool_name, arguments, prompt_msg)
+                                sec_mgr.set_pending_confirmation(tool_name, arguments, safe_prompt)
                                 AuditLogger.log_event(
                                     tool_name,
                                     arguments.get("path") or arguments.get("directory") or "",
@@ -380,7 +382,7 @@ class MCPManager:
                                     "PENDING"
                                 )
                                 print(f"[SECURITY] Confirmation required for '{tool_name}' on '{path_summary}'")
-                                return prompt_msg
+                                return safe_prompt
 
                     print(f"[JARVIS] Tool: {tool_name}")
                     print(f"[JARVIS] [TOOL] {tool_name} {arguments}")

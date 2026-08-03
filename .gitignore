@@ -45,5 +45,6 @@ data/
 *.db-wal
 memory/faiss_indexes/
 memory/browser_sessions/
+memory/browser_profile/
 memory/emotional_patterns.json
 memory/reminders.json

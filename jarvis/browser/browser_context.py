@@ -168,65 +168,45 @@ def check_chrome_cdp_endpoint(default_port: int = 9222) -> Optional[str]:
     return None
 
 
+def get_jarvis_dedicated_profile_dir() -> Path:
+    """Returns the dedicated, isolated JARVIS Chrome profile directory."""
+    profile_dir = get_base_dir() / "memory" / "browser_profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    return profile_dir
+
+
 def ensure_chrome_running_with_cdp(default_port: int = 9222) -> Optional[str]:
     """
-    Authoritative helper that guarantees real Google Chrome is running with DevTools Protocol active
-    using the normal User Data profile, without ever creating separate automation profiles.
+    Guarantees Google Chrome is accessible via DevTools Protocol (CDP).
+    MODE A: If existing Chrome is running with CDP, attach to it. NEVER launch Chrome or touch personal profile.
+    MODE B: If Chrome is closed / CDP unavailable, launch dedicated JARVIS Chrome profile (memory/browser_profile).
+            NEVER touch, junction, or pass personal Chrome User Data directory.
     """
-    exe_path = find_real_chrome_executable()
-    real_user_data = find_real_chrome_user_data()
-
-    if exe_path:
-        print(f"[CHROME EXECUTABLE] Using real Chrome: {exe_path}")
-    else:
-        print("[CHROME EXECUTABLE WARNING] Using default Chrome path fallback.")
-
-    if real_user_data:
-        print(f"[CHROME USER DATA] Using normal Chrome User Data: {real_user_data}")
-        print("[CHROME PROFILE] Using normal/default Chrome profile")
-
-    # 1. Check if already running with CDP accessible
+    # 1. MODE A: Check if already running with CDP accessible
     cdp_url = check_chrome_cdp_endpoint(default_port)
     if cdp_url:
-        print("[CHROME DEBUG] Connected to Chrome debugging endpoint")
-        print("[CHROME AUTOMATION] Reusing existing Chrome instance")
-        print("[CHROME AUTOMATION] Browser connection healthy")
+        print("[CHROME MODE] EXISTING_SESSION")
+        print("[CHROME CDP] Existing Chrome detected")
+        print(f"[CHROME CDP] Attaching to {cdp_url}")
+        print("[CHROME CDP] No Chrome launch required")
         return cdp_url
 
-    # 2. If Chrome is running without CDP enabled, NEVER terminate the user's active browser session!
-    chrome_running_without_cdp = False
-    if psutil is not None:
-        try:
-            for proc in psutil.process_iter(["name"]):
-                name = (proc.info.get("name") or "").lower()
-                if "chrome" in name and "chromedriver" not in name:
-                    chrome_running_without_cdp = True
-                    print("[CHROME AUTOMATION] Reusing existing Chrome instance without terminating user session")
-                    print("[CHROME AUTOMATION] Browser connection healthy")
-                    return None
-        except Exception as e:
-            print(f"[CHROME AUTOMATION WARNING] Error inspecting existing processes: {e}")
+    # 2. MODE B: Personal Chrome unavailable via CDP.
+    # Launch isolated JARVIS Chrome using dedicated project profile ONLY.
+    jarvis_profile = get_jarvis_dedicated_profile_dir()
+    exe_path = find_real_chrome_executable()
 
-    # 3. Launch real Chrome with normal user data and debugging port enabled
+    print("[CHROME MODE] JARVIS_DEDICATED_PROFILE")
+    print("[CHROME MODE] Personal Chrome unavailable via CDP")
+    print("[CHROME MODE] Starting isolated JARVIS Chrome")
+    print(f"[CHROME PROFILE] {jarvis_profile}")
+    print(f"[CHROME CDP] Port: {default_port}")
+
     port = get_free_port(default_port)
-    print("[CHROME AUTOMATION] Starting Chrome with debugging enabled")
-
-    effective_user_data = str(real_user_data) if real_user_data else ""
-    if real_user_data and os.name == "nt":
-        # Chrome 120+ rejects DevTools connections if --user-data-dir is the exact default installation path.
-        # Create a transparent NTFS Directory Junction to the exact same real User Data directory to allow DevTools while preserving real sessions and logins.
-        junction_dir = Path(real_user_data).parent / "User_Data_DevTools"
-        try:
-            if not junction_dir.exists():
-                subprocess.run(["cmd", "/c", "mklink", "/J", str(junction_dir), str(real_user_data)], capture_output=True, check=True)
-            if junction_dir.exists():
-                effective_user_data = str(junction_dir)
-        except Exception as e:
-            print(f"[CHROME AUTOMATION WARNING] Could not create DevTools junction: {e}")
 
     cmd = [
         exe_path or "chrome.exe",
-        f"--user-data-dir={effective_user_data}" if effective_user_data else "",
+        f"--user-data-dir={jarvis_profile}",
         f"--remote-debugging-port={port}",
         "--remote-allow-origins=*",
         "--no-first-run",
@@ -245,7 +225,7 @@ def ensure_chrome_running_with_cdp(default_port: int = 9222) -> Optional[str]:
         print(f"[CHROME AUTOMATION ERROR] Failed to launch Chrome subprocess: {e}")
         raise
 
-    # 4. Poll until CDP endpoint is responsive
+    # Poll until CDP endpoint is responsive
     start_t = time.time()
     while time.time() - start_t < 6.0:
         cdp_url = check_chrome_cdp_endpoint(port)
@@ -262,20 +242,20 @@ def ensure_chrome_running_with_cdp(default_port: int = 9222) -> Optional[str]:
 
 def get_chrome_automation_config() -> Dict[str, Any]:
     """
-    Determines authoritative Google Chrome configuration by attaching via DevTools Protocol.
-    Strictly forbids separate fallback automation profiles.
+    Determines Google Chrome configuration by attaching via DevTools Protocol or using dedicated JARVIS profile.
+    NEVER passes or uses personal User Data directory for browser launches.
     """
     cdp_endpoint = ensure_chrome_running_with_cdp()
     exe_path = find_real_chrome_executable()
-    real_user_data = find_real_chrome_user_data()
+    jarvis_profile = get_jarvis_dedicated_profile_dir()
 
     return {
         "executable_path": exe_path,
-        "user_data_dir": str(real_user_data) if real_user_data else None,
+        "user_data_dir": str(jarvis_profile),
         "cdp_endpoint": cdp_endpoint,
         "is_fallback": False,
         "is_running": True,
-        "attachment_success": True,
+        "attachment_success": True if cdp_endpoint else False,
         "enable_debugging": True
     }
 
@@ -316,14 +296,12 @@ class BrowserContextManager:
 
     def detect_chrome_profile(self) -> Tuple[Path, str]:
         """
-        Detects installed Chrome profile configuration and returns CDP active session marker or real profile.
+        Detects installed Chrome profile configuration and returns CDP active session marker or dedicated JARVIS profile.
         """
         config = get_chrome_automation_config()
         if config.get("cdp_endpoint"):
             return Path("cdp_attached"), "chrome-cdp-live-session"
-        user_data = find_real_chrome_user_data()
-        prof_path = user_data if user_data else Path("cdp_attached")
-        return prof_path, "chrome-primary-user-data"
+        return get_jarvis_dedicated_profile_dir(), "jarvis-dedicated-profile"
 
     def is_profile_locked(self, profile_path: Path) -> Tuple[bool, str]:
         """
