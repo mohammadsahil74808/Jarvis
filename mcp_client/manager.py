@@ -98,12 +98,32 @@ class MCPManager:
 
     async def init_client(self, server_name: str) -> MCPClient:
         """Initialize and connect a resilient client for the given server name."""
+        try:
+            from dotenv import load_dotenv
+            load_dotenv()
+        except ImportError:
+            pass
+            
         tag = f"MCP {server_name.upper().replace('_', ' ')}"
         if server_name in self.clients:
             c = self.clients[server_name]
-            if getattr(c, "_is_stdio", False) and (not c._worker_task or c._worker_task.done()):
+            is_stale_loop = False
+            try:
+                loop = asyncio.get_running_loop()
+                task_loop = getattr(c._worker_task, "_loop", None) if c._worker_task else None
+                if task_loop and task_loop != loop:
+                    is_stale_loop = True
+                elif loop.is_closed():
+                    is_stale_loop = True
+            except Exception:
+                is_stale_loop = True
+
+            if getattr(c, "_is_stdio", False) and (is_stale_loop or not c._worker_task or c._worker_task.done()):
                 print(f"[{tag}] Stale or disconnected worker detected for {server_name}. Cleaning up before reconnecting...")
-                await c.cleanup()
+                try:
+                    await c.cleanup()
+                except Exception:
+                    pass
                 self.clients.pop(server_name, None)
             else:
                 return self.clients[server_name]
@@ -437,7 +457,7 @@ def get_mcp_manager() -> MCPManager:
 async def setup_mcp_integration():
     """Initializes connections and returns the list of Gemini-formatted tools."""
     manager = get_mcp_manager()
-    return await manager.get_all_gemini_tools()
+    return await manager.get_all_gemini_tools(close_after=True)
 
 async def execute_mcp_tool(name: str, arguments: dict) -> str:
     """Executes an MCP tool."""

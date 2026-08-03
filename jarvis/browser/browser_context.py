@@ -192,23 +192,30 @@ def ensure_chrome_running_with_cdp(default_port: int = 9222) -> str:
         return cdp_url
 
     # 2. If Chrome is running without CDP enabled, NEVER terminate the user's active browser session!
+    chrome_running_without_cdp = False
     if psutil:
         try:
             for proc in psutil.process_iter(["name"]):
                 name = (proc.info.get("name") or "").lower()
                 if "chrome" in name and "chromedriver" not in name:
+                    chrome_running_without_cdp = True
                     print(f"[CHROME AUTOMATION] Reusing existing Chrome instance without terminating user session")
                     print(f"[CHROME AUTOMATION] Browser connection healthy")
-                    return None
+                    break
         except Exception as e:
             print(f"[CHROME AUTOMATION WARNING] Error inspecting existing processes: {e}")
 
-    # 3. Launch real Chrome with normal user data and debugging port enabled
+    # 3. Launch real Chrome with debugging port enabled without conflicting with active profile lock
     port = get_free_port(default_port)
-    print(f"[CHROME AUTOMATION] Starting Chrome with debugging enabled")
+    print(f"[CHROME AUTOMATION] Starting Chrome with debugging enabled on port {port}")
 
     effective_user_data = str(real_user_data) if real_user_data else ""
-    if real_user_data and os.name == "nt":
+    if chrome_running_without_cdp and real_user_data:
+        # Avoid lock contention with active user browser session by launching CDP session in a non-conflicting profile
+        dev_session_dir = Path(real_user_data).parent / "Chrome_DevTools_Session"
+        dev_session_dir.mkdir(parents=True, exist_ok=True)
+        effective_user_data = str(dev_session_dir)
+    elif real_user_data and os.name == "nt":
         # Chrome 120+ rejects DevTools connections if --user-data-dir is the exact default installation path.
         # Create a transparent NTFS Directory Junction to the exact same real User Data directory to allow DevTools while preserving real sessions and logins.
         junction_dir = Path(real_user_data).parent / "User_Data_DevTools"

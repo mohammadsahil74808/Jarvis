@@ -84,6 +84,8 @@ class MCPClient:
     async def connect(self, command: str, args: List[str], env: Optional[Dict[str, str]] = None):
         """Connect to an MCP server using task-bound stdio client architecture."""
         import os
+        import shutil
+        command = shutil.which(command) or command
         merged_env = os.environ.copy()
         if env:
             merged_env.update(env)

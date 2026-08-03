@@ -220,14 +220,24 @@ class BrowserManager:
                 print(f"[STEP 3 ERROR] launch_persistent_context failed: {err_str}")
                 traceback.print_exc()
                 if "locked" in err_str.lower() or "busy" in err_str.lower() or "process" in err_str.lower():
-                    warning_msg = (
-                        f"\n[CHROME PROFILE LOCKED WARNING] Failed to open profile at '{profile_path}'.\n"
-                        f"Playwright error: {err_str}\n"
-                        f"Please ensure Google Chrome is closed or running with --remote-debugging-port=9222 and try again."
-                    )
-                    print(warning_msg)
-                    raise RuntimeError(warning_msg) from e
-                raise
+                    print(f"[CHROME PROFILE LOCKED] Profile at '{profile_path}' is locked by another running Chrome process. Falling back to non-conflicting automation session...")
+                    try:
+                        fallback_dir = Path(profile_path).parent / "Chrome_DevTools_Session"
+                        fallback_dir.mkdir(parents=True, exist_ok=True)
+                        launch_kwargs["user_data_dir"] = str(fallback_dir)
+                        context = await self._playwright_instance.chromium.launch_persistent_context(**launch_kwargs)
+                        print("[STEP 3 DONE] Persistent non-conflicting Chrome browser context launched successfully.")
+                        self._persistent_context = context
+                    except Exception as fallback_err:
+                        warning_msg = (
+                            f"\n[CHROME PROFILE LOCKED WARNING] Failed to open profile at '{profile_path}' and fallback failed: {fallback_err}\n"
+                            f"Playwright error: {err_str}\n"
+                            f"Please ensure Google Chrome is closed or running with --remote-debugging-port=9222 and try again."
+                        )
+                        print(warning_msg)
+                        raise RuntimeError(warning_msg) from e
+                else:
+                    raise
 
         # STEP 4: Wrap context
         print("[STEP 4] Creating context wrapper...")
