@@ -482,7 +482,7 @@ class JarvisLive:
         if not self._loop or not self.session:
             return
         # ── Sanitize input to prevent Gemini Live 1011 WebSocket crash ──
-        text = str(text).strip()
+        text = text.strip()
         # Strip unmatched leading/trailing quotes
         if text.startswith('"') and not text.endswith('"'):
             text = text[1:].strip()
@@ -566,7 +566,7 @@ class JarvisLive:
             return
 
         # Sanitize text string to prevent Gemini Live 1011 JSON framing error
-        text = str(text).strip()
+        text = text.strip()
         if text.startswith('"') and not text.endswith('"'):
             text = text[1:].strip()
         elif text.endswith('"') and not text.startswith('"'):

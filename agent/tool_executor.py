@@ -1,8 +1,9 @@
-# agent/tool_executor.py
-
 import asyncio
+import os
+import time
 import traceback
 import importlib
+import importlib.util
 from types import SimpleNamespace
 from typing import Any
 
@@ -45,7 +46,6 @@ class ToolExecutor:
         }
 
     async def execute(self, fc) -> Any:
-        import os, time
         _debug_latency = bool(os.environ.get("JARVIS_LATENCY_DEBUG"))
         _t0 = time.time() if _debug_latency else 0.0
 
