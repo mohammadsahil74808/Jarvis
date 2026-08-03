@@ -11,9 +11,6 @@ import traceback
 from pathlib import Path
 from typing import Dict
 
-from bs4 import BeautifulSoup
-from core.config import get_api_key, get_groq_api_key
-
 from .browser_context import BrowserContextManager
 from .browser_manager import BrowserManager
 from .browser_state import BrowserState
@@ -343,6 +340,7 @@ class BrowserController:
                 raise
 
         content, title, url = self._run_with_recovery(_action)
+        from bs4 import BeautifulSoup
         soup = BeautifulSoup(content, "html.parser")
         text = soup.get_text(separator=" ", strip=True)
         summary = f"Extracted from '{title}' ({url}):\n{text[:1500]}"
@@ -421,6 +419,7 @@ class BrowserController:
         async def _run_agent():
             try:
                 browser, context = await self.manager.async_get_or_create_browser()
+                from core.config import get_api_key, get_groq_api_key
                 gemini_key = get_api_key()
                 groq_key = get_groq_api_key()
 
@@ -555,4 +554,3 @@ class BrowserController:
     def go_forward(self) -> str:
         """Navigates to next page in history."""
         return self.navigate("forward")
-

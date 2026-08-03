@@ -18,8 +18,6 @@ from pathlib import Path
 from typing import Any, Coroutine, TypeVar
 
 from core.config import get_base_dir
-from playwright.async_api import async_playwright
-
 from .browser_context import BrowserContextManager, find_real_chrome_executable, get_chrome_automation_config
 
 # Ensure jarvis/browser is in sys.path so browser_use package resolves cleanly
@@ -169,6 +167,7 @@ class BrowserManager:
         print("[STEP 2] Launching Playwright driver...")
         try:
             if self._playwright_instance is None:
+                from playwright.async_api import async_playwright
                 self._playwright_instance = await async_playwright().start()
             print("[STEP 2 DONE] Playwright driver ready.")
         except Exception as e:
