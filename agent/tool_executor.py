@@ -76,7 +76,20 @@ class ToolExecutor:
         self._update_session_context(name, args)
 
         # Acknowledgement Fillers
-        if name in ("web_search", "browser_control", "browser_agent", "research_mode", "app_builder", "website_builder", "generate_image", "youtube_video"):
+        # Also fire for MCP-routed tools (GitHub/Filesystem/Playwright/SQLite/Drive) —
+        # these previously got no immediate spoken response, so the user heard dead
+        # silence for however long the MCP subprocess/network round-trip took.
+        is_mcp_tool = False
+        if name not in ("web_search", "browser_control", "browser_agent", "research_mode", "app_builder", "website_builder", "generate_image", "youtube_video"):
+            try:
+                from mcp_client.manager import get_mcp_manager
+                _mgr = get_mcp_manager()
+                if _mgr._gemini_tools_cache and any(t.get("name") == name for t in _mgr._gemini_tools_cache):
+                    is_mcp_tool = True
+            except Exception:
+                pass
+
+        if is_mcp_tool or name in ("web_search", "browser_control", "browser_agent", "research_mode", "app_builder", "website_builder", "generate_image", "youtube_video"):
             import random
             from core.utils import speak_local
             persona = getattr(self.jarvis.state, "active_persona", "jarvis").lower()
@@ -599,4 +612,8 @@ class ToolExecutor:
                 traceback.print_exc()
                 self.jarvis.speak_error(name, e)
                 break
+
+        if _debug_latency and _t0 > 0:
+            print(f"[LATENCY] tool={name} took {time.time() - _t0:.3f}s")
+
         return result

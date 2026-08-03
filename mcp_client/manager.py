@@ -71,7 +71,7 @@ def convert_to_gemini_schema(schema: Any) -> Any:
 class MCPManager:
     """Manager to handle reading config and orchestrating MCP clients."""
     
-    def __init__(self, config_path: str):
+    def __init__(self, config_path: str = r"C:\Projects\Jarvis\mcp_client\config.json"):
         self.config_path = config_path
         self.config = self._load_config()
         self.clients: Dict[str, MCPClient] = {}

@@ -364,6 +364,23 @@ class JarvisLive:
                 mcp_tools = asyncio.run(setup_mcp_integration())
                 if mcp_tools:
                     print(f"[JARVIS] Loaded {len(mcp_tools)} MCP tools into background MCP Manager.")
+
+                    # CRITICAL: MCP tools were previously only cached in MCPManager and
+                    # never merged into _CACHED_TOOLS, which is the ONLY tool list ever
+                    # sent to Gemini Live (`tools=_CACHED_TOOLS` in _build_config). That
+                    # meant Gemini never knew these tools existed and could never call
+                    # them, no matter how well tool_executor's MCP dispatch worked.
+                    # Merge them in now and restart the session so the live connection
+                    # picks up the full tool list (same mechanism already used for
+                    # persona switches).
+                    existing_names = {t.get("name") for t in TOOL_DECLARATIONS}
+                    new_mcp_tools = [t for t in mcp_tools if t.get("name") not in existing_names]
+                    if new_mcp_tools:
+                        _CACHED_TOOLS[0]["function_declarations"] = TOOL_DECLARATIONS + new_mcp_tools
+                        self._config_dirty = True
+                        if self.session:
+                            self._force_restart = True
+                        print(f"[JARVIS] Registered {len(new_mcp_tools)} MCP tools with Gemini Live tool schema.")
             except Exception as e:
                 print(f"[JARVIS] MCP Init Error: {e}")
 
