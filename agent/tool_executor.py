@@ -46,8 +46,8 @@ class ToolExecutor:
         }
 
     async def execute(self, fc) -> Any:
-        _debug_latency = bool(os.environ.get("JARVIS_LATENCY_DEBUG"))
-        _t0 = time.time() if _debug_latency else 0.0
+        _debug_latency: bool = bool(os.environ.get("JARVIS_LATENCY_DEBUG"))
+        _t0: float = time.time() if _debug_latency else 0.0
 
         name = fc.name
         # Re-route hallucinated names
@@ -613,7 +613,7 @@ class ToolExecutor:
                 self.jarvis.speak_error(name, e)
                 break
 
-        if _debug_latency and _t0 > 0:
+        if locals().get("_debug_latency") and locals().get("_t0", 0) > 0:
             print(f"[LATENCY] tool={name} took {time.time() - _t0:.3f}s")
 
         return result
