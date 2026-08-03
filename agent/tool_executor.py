@@ -3,6 +3,7 @@
 import asyncio
 import traceback
 import importlib
+from types import SimpleNamespace
 from typing import Any
 
 # We'll use lazy imports for genai and other heavy modules
@@ -11,9 +12,14 @@ _genai_cache = None
 def _get_genai():
     global _genai_cache
     if _genai_cache is None:
-        from google import genai
-        from google.genai import types
-        _genai_cache = (genai, types)
+        if importlib.util.find_spec("google") is None or importlib.util.find_spec("google.genai") is None:
+            class _FallbackTypes:
+                FunctionResponse = SimpleNamespace
+            _genai_cache = (None, _FallbackTypes)
+        else:
+            from google import genai
+            from google.genai import types
+            _genai_cache = (genai, types)
     return _genai_cache
 
 def wrap_untrusted(source: str, text: str) -> str:

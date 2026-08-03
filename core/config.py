@@ -4,7 +4,6 @@ import json
 import warnings
 warnings.filterwarnings("ignore")
 from pathlib import Path
-from google import genai
 
 def get_base_dir() -> Path:
     """Returns the base directory of the JARVIS project."""
@@ -57,6 +56,7 @@ def get_gemini_client(persona="jarvis"):
     """Returns a singleton instance of the Gemini Client."""
     global _client
     if _client is None:
+        from google import genai
         _client = genai.Client(
             api_key=get_api_key()
         )

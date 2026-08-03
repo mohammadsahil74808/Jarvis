@@ -7,6 +7,7 @@ and privacy-safe audit logging.
 """
 
 import os
+import ntpath
 import re
 import json
 import time
@@ -60,15 +61,18 @@ class PathSecurity:
         if not raw_path:
             return ""
         clean = str(raw_path).strip().strip("'\"")
-        # Replace forward slashes with backslashes
-        clean = os.path.normpath(os.path.abspath(clean))
-        return clean
+        # Preserve Windows drive semantics even when tests run on Linux/macOS.
+        # os.path.abspath("C:\\foo") on POSIX turns it into
+        # "/workspace/Jarvis/C:\\foo", which breaks drive scoping.
+        if re.match(r"^[a-zA-Z]:[\\/]", clean) or re.match(r"^[a-zA-Z]:$", clean):
+            return ntpath.normpath(clean.replace("/", "\\"))
+        return os.path.normpath(os.path.abspath(clean))
 
     @staticmethod
     def is_allowed_drive(path_str: str) -> bool:
         """Verifies if path belongs to allowed drives (C:\\ or D:\\)."""
         norm = PathSecurity.normalize_path(path_str)
-        drive = os.path.splitdrive(norm)[0].upper()
+        drive = ntpath.splitdrive(norm)[0].upper()
         return drive in ALLOWED_DRIVES
 
     @staticmethod
@@ -156,13 +160,13 @@ class FileSystemSecurityManager:
 
         # 1. Drive Scope Check
         if norm_path and not PathSecurity.is_allowed_drive(norm_path):
-            drive = os.path.splitdrive(norm_path)[0]
+            drive = ntpath.splitdrive(norm_path)[0]
             err = f"SECURITY BLOCK: Access to drive '{drive}' is denied. Only C:\\ and D:\\ are accessible."
             AuditLogger.log_event(tool, norm_path, norm_dest, RISK_BLOCKED, False, "BLOCKED", "BLOCKED")
             return (RISK_BLOCKED, err, norm_path)
 
         if norm_dest and not PathSecurity.is_allowed_drive(norm_dest):
-            drive = os.path.splitdrive(norm_dest)[0]
+            drive = ntpath.splitdrive(norm_dest)[0]
             err = f"SECURITY BLOCK: Access to destination drive '{drive}' is denied. Only C:\\ and D:\\ are accessible."
             AuditLogger.log_event(tool, norm_path, norm_dest, RISK_BLOCKED, False, "BLOCKED", "BLOCKED")
             return (RISK_BLOCKED, err, norm_dest)
