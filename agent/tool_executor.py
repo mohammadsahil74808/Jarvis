@@ -50,6 +50,8 @@ class ToolExecutor:
         self._debug_latency = bool(os.environ.get("JARVIS_LATENCY_DEBUG"))
 
         name = fc.name
+        args = dict(fc.args or {})
+
         # Re-route hallucinated names
         if name in ["file_controller", "file_brain"]:
             print(f"[JARVIS] Hallucinated tool {name} re-routed to file_manager")
@@ -66,8 +68,6 @@ class ToolExecutor:
             print(f"[JARVIS] Hallucinated tool {name} re-routed to browser_control")
             name = "browser_control"
             args = {"action": "extract_data", "query": args.get("text", "")}
-            
-        args = dict(fc.args or {})
         
         # Hard code-level routing safeguards
         if name == "web_search":
