@@ -54,6 +54,18 @@ class ToolExecutor:
         if name in ["file_controller", "file_brain"]:
             print(f"[JARVIS] Hallucinated tool {name} re-routed to file_manager")
             name = "file_manager"
+        elif name == "browser_navigate":
+            print(f"[JARVIS] Hallucinated tool {name} re-routed to browser_control")
+            name = "browser_control"
+            args = {"action": "open_website", "url": args.get("url", "")}
+        elif name == "browser_snapshot":
+            print(f"[JARVIS] Hallucinated tool {name} re-routed to browser_control")
+            name = "browser_control"
+            args = {"action": "capture_page"}
+        elif name == "browser_find":
+            print(f"[JARVIS] Hallucinated tool {name} re-routed to browser_control")
+            name = "browser_control"
+            args = {"action": "extract_data", "query": args.get("text", "")}
             
         args = dict(fc.args or {})
         
@@ -84,7 +96,7 @@ class ToolExecutor:
             try:
                 from mcp_client.manager import get_mcp_manager
                 _mgr = get_mcp_manager()
-                if _mgr._gemini_tools_cache and any(t.get("name") == name for t in _mgr._gemini_tools_cache):
+                if (hasattr(_mgr, "_tool_to_server") and name in _mgr._tool_to_server) or (_mgr._gemini_tools_cache and any(t.get("name") == name for t in _mgr._gemini_tools_cache)):
                     is_mcp_tool = True
             except Exception:
                 pass
@@ -574,9 +586,10 @@ class ToolExecutor:
                             from mcp_client.manager import get_mcp_manager, execute_mcp_tool
                             mgr = get_mcp_manager()
                             is_mcp = False
-                            if mgr._gemini_tools_cache:
-                                if any(t["name"] == name for t in mgr._gemini_tools_cache):
-                                    is_mcp = True
+                            if hasattr(mgr, "_tool_to_server") and name in mgr._tool_to_server:
+                                is_mcp = True
+                            elif mgr._gemini_tools_cache and any(t.get("name") == name for t in mgr._gemini_tools_cache):
+                                is_mcp = True
                             
                             if is_mcp:
                                 result = await execute_mcp_tool(name, args)

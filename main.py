@@ -533,12 +533,11 @@ class JarvisLive:
             self._is_speaking = False
             
         if was_speaking:
-            try:
-                while not self.audio_in_queue.empty():
+            while not self.audio_in_queue.empty():
+                try:
                     self.audio_in_queue.get_nowait()
-                    self.audio_in_queue.task_done()
-            except Exception:
-                pass
+                except Exception:
+                    break
             if not self.ui.muted:
                 self.ui.set_state("LISTENING")
                 
