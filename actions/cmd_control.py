@@ -16,7 +16,7 @@ def _get_platform() -> str:
     return "linux"
 
 WIN_COMMAND_MAP = [
-    (["disk space", "disk usage", "storage", "free space", "c drive space"],
+    (["disk space", "disk usage", "storage", "free space", "c drive space", "drive space", "kitni jagah"],
      "wmic logicaldisk get caption,freespace,size /format:list", False),
     (["running processes", "list processes", "show processes", "active processes", "tasklist"],
      "tasklist /fo table", False),
@@ -50,11 +50,53 @@ WIN_COMMAND_MAP = [
      f'dir "{Path.home() / "Downloads"}"', False),
     (["large files", "biggest files", "largest files"],
      'powershell "Get-ChildItem C:\\ -Recurse -ErrorAction SilentlyContinue | Sort-Object Length -Descending | Select-Object -First 10 FullName,Length | Format-Table"', False),
+    (["environment variables", "env variables", "path variable"],
+     "set", False),
+    (["user accounts", "local users", "list users"],
+     "net user", False),
+    (["uptime", "system uptime", "how long running"],
+     'powershell "(Get-Date) - (gcim Win32_OperatingSystem).LastBootUpTime"', False),
 ]
 
 def _find_hardcoded(task: str) -> str | None:
     task_lower = task.lower()
-    
+
+    # ── Folder/file SIZE queries ───────────────────────────────────
+    # Matches: "size of C:\Projects\Jarvis", "JARVIS folder ki size", "D: drive size"
+    size_patterns = [
+        r'size\s+of\s+([\w\\:/\.]+)',   # size of <path>
+        r'([\w\\:/\.]+)\s+(?:folder|directory|drive)?\s*(?:ki|ka)?\s*size',  # <path> ki size
+        r'([a-zA-Z]:\\[\w\\./\- ]+)\s*(?:kitni|size|bari)',  # absolute path size
+    ]
+    for pat in size_patterns:
+        m = re.search(pat, task_lower)
+        if m:
+            raw = m.group(1).strip()
+            # Heuristic: if single word with no slash, check if it's a known project folder
+            if not any(c in raw for c in ['\\', '/']):
+                jarvis_path = r'C:\Projects\Jarvis'
+                if raw in task_lower and 'jarvis' in task_lower:
+                    raw = jarvis_path
+            return (
+                f'powershell "$s = (Get-ChildItem \'\'{raw}\'\' -Recurse -ErrorAction SilentlyContinue '
+                f'| Measure-Object -Property Length -Sum).Sum; '
+                f'[math]::Round($s/1MB, 2)\'\' MB\'\"'
+            )
+
+    # ── COUNT files queries ────────────────────────────────────────
+    count_patterns = [
+        r'(?:count|kitne|how many)\s+files?\s+(?:in|on|h|hai|hain)?\s*([a-zA-Z](?::\\|:\s|\s+drive)?)',
+        r'([a-zA-Z])\s*(?:drive|:)?\s+(?:me|mein|m\b)\s+kitne\s+file',
+    ]
+    for pat in count_patterns:
+        m = re.search(pat, task_lower)
+        if m:
+            drive_letter = m.group(1).strip().upper().rstrip(':')
+            return (
+                f'powershell "(Get-ChildItem {drive_letter}:\\ -Recurse '
+                f'-ErrorAction SilentlyContinue -File).Count"'
+            )
+
     if "notepad" in task_lower or any(ext in task_lower for ext in [".txt", ".log", ".md", ".csv"]):
         file_match = re.search(r'[\"\']?([\S]+\.(?:txt|log|md|csv|json|xml))[\"\']?', task, re.IGNORECASE)
         if file_match:

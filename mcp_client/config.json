@@ -4,10 +4,8 @@
       "command": "node",
       "args": [
         "C:\\Projects\\Jarvis\\node_modules\\@modelcontextprotocol\\server-filesystem\\dist\\index.js",
-        "C:\\Projects\\Jarvis",
-        "C:\\Users\\user\\Desktop",
-        "C:\\Users\\user\\Downloads",
-        "C:\\Users\\user\\Documents"
+        "C:\\",
+        "D:\\"
       ]
     },
     "github": {

@@ -464,6 +464,34 @@ class JarvisLive:
     def _on_text_command(self, text: str):
         if not self._loop or not self.session:
             return
+        # ── Sanitize input to prevent Gemini Live 1011 WebSocket crash ──
+        text = str(text).strip()
+        # Strip unmatched leading/trailing quotes
+        if text.startswith('"') and not text.endswith('"'):
+            text = text[1:].strip()
+        elif text.endswith('"') and not text.startswith('"'):
+            text = text[:-1].strip()
+        if text.startswith("'") and not text.endswith("'"):
+            text = text[1:].strip()
+        elif text.endswith("'") and not text.startswith("'"):
+            text = text[:-1].strip()
+        # Expand very short single-word affirmatives into safe phrases
+        # (bare "ha", "haan", "yes", etc. can cause 1011 on Gemini Live)
+        _AFFIRM_MAP = {
+            "ha": "haan, proceed karo",
+            "haan": "haan, proceed karo",
+            "yes": "yes, proceed",
+            "ok": "ok, proceed",
+            "sure": "sure, go ahead",
+            "proceed": "please proceed",
+            "confirm": "yes, confirmed",
+            "go": "go ahead",
+        }
+        if text.lower() in _AFFIRM_MAP:
+            text = _AFFIRM_MAP[text.lower()]
+        # Ensure minimum safe length
+        if len(text) < 2:
+            return
         from core.local_router import route_command
         if route_command(text, self):
             return
@@ -474,6 +502,7 @@ class JarvisLive:
             ),
             self._loop
         )
+
 
     def _prediction_loop(self):
         if self.predictive_engine and self.predictive_engine.predictive_mode:
@@ -518,6 +547,14 @@ class JarvisLive:
             return
         if getattr(self, "tool_call_pending", False) or self._is_speaking:
             return
+
+        # Sanitize text string to prevent Gemini Live 1011 JSON framing error
+        text = str(text).strip()
+        if text.startswith('"') and not text.endswith('"'):
+            text = text[1:].strip()
+        elif text.endswith('"') and not text.startswith('"'):
+            text = text[:-1].strip()
+
         asyncio.run_coroutine_threadsafe(
             self.session.send_client_content(
                 turns={"parts": [{"text": text}]},

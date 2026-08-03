@@ -326,6 +326,11 @@ class JarvisUI:
     def _on_type_submit(self, event=None):
         text = self.type_entry.get().strip()
         if text:
+            # Clean unmatched quotes that cause Gemini Live WebSocket 1011 error
+            if text.startswith('"') and not text.endswith('"'):
+                text = text[1:].strip()
+            elif text.endswith('"') and not text.startswith('"'):
+                text = text[:-1].strip()
             self.write_log(f"You (typed): {text}")
             self.type_entry.delete(0, tk.END)
             if self.on_text_command:

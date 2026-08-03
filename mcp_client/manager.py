@@ -165,6 +165,13 @@ class MCPManager:
                 await client.connect(command, args, env=env)
                 print(f"[{tag}] Connected")
                 
+            if server_name == "filesystem":
+                try:
+                    from mcp_client.filesystem_security import get_filesystem_security_manager
+                    get_filesystem_security_manager().print_startup_logs()
+                except Exception as e:
+                    print(f"[SECURITY WARNING] Failed to initialize security manager: {e}")
+
             if server_name == "sqlite":
                 db_path = args[-1] if args else "C:\\Projects\\Jarvis\\data\\jarvis.db"
                 print(f"[{tag}] Database: {db_path}")
@@ -326,10 +333,55 @@ class MCPManager:
                                 elif q.lower() in ("sahil", "me", "my", "my repos", "my repositories"):
                                     arguments["query"] = f"user:{auth_user}"
 
+                    if server_name == "filesystem":
+                        from mcp_client.filesystem_security import (
+                            get_filesystem_security_manager,
+                            RISK_SAFE, RISK_CONFIRMATION_REQUIRED, RISK_BLOCKED, AuditLogger
+                        )
+                        sec_mgr = get_filesystem_security_manager()
+                        risk_level, prompt_msg, path_summary = sec_mgr.evaluate_operation(tool_name, arguments)
+
+                        if risk_level == RISK_BLOCKED:
+                            print(f"[SECURITY BLOCK] Prevented execution of '{tool_name}' on '{path_summary}'")
+                            self._emit_event("mcp_tool_error", tool_name, {"error": prompt_msg, "server": server_name})
+                            return prompt_msg
+
+                        if risk_level == RISK_CONFIRMATION_REQUIRED:
+                            user_confirmed = arguments.get("user_confirmed") or arguments.get("confirmed") or False
+                            if not user_confirmed:
+                                sec_mgr.set_pending_confirmation(tool_name, arguments, prompt_msg)
+                                AuditLogger.log_event(
+                                    tool_name,
+                                    arguments.get("path") or arguments.get("directory") or "",
+                                    arguments.get("destination") or "",
+                                    RISK_CONFIRMATION_REQUIRED,
+                                    True,
+                                    "AWAITING_CONFIRMATION",
+                                    "PENDING"
+                                )
+                                print(f"[SECURITY] Confirmation required for '{tool_name}' on '{path_summary}'")
+                                return prompt_msg
+
                     print(f"[JARVIS] Tool: {tool_name}")
                     print(f"[JARVIS] [TOOL] {tool_name} {arguments}")
                     self._emit_event("mcp_tool_started", tool_name, {"arguments": arguments, "server": server_name})
                     result = await client.execute_tool(tool_name, arguments)
+
+                    if server_name == "filesystem":
+                        from mcp_client.filesystem_security import get_filesystem_security_manager, AuditLogger, RISK_CONFIRMATION_REQUIRED
+                        sec_mgr = get_filesystem_security_manager()
+                        conf_res = "APPROVED" if (arguments.get("user_confirmed") or arguments.get("confirmed")) else "NOT_REQUIRED"
+                        AuditLogger.log_event(
+                            tool_name,
+                            arguments.get("path") or arguments.get("directory") or "",
+                            arguments.get("destination") or "",
+                            "SAFE" if conf_res == "NOT_REQUIRED" else RISK_CONFIRMATION_REQUIRED,
+                            conf_res == "APPROVED",
+                            conf_res,
+                            "ERROR" if result.isError else "SUCCESS"
+                        )
+                        if sec_mgr.pending_confirmation and conf_res == "APPROVED":
+                            sec_mgr.clear_pending_confirmation()
 
                     if result.isError:
                         err_text = f"Error from MCP {server_name}: {result.content}"

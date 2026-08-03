@@ -33,6 +33,9 @@ class BrowserState:
     action_history: List[Dict[str, Any]] = field(default_factory=list)
     download_history: List[Dict[str, Any]] = field(default_factory=list)
     last_screenshot_bytes: Optional[bytes] = None
+    last_search_query: str = ""
+    search_results: List[Dict[str, Any]] = field(default_factory=list)
+    search_context: Dict[str, Any] = field(default_factory=dict)
     last_updated: float = field(default_factory=time.time)
 
     def update_active_tab(self, url: str, title: str) -> None:
@@ -75,9 +78,32 @@ class BrowserState:
                 "active_title": self.active_title,
                 "action_count": len(self.action_history),
                 "last_actions": self.action_history[-10:],
+                "last_search_query": self.last_search_query,
+                "search_results": self.search_results,
+                "search_context": self.search_context,
                 "last_updated": self.last_updated,
             }
             with open(mem_dir / "browser_memory.json", "w", encoding="utf-8") as f:
                 json.dump(data, f, indent=2)
         except Exception:
             pass
+
+    def load_persistent_state(self) -> None:
+        """Loads session memory state from disk so search context survives across separate calls."""
+        try:
+            mem_file = get_base_dir() / "memory" / "browser_sessions" / "browser_memory.json"
+            if mem_file.exists():
+                data = json.loads(mem_file.read_text(encoding="utf-8"))
+                self.active_url = data.get("active_url", self.active_url)
+                self.active_title = data.get("active_title", self.active_title)
+                self.last_search_query = data.get("last_search_query", self.last_search_query)
+                self.search_results = data.get("search_results", self.search_results)
+                self.search_context = data.get("search_context", self.search_context)
+                if not self.search_context and self.search_results:
+                    self.search_context = {
+                        "query": self.last_search_query,
+                        "timestamp": data.get("last_updated", time.time()),
+                        "results": self.search_results
+                    }
+        except Exception as e:
+            print(f"[BROWSER_STATE WARNING] Could not read disk memory: {e}")

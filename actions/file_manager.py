@@ -41,6 +41,11 @@ def _resolve_path(raw: str) -> Path:
     if lower in _SHORTCUTS:
         fn = _SHORTCUTS[lower]
         return fn() if callable(fn) else fn
+    # Fix bare drive letters: "C:" or "D:" → "C:\" / "D:\"
+    # On Windows, Path("C:") resolves to CWD on that drive, NOT root
+    import re as _re
+    if _re.match(r'^[a-zA-Z]:$', raw.rstrip('\\')):
+        return Path(raw.rstrip('\\') + '\\')
     return Path(raw).expanduser()
 
 def _format_size(b: int) -> str:
@@ -557,24 +562,27 @@ def get_file_info(path: str) -> str:
 
 
 def read_document(path: str) -> str:
-    p = Path(path).expanduser()
+    raw_path = str(path).strip().strip("'\"").replace("\\\\", "\\")
+    p = Path(raw_path).expanduser().resolve()
     if not p.exists(): return f"File not found: {path}"
     ext = p.suffix.lower()
     try:
-        if ext == ".txt":
-            return p.read_text(encoding="utf-8", errors="ignore")[:5000]
-        elif ext == ".pdf":
+        if ext == ".pdf":
             text = []
             with open(p, "rb") as f:
                 reader = PyPDF2.PdfReader(f)
                 for page in reader.pages[:10]:
                     text.append(page.extract_text() or "")
-            return "\n".join(text)[:5000]
+            return "\n".join(text)[:10000]
         elif ext == ".docx":
             doc = Document(p)
-            return "\n".join(para.text for para in doc.paragraphs)[:5000]
+            return "\n".join(para.text for para in doc.paragraphs)[:10000]
         else:
-            return f"Unsupported type: {ext}. Supported: .txt, .pdf, .docx"
+            try:
+                content = p.read_text(encoding="utf-8", errors="ignore")
+                return content[:10000] if content else "File is empty."
+            except Exception:
+                return f"Unsupported or binary file type: {ext}"
     except Exception as e:
         return f"Error reading {ext}: {e}"
 

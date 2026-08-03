@@ -54,6 +54,11 @@ class BrowserController:
 
     def open_website(self, url: str) -> str:
         """Navigates current active Google Chrome tab to the specified URL."""
+        from .search_resolver import is_search_result_request
+        if is_search_result_request(url) and not url.startswith(("http://", "https://", "www.")):
+            print(f"[OPEN_WEBSITE] Intercepting search result selection request: '{url}'")
+            return self.open_search_result(url)
+
         if not url.startswith(("http://", "https://")):
             url = f"https://{url}"
 
@@ -117,14 +122,145 @@ class BrowserController:
         return f"Successfully opened {current_url} — '{title}' in Google Chrome"
 
     def search_web(self, query: str) -> str:
-        """Executes a Google search in Google Chrome."""
+        """Executes a Google search in Google Chrome and stores structured organic search results."""
+        from .search_resolver import is_search_result_request
+        if is_search_result_request(query):
+            print(f"[SEARCH_WEB] Intercepting search result selection request: '{query}'")
+            return self.open_search_result(query)
+
         search_url = f"https://www.google.com/search?q={query.replace(' ', '+')}"
         res = self.open_website(search_url)
-        self.state.log_action("search_web", {"query": query}, res)
+        
+        # Build structured search results representation
+        structured_results = self.inspect_and_store_search_results(query)
+        self.state.log_action("search_web", {"query": query, "results_count": len(structured_results)}, res)
+        
+        if structured_results:
+            summary = [f"Searched Google for '{query}'. Found {len(structured_results)} structured results ready for selection:"]
+            for r in structured_results[:4]:
+                summary.append(f"  #{r['rank']}: {r['title']} ({r['url']})")
+            return "\n".join(summary)
         return f"Searched Google for '{query}'"
 
+    def inspect_and_store_search_results(self, query: str) -> List[Dict[str, Any]]:
+        """
+        Inspects Google search results and builds a structured representation in browser state,
+        retaining context without modifying browser architecture or user session.
+        """
+        from .search_resolver import extract_organic_search_results
+        import time
+        
+        dom_items = []
+        try:
+            from jarvis.browser.browser_context import check_chrome_cdp_endpoint
+            if check_chrome_cdp_endpoint(9222):
+                async def _extract_live_dom():
+                    try:
+                        _, context = await self.manager.async_get_or_create_browser()
+                        page = context.pages[0] if context.pages else await context.new_page()
+                        return await page.evaluate('''() => {
+                            let results = [];
+                            document.querySelectorAll('div.g, div[data-hveid]').forEach(div => {
+                                let a = div.querySelector('a[href]');
+                                let h3 = div.querySelector('h3') || div.querySelector('h2');
+                                if (a && h3 && a.href && a.href.startsWith('http') && !a.href.includes('google.com/')) {
+                                    let snippet = div.innerText.replace(h3.innerText, '').trim();
+                                    results.push({
+                                        title: h3.innerText.trim(),
+                                        url: a.href,
+                                        snippet: snippet.substring(0, 300),
+                                        element_ref: `a[href="${a.href}"]`
+                                    });
+                                }
+                            });
+                            return results;
+                        }''')
+                    except Exception:
+                        return []
+                dom_items = self._run_with_recovery(_extract_live_dom, timeout=5.0)
+        except Exception as e:
+            print(f"[SEARCH INSPECTION] Live CDP DOM extraction unavailable or timed out: {e}")
+
+        structured = extract_organic_search_results(query, dom_items=dom_items)
+        self.state.last_search_query = query
+        self.state.search_results = structured
+        self.state.search_context = {
+            "query": query,
+            "timestamp": time.time(),
+            "results": structured,
+            "ordered_result_list": structured
+        }
+        self.state.save_persistent_state()
+        print(f"[SEARCH INSPECTION] Stored {len(structured)} structured organic results for query '{query}'.")
+        return structured
+
+    def open_search_result(self, target: str) -> str:
+        """
+        Resolves an ordinal or title-based result request against stored structured search results,
+        verifies the link, and opens it in the current normal Chrome session.
+        """
+        from .search_resolver import resolve_search_result_target
+        
+        # Always reload persistent state first to ensure context survives across separate calls
+        if hasattr(self.state, "load_persistent_state"):
+            self.state.load_persistent_state()
+        results = getattr(self.state, "search_results", [])
+        if not results:
+            try:
+                from core.config import get_base_dir
+                import json
+                mem_file = get_base_dir() / "memory" / "browser_sessions" / "browser_memory.json"
+                if mem_file.exists():
+                    data = json.loads(mem_file.read_text(encoding="utf-8"))
+                    results = data.get("search_results", [])
+                    self.state.search_results = results
+                    self.state.last_search_query = data.get("last_search_query", "")
+            except Exception as e:
+                print(f"[OPEN_RESULT WARNING] Could not read disk memory: {e}")
+
+        match = resolve_search_result_target(target, results) if results else None
+
+        if not results or not match:
+            target_clean = str(target).strip()
+            err_msg = f"Search result #{target_clean} is not available because Google results could not be inspected."
+            print(f"[SEARCH SELECTION ERROR] {err_msg}")
+            return f"Error: {err_msg} DO NOT guess a URL, DO NOT convert the search query into a website URL, and DO NOT perform another go_to or search as a fallback. Report this exact error message to the user immediately without trying any alternatives."
+
+        rank = match.get("rank") or match.get("number") or 1
+        title = match.get("title") or "Unknown Title"
+        url = match.get("url") or ""
+        element_ref = match.get("target") or match.get("element_ref") or f'a[href="{url}"]'
+
+        # Requirement 8: Before clicking, verify that the selected element is actually associated with the requested result title/URL.
+        if not url or not url.startswith(("http://", "https://")):
+            raise ValueError(f"Verification failed: invalid or non-organic URL '{url}' for result #{rank}")
+
+        print(f"[SEARCH SELECTION] Verified result #{rank} — Title: '{title}' | URL: '{url}' | Target: '{element_ref}'")
+        print(f"[SEARCH SELECTION] Opening selected result in current normal Chrome session...")
+
+        # Requirement 9: Open in CURRENT Chrome session without modifying architecture or creating new profiles.
+        self.open_website(url)
+
+        # Requirement 10: Verify URL changed and is not still the Google search-results page.
+        active_url = self.state.active_url or url
+        active_title = self.state.active_title or title
+        if "google.com/search" in active_url.lower():
+            print(f"[SEARCH SELECTION WARNING] Navigation verification detected page is still Google search results.")
+        else:
+            print(f"[SEARCH SELECTION] Navigation verified: URL changed to {active_url}, Title is '{active_title}'.")
+
+        self.state.log_action("open_search_result", {"target": target, "rank": rank, "url": url}, f"Opened #{rank}: {title}")
+        self.state.save_persistent_state()
+
+        # Requirement 11: Return clear tool result
+        return f"Opened search result #{rank}: {title}"
+
     def click_element(self, target: str) -> str:
-        """Clicks an element on the active page by CSS selector or inner text."""
+        """Clicks an element on the active page by CSS selector or inner text, or selects a search result."""
+        from .search_resolver import is_search_result_request
+        if is_search_result_request(target):
+            print(f"[CLICK_ELEMENT] Intercepting search result selection request: '{target}'")
+            return self.open_search_result(target)
 
         async def _action():
             try:

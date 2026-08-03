@@ -39,6 +39,13 @@ def browser_control(parameters: dict, **kwargs) -> str:
             print(f"[TASK COMPLETED] Result: {res}")
             return res
 
+        elif action in ("open_result", "open_search_result", "select_result", "click_result", "open_result_by_rank"):
+            target = str(params.get("target") or params.get("selector") or params.get("text") or params.get("query") or params.get("description") or params.get("rank") or params.get("index") or "1")
+            print(f"[CHROME] Opening search result matching: '{target}'")
+            res = adapter.open_search_result(target)
+            print(f"[TASK COMPLETED] Result: {res}")
+            return res
+
         elif action == "click_element" or action == "click":
             target = str(params.get("target") or params.get("selector") or params.get("text") or params.get("description") or "")
             print(f"[CHROME] Clicking element: '{target}'")

@@ -197,13 +197,14 @@ TOOL_DECLARATIONS = [
     {
         "name": "browser_control",
         "description": (
-            "Controls the web browser. Use for: opening websites, searching the web, "
+            "Controls the web browser. Use for: opening websites, searching the web, opening search results, "
             "clicking elements, filling forms, scrolling, managing tabs, running JS, autonomous multi-step tasks, any web-based task."
         ),
         "parameters": {
             "type": "OBJECT",
             "properties": {
-                "action":      {"type": "STRING", "description": "go_to | search | click | type | scroll | fill_form | smart_click | smart_type | get_text | press | close | list_tabs | switch_tab | close_tab | execute_js | go_back | go_forward | autonomous_task"},
+                "action":      {"type": "STRING", "description": "go_to | search | open_result | click | type | scroll | fill_form | smart_click | smart_type | get_text | press | close | list_tabs | switch_tab | close_tab | execute_js | go_back | go_forward | autonomous_task"},
+                "target":      {"type": "STRING", "description": "Target result or element (e.g., '1', 'pehla result', 'first result', 'OpenAI') for open_result or click"},
                 "url":         {"type": "STRING", "description": "URL for go_to action"},
                 "query":       {"type": "STRING", "description": "Search query for search action"},
                 "selector":    {"type": "STRING", "description": "CSS selector for click/type"},

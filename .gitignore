@@ -22,6 +22,7 @@ generated_images/
 memory/*.json
 memory/*.db
 memory/*.faiss
+memory/*.log
 config/browser_signal.json
 config/drive_*.json
 config/*client_secret*.json
