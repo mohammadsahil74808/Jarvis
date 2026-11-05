@@ -43,6 +43,33 @@ def get_config() -> dict:
     
     return {}
 
+
+def is_first_run() -> bool:
+    """Return True if the Gemini API key is absent or blank."""
+    try:
+        if not API_CONFIG_PATH.exists():
+            return True
+        data = get_config()
+        key  = data.get("gemini_api_key", "").strip()
+        return not key or len(key) < 10
+    except Exception:
+        return True
+
+
+_PROFILE_PATH = BASE_DIR / "memory" / "user_profile.json"
+
+
+def get_user_profile() -> dict:
+    """Return the user profile dict from memory/user_profile.json."""
+    try:
+        if _PROFILE_PATH.exists():
+            import json as _json
+            return _json.loads(_PROFILE_PATH.read_text("utf-8"))
+    except Exception as e:
+        print(f"[Config] Failed to load user profile: {e}")
+    return {}
+
+
 def invalidate_config_cache():
     """Clears the internal config cache and reset the Gemini client."""
     global _config_cache, _client

@@ -44,12 +44,45 @@ def _get_config() -> dict:
 
 def _load_system_prompt(persona="jarvis") -> str:
     try:
-        from core.config import BASE_DIR
+        from core.config import BASE_DIR, get_user_profile
         prompt_path = BASE_DIR / "core" / f"{persona}_prompt.txt"
         if not prompt_path.exists() and persona == "jarvis":
             prompt_path = PROMPT_PATH
-            
-        return prompt_path.read_text(encoding="utf-8")
+
+        base_prompt = prompt_path.read_text(encoding="utf-8")
+
+        # ── Inject user personalization header ──────────────────────
+        try:
+            profile = get_user_profile()
+            user_name      = profile.get("personal_info", {}).get("name", "").strip()
+            assistant_name = profile.get("assistant_name", "").strip()
+            bio_raw        = profile.get("bio_raw", "").strip()
+
+            lines = []
+            if user_name:
+                lines.append(f"USER NAME: {user_name}")
+            if assistant_name:
+                lines.append(f"ASSISTANT NAME: {assistant_name}")
+            if bio_raw:
+                lines.append(
+                    f"\nUSER PROFILE (use this to personalize every interaction):\n{bio_raw}"
+                )
+
+            if lines:
+                header = (
+                    "=== PERSONALIZATION CONTEXT ===\n"
+                    + "\n".join(lines)
+                    + "\n================================\n\n"
+                )
+                base_prompt = header + base_prompt
+
+            # Substitute hardcoded name in base prompt with actual user name
+            if user_name:
+                base_prompt = base_prompt.replace("Sahil", user_name)
+        except Exception:
+            pass  # personalization is best-effort; never crash the boot
+
+        return base_prompt
     except Exception:
         return (
             "You are JARVIS, Tony Stark's AI assistant. "
@@ -938,8 +971,33 @@ def main():
         print("[JARVIS] An instance is already running. Sent wake signal. Exiting.")
         sys.exit(0)
 
+    # ── Check if --setup flag passed (force setup even if already configured) ──
+    force_setup = "--setup" in sys.argv or "-s" in sys.argv
+
+    # ── First-run setup check ─────────────────────────────────────────────────
+    from ui.setup_screen import is_setup_needed, JarvisSetupScreen
+    from core.config import invalidate_config_cache
+
+    if force_setup or is_setup_needed():
+        # Run setup as its own Tk window BEFORE creating JarvisUI.
+        # Using a temporary hidden root so Tk is initialized once cleanly.
+        import tkinter as _tk
+        _tmp_root = _tk.Tk()
+        _tmp_root.withdraw()           # hide the dummy root immediately
+
+        wizard = JarvisSetupScreen(master=_tmp_root)
+        wizard.run()                   # blocks until user finishes or cancels
+
+        _tmp_root.destroy()            # clean up the hidden root
+        invalidate_config_cache()      # re-read freshly written api_keys.json
+
+        # If setup was cancelled (no key written), exit
+        if is_setup_needed():
+            print("[JARVIS] Setup was not completed. Exiting.")
+            sys.exit(0)
+
     ui = JarvisUI("face.png")
-    
+
     # Store reference so we can access it on exit
     _jarvis_instance = None
 
@@ -953,7 +1011,7 @@ def main():
 
     def runner():
         nonlocal _jarvis_instance
-        ui.wait_for_api_key()
+        # Setup already ensured a valid key exists
         jarvis    = JarvisLive(ui)
         ui.jarvis = jarvis
         _jarvis_instance = jarvis
@@ -970,4 +1028,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main()
